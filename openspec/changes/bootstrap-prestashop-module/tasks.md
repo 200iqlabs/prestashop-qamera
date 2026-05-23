@@ -62,9 +62,9 @@
 
 ## 10. Repo creation + first push
 
-- [ ] 10.1. `gh repo create 200iqlabs/prestashop-qamera --public --source=. --remote=origin --description="Qamera AI integration for PrestaShop — AI-powered product photography"`
-- [ ] 10.2. First commit on `main` (`feat: bootstrap PrestaShop module — install lifecycle, configuration page, CI`) + push
-- [ ] 10.3. Verify CI run passes on the bootstrap commit (PHP 8.1 / 8.2 / 8.3 matrix)
+- [x] 10.1. `gh repo create 200iqlabs/prestashop-qamera --public --source=. --remote=origin --description="Qamera AI integration for PrestaShop — AI-powered product photography"`
+- [x] 10.2. First commit on `main` (`feat: bootstrap PrestaShop module — install lifecycle, configuration page, CI`) + push
+- [x] 10.3. Verify CI run passes on the bootstrap commit (PHP 8.1 / 8.2 / 8.3 matrix)
 
 ## 11. Verification
 
