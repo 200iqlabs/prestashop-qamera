@@ -2,15 +2,16 @@ parameters:
   level: 5
   paths:
     - src
-  excludePaths:
-    - src/Install/Migrations/*
-  treatPhpDocTypesAsCertain: false
 
-  # PrestaShop core classes are not autoloaded by Composer. Tell PHPStan
-  # which globals/classes to assume exist so static analysis runs without
-  # a full PS bootstrap.
-  ignoreErrors:
-    - identifier: class.notFound
-      paths:
-        - src/Install/Installer.php
-        - src/Controller/Admin/*.php
+  # PrestaShop core classes (`Db`, `Configuration`, `Tab`, `Module`,
+  # `Tools`, `PrestaShopBundle\Controller\…`) are not Composer-autoloaded —
+  # they live in the PS application itself, which is only present at
+  # runtime. Until Phase 2 introduces stubs via `php-stubs/prestashop-stubs`,
+  # the directories that consume those globals are excluded from analysis.
+  # Pure PHP under `src/Api`, `src/Service`, `src/Repository` (added in
+  # Phase 2) remains in scope.
+  excludePaths:
+    - src/Install/*
+    - src/Controller/Admin/*
+
+  treatPhpDocTypesAsCertain: false
