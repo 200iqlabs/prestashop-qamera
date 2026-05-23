@@ -1,0 +1,86 @@
+{% extends '@PrestaShop/Admin/layout.html.twig' %}
+
+{% block content %}
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-header-title">
+        <i class="material-icons">photo_camera</i>
+        {{ 'Qamera AI configuration'|trans({}, 'Modules.Qameraai.Admin') }}
+      </h3>
+    </div>
+
+    <div class="card-body">
+      <form method="post" action="{{ path('_qameraai_admin_configuration') }}">
+
+        <div class="form-group row">
+          <label class="form-control-label col-sm-3">
+            {{ 'API base URL'|trans({}, 'Modules.Qameraai.Admin') }}
+          </label>
+          <div class="col-sm-9">
+            <input type="url" name="api_base_url" class="form-control" value="{{ apiBaseUrl }}" required>
+            <small class="form-text text-muted">
+              {{ 'Default: https://qamera.ai/api/v1/plugin'|trans({}, 'Modules.Qameraai.Admin') }}
+            </small>
+          </div>
+        </div>
+
+        <div class="form-group row">
+          <label class="form-control-label col-sm-3">
+            {{ 'API key'|trans({}, 'Modules.Qameraai.Admin') }}
+          </label>
+          <div class="col-sm-9">
+            <input type="text" name="api_key" class="form-control"
+                   placeholder="mk_live_..." value="{{ apiKeyMasked }}">
+            <small class="form-text text-muted">
+              {{ 'Provided once by your Qamera AI operator. Leave masked value to keep the existing key.'|trans({}, 'Modules.Qameraai.Admin') }}
+            </small>
+          </div>
+        </div>
+
+        <div class="form-group row">
+          <label class="form-control-label col-sm-3">
+            {{ 'Webhook secret'|trans({}, 'Modules.Qameraai.Admin') }}
+          </label>
+          <div class="col-sm-9">
+            <input type="text" name="webhook_secret" class="form-control"
+                   value="{{ webhookSecretMasked }}">
+            <small class="form-text text-muted">
+              {{ 'Used to verify X-Qamera-Signature on incoming webhooks.'|trans({}, 'Modules.Qameraai.Admin') }}
+            </small>
+          </div>
+        </div>
+
+        <div class="form-group row">
+          <label class="form-control-label col-sm-3">
+            {{ 'Auto-register new products'|trans({}, 'Modules.Qameraai.Admin') }}
+          </label>
+          <div class="col-sm-9">
+            <label class="switch">
+              <input type="checkbox" name="auto_register_products" value="1" {{ autoRegisterProducts ? 'checked' : '' }}>
+              <span class="slider round"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group row">
+          <label class="form-control-label col-sm-3">
+            {{ 'Sync batch size'|trans({}, 'Modules.Qameraai.Admin') }}
+          </label>
+          <div class="col-sm-9">
+            <input type="number" name="sync_batch_size" class="form-control" min="1" max="1000" value="{{ syncBatchSize }}">
+          </div>
+        </div>
+
+        <div class="card-footer">
+          <button type="submit" class="btn btn-primary">
+            {{ 'Save'|trans({}, 'Admin.Actions') }}
+          </button>
+          <button type="button" class="btn btn-outline-secondary" disabled
+                  title="{{ 'Wired up in Phase 2'|trans({}, 'Modules.Qameraai.Admin') }}">
+            {{ 'Test connection'|trans({}, 'Modules.Qameraai.Admin') }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

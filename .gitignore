@@ -1,0 +1,29 @@
+# Composer
+/vendor/
+composer.lock
+
+# PrestaShop build artifacts
+/qameraai-*.zip
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local config / secrets
+.env
+.env.*
+!.env.example
+docker/.env
+
+# Test / coverage
+.phpunit.result.cache
+/coverage/
+/.phpunit.cache/
+
+# Logs
+*.log

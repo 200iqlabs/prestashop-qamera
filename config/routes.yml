@@ -1,0 +1,7 @@
+_qameraai_admin_configuration:
+  path: /qameraai/configuration
+  methods: [GET, POST]
+  defaults:
+    _controller: 'QameraAi\Module\Controller\Admin\ConfigurationController::indexAction'
+    _legacy_controller: AdminQameraAiConfiguration
+    _legacy_link: AdminQameraAiConfiguration

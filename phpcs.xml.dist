@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<ruleset name="qameraai">
+  <description>PSR-12 coding standard for the Qamera AI PrestaShop module.</description>
+
+  <file>src</file>
+  <file>tests</file>
+
+  <arg name="colors"/>
+  <arg name="basepath" value="."/>
+  <arg value="np"/>
+
+  <rule ref="PSR12"/>
+</ruleset>

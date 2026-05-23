@@ -1,0 +1,9 @@
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+    public: true
+
+  QameraAi\Module\Controller\Admin\:
+    resource: '../../src/Controller/Admin'
+    tags: ['controller.service_arguments']

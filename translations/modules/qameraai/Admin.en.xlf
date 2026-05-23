@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" version="1.2">
+  <file source-language="en" target-language="en" datatype="plaintext" original="Modules.Qameraai.Admin">
+    <body>
+      <trans-unit id="qameraai.module.name">
+        <source>Qamera AI</source>
+        <target>Qamera AI</target>
+      </trans-unit>
+      <trans-unit id="qameraai.module.description">
+        <source>AI-powered product photography: packshots and full sessions from your store products.</source>
+        <target>AI-powered product photography: packshots and full sessions from your store products.</target>
+      </trans-unit>
+      <trans-unit id="qameraai.configuration.title">
+        <source>Qamera AI configuration</source>
+        <target>Qamera AI configuration</target>
+      </trans-unit>
+      <trans-unit id="qameraai.configuration.api_base_url">
+        <source>API base URL</source>
+        <target>API base URL</target>
+      </trans-unit>
+      <trans-unit id="qameraai.configuration.api_key">
+        <source>API key</source>
+        <target>API key</target>
+      </trans-unit>
+      <trans-unit id="qameraai.configuration.webhook_secret">
+        <source>Webhook secret</source>
+        <target>Webhook secret</target>
+      </trans-unit>
+      <trans-unit id="qameraai.configuration.auto_register">
+        <source>Auto-register new products</source>
+        <target>Auto-register new products</target>
+      </trans-unit>
+      <trans-unit id="qameraai.configuration.batch_size">
+        <source>Sync batch size</source>
+        <target>Sync batch size</target>
+      </trans-unit>
+      <trans-unit id="qameraai.configuration.test_connection">
+        <source>Test connection</source>
+        <target>Test connection</target>
+      </trans-unit>
+      <trans-unit id="qameraai.configuration.saved">
+        <source>Settings saved.</source>
+        <target>Settings saved.</target>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

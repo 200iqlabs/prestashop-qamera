@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" version="1.2">
+  <file source-language="en" target-language="uk" datatype="plaintext" original="Modules.Qameraai.Admin">
+    <body>
+      <trans-unit id="qameraai.module.name">
+        <source>Qamera AI</source>
+        <target>Qamera AI</target>
+      </trans-unit>
+      <trans-unit id="qameraai.module.description">
+        <source>AI-powered product photography: packshots and full sessions from your store products.</source>
+        <target>Фотографія товарів на основі ШІ: пакшоти та повноцінні сесії з продуктів вашого магазину.</target>
+      </trans-unit>
+      <trans-unit id="qameraai.configuration.title">
+        <source>Qamera AI configuration</source>
+        <target>Налаштування Qamera AI</target>
+      </trans-unit>
+      <trans-unit id="qameraai.configuration.api_base_url">
+        <source>API base URL</source>
+        <target>Базовий URL API</target>
+      </trans-unit>
+      <trans-unit id="qameraai.configuration.api_key">
+        <source>API key</source>
+        <target>API-ключ</target>
+      </trans-unit>
+      <trans-unit id="qameraai.configuration.webhook_secret">
+        <source>Webhook secret</source>
+        <target>Секрет вебхука</target>
+      </trans-unit>
+      <trans-unit id="qameraai.configuration.auto_register">
+        <source>Auto-register new products</source>
+        <target>Автоматична реєстрація нових товарів</target>
+      </trans-unit>
+      <trans-unit id="qameraai.configuration.batch_size">
+        <source>Sync batch size</source>
+        <target>Розмір пакета синхронізації</target>
+      </trans-unit>
+      <trans-unit id="qameraai.configuration.test_connection">
+        <source>Test connection</source>
+        <target>Тестове з'єднання</target>
+      </trans-unit>
+      <trans-unit id="qameraai.configuration.saved">
+        <source>Settings saved.</source>
+        <target>Налаштування збережено.</target>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

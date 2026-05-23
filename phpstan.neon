@@ -1,0 +1,16 @@
+parameters:
+  level: 5
+  paths:
+    - src
+  excludePaths:
+    - src/Install/Migrations/*
+  treatPhpDocTypesAsCertain: false
+
+  # PrestaShop core classes are not autoloaded by Composer. Tell PHPStan
+  # which globals/classes to assume exist so static analysis runs without
+  # a full PS bootstrap.
+  ignoreErrors:
+    - identifier: class.notFound
+      paths:
+        - src/Install/Installer.php
+        - src/Controller/Admin/*.php

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" version="1.2">
+  <file source-language="en" target-language="pl" datatype="plaintext" original="Modules.Qameraai.Admin">
+    <body>
+      <trans-unit id="qameraai.module.name">
+        <source>Qamera AI</source>
+        <target>Qamera AI</target>
+      </trans-unit>
+      <trans-unit id="qameraai.module.description">
+        <source>AI-powered product photography: packshots and full sessions from your store products.</source>
+        <target>Fotografia produktowa oparta na AI: packshoty i pełne sesje z produktów Twojego sklepu.</target>
+      </trans-unit>
+      <trans-unit id="qameraai.configuration.title">
+        <source>Qamera AI configuration</source>
+        <target>Konfiguracja Qamera AI</target>
+      </trans-unit>
+      <trans-unit id="qameraai.configuration.api_base_url">
+        <source>API base URL</source>
+        <target>Bazowy URL API</target>
+      </trans-unit>
+      <trans-unit id="qameraai.configuration.api_key">
+        <source>API key</source>
+        <target>Klucz API</target>
+      </trans-unit>
+      <trans-unit id="qameraai.configuration.webhook_secret">
+        <source>Webhook secret</source>
+        <target>Sekret webhooka</target>
+      </trans-unit>
+      <trans-unit id="qameraai.configuration.auto_register">
+        <source>Auto-register new products</source>
+        <target>Automatyczna rejestracja nowych produktów</target>
+      </trans-unit>
+      <trans-unit id="qameraai.configuration.batch_size">
+        <source>Sync batch size</source>
+        <target>Rozmiar partii synchronizacji</target>
+      </trans-unit>
+      <trans-unit id="qameraai.configuration.test_connection">
+        <source>Test connection</source>
+        <target>Testuj połączenie</target>
+      </trans-unit>
+      <trans-unit id="qameraai.configuration.saved">
+        <source>Settings saved.</source>
+        <target>Ustawienia zapisane.</target>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>
