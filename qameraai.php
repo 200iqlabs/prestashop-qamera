@@ -67,4 +67,27 @@ class QameraAi extends Module
     {
         return true;
     }
+
+    /**
+     * Stub for the `actionProductAdd` hook registered by the installer.
+     * PrestaShop 9.0+ validates that every registered hook has a matching
+     * `hookXxx` method on the Module class at install time. The real
+     * implementation lands in Phase 3 (`ProductSyncService`), wired via
+     * the back-office "Auto-register new products" toggle.
+     *
+     * @param array<string, mixed> $params
+     */
+    public function hookActionProductAdd(array $params): void
+    {
+    }
+
+    /**
+     * Stub for the `actionProductUpdate` hook registered by the installer.
+     * See `hookActionProductAdd` for the Phase 3 plan.
+     *
+     * @param array<string, mixed> $params
+     */
+    public function hookActionProductUpdate(array $params): void
+    {
+    }
 }
