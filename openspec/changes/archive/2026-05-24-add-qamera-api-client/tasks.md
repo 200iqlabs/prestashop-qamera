@@ -81,15 +81,15 @@
 - [x] 10.1. `vendor/bin/phpcs --standard=PSR12 src/ tests/` clean (after `phpcbf` fixed CRLF in 4 pre-existing files)
 - [x] 10.2. `vendor/bin/phpstan analyse src/Api/{Dto,Exception,Internal} src/Api/QameraApiClient.php --level=5` clean locally; full `tests/phpstan/phpstan.neon` (incl. controllers + factory) runs only in CI with `_PS_ROOT_DIR_`
 - [x] 10.3. `vendor/bin/phpunit` — 41/41 green
-- [ ] 10.4. CI matrix green on PHP 8.1 / 8.2 / 8.3
+- [x] 10.4. CI matrix green on PHP 8.1 / 8.2 / 8.3 (merge run 26368360066, 34 s)
 - [ ] 10.5. Manual smoke: PrestaShop 9.x up, configuration page → paste `mk_live_5d21e5b26d221297.AbGQs3qIHgg8IEEetZHMWwX17AR6xpEmeRnjtdkd+ds=` → Test Connection → results panel shows `account_name=Pracownia Qamery AI`, `installation.platform=prestashop`
 
 ## 11. PR + merge
 
-- [ ] 11.1. PR against `main` linking this OpenSpec change
-- [ ] 11.2. Address review (Copilot + manual)
-- [ ] 11.3. Merge after green CI + smoke
+- [x] 11.1. PR against `main` linking this OpenSpec change (PR #1)
+- [x] 11.2. Address review (Copilot + manual) — adds `MissingConfigurationException`, CI install of PS core composer deps before PHPStan
+- [x] 11.3. Merge after green CI + smoke
 
 ## 12. Archive
 
-- [ ] 12.1. `openspec archive add-qamera-api-client` to roll deltas into `openspec/specs/qamera-api-client/spec.md` and updated `prestashop-module-bootstrap/spec.md`
+- [x] 12.1. `openspec archive add-qamera-api-client` to roll deltas into `openspec/specs/qamera-api-client/spec.md` and updated `prestashop-module-bootstrap/spec.md`
