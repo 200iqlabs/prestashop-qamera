@@ -90,4 +90,27 @@ class QameraAi extends Module
     public function hookActionProductUpdate(array $params): void
     {
     }
+
+    /**
+     * Stub for the `displayAdminProductsExtra` hook registered by the
+     * installer. The real implementation lands in Phase 4 (back-office
+     * product page "Qamera AI" tab with packshot generation controls).
+     *
+     * @param array<string, mixed> $params
+     */
+    public function hookDisplayAdminProductsExtra(array $params): string
+    {
+        return '';
+    }
+
+    /**
+     * Stub for the `displayBackOfficeHeader` hook registered by the
+     * installer. The real implementation lands in Phase 4 (injects the
+     * back-office CSS/JS bundle on Qamera-related admin screens).
+     *
+     * @param array<string, mixed> $params
+     */
+    public function hookDisplayBackOfficeHeader(array $params): void
+    {
+    }
 }
