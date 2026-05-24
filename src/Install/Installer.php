@@ -147,7 +147,13 @@ final class Installer
         foreach (Language::getLanguages(true) as $language) {
             $tab->name[$language['id_lang']] = 'Qamera AI';
         }
-        $tab->id_parent = -1;
+
+        // Attach under the IMPROVE root so the module has a visible menu
+        // entry in the back-office sidebar instead of forcing operators
+        // to reach Configure via Module Manager. Falls back to -1 (hidden
+        // orphan) on PS builds that don't expose the IMPROVE class slug.
+        $parentId = (int) Tab::getIdFromClassName('IMPROVE');
+        $tab->id_parent = $parentId > 0 ? $parentId : -1;
         $tab->module = $this->module->name;
 
         return (bool) $tab->add();
