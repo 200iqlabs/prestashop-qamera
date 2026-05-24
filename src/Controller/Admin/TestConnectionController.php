@@ -12,7 +12,8 @@ use QameraAi\Module\Api\Exception\RateLimitException;
 use QameraAi\Module\Api\Exception\ServerException;
 use QameraAi\Module\Api\Exception\TransportException;
 use QameraAi\Module\Api\Exception\ValidationException;
-use QameraAi\Module\Api\QameraApiClient;
+use QameraAi\Module\Api\Factory\MissingConfigurationException;
+use QameraAi\Module\Api\Factory\QameraApiClientFactory;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 
@@ -24,7 +25,7 @@ use Symfony\Component\HttpFoundation\Request;
  */
 final class TestConnectionController extends FrameworkBundleAdminController
 {
-    public function indexAction(Request $request, QameraApiClient $client): JsonResponse
+    public function indexAction(Request $request, QameraApiClientFactory $factory): JsonResponse
     {
         $token = (string) $request->request->get('_token');
         if (!$this->isCsrfTokenValid('qamera_test_connection', $token)) {
@@ -36,7 +37,16 @@ final class TestConnectionController extends FrameworkBundleAdminController
         }
 
         try {
-            $me = $client->me();
+            $me = $factory->create()->me();
+        } catch (MissingConfigurationException $e) {
+            return new JsonResponse([
+                'ok' => false,
+                'message' => $this->trans(
+                    'Qamera AI API key is not configured. Save your credentials first.',
+                    'Modules.Qameraai.Admin',
+                ),
+                'code' => 'not_configured',
+            ]);
         } catch (ApiException $e) {
             return new JsonResponse([
                 'ok' => false,

@@ -90,6 +90,10 @@
         <source>Authentication failed. Verify the API key and that the installation is active.</source>
         <target>Помилка автентифікації. Перевірте API-ключ і стан інсталяції.</target>
       </trans-unit>
+      <trans-unit id="apiClient.testConnection.errors.notConfigured">
+        <source>Qamera AI API key is not configured. Save your credentials first.</source>
+        <target>API-ключ Qamera AI не налаштовано. Спочатку збережіть облікові дані.</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

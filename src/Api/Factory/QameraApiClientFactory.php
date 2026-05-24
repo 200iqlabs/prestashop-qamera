@@ -7,7 +7,6 @@ namespace QameraAi\Module\Api\Factory;
 use Configuration;
 use Context;
 use Module;
-use QameraAi\Module\Api\Exception\ValidationException;
 use QameraAi\Module\Api\Internal\ErrorEnvelopeParser;
 use QameraAi\Module\Api\Internal\HeaderBuilder;
 use QameraAi\Module\Api\Internal\IdempotencyKeyGenerator;
@@ -36,7 +35,7 @@ final class QameraApiClientFactory
     {
         $apiKey = (string) Configuration::get('QAMERAAI_API_KEY');
         if ($apiKey === '') {
-            throw new ValidationException('Qamera AI API key is not configured');
+            throw new MissingConfigurationException('Qamera AI API key is not configured');
         }
 
         $baseUrl = (string) Configuration::get('QAMERAAI_API_BASE_URL');
