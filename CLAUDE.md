@@ -15,7 +15,8 @@ PrestaShop module that talks to the Qamera AI Plugin API (`https://qamera.ai/api
 - **OpenSpec spec-driven from day 1.** Any non-trivial change starts with `/opsx:new <kebab-name>`. Implementation only happens after proposal + design + specs + tasks are committed.
 - **Branch per change.** `add-foo`, `fix-bar`. Direct commits to `main` are reserved for chore tweaks (renumber, lint).
 - **CI on every push** — PHPCS + PHPStan + PHPUnit on PHP 8.1/8.2/8.3. Red CI blocks merge.
-- **Composer install BEFORE `docker compose up`** — PS installer scans modules/ on first boot and tries to load `QameraAi\Module\…`; without `vendor/`, the container exits 1. See `docker/README.md` for the one-shot recipe.
+- **Composer install BEFORE `make up`** — PS installer scans modules/ on first boot and tries to load `QameraAi\Module\…`; without `vendor/`, the container exits 1. Run `composer install` in this directory before triggering `make up` from the parent `qameraai-prestashop/` shell.
+- **Dev environment lives in the parent shell**, not in this repo. `qameraai-prestashop/` (parent of `modules/qameraai/`) owns `docker-compose.yml` + `Makefile`. Do NOT reintroduce a `docker/` directory here — duplicates risk port collisions (parent binds `qameraai-ps` on 8080).
 
 ## Credentials for smoke testing
 
