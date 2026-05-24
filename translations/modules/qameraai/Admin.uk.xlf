@@ -42,6 +42,58 @@
         <source>Settings saved.</source>
         <target>Налаштування збережено.</target>
       </trans-unit>
+      <trans-unit id="apiClient.testConnection.testing">
+        <source>Testing connection…</source>
+        <target>Перевірка з'єднання…</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.success">
+        <source>Connection successful</source>
+        <target>З'єднання успішне</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.failure">
+        <source>Connection failed</source>
+        <target>Помилка з'єднання</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.network">
+        <source>Network error reaching Qamera AI</source>
+        <target>Помилка мережі під час підключення до Qamera AI</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.fields.accountName">
+        <source>Account</source>
+        <target>Обліковий запис</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.fields.credits">
+        <source>Credits</source>
+        <target>Кредити</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.fields.plan">
+        <source>Plan</source>
+        <target>Тариф</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.fields.platform">
+        <source>Platform</source>
+        <target>Платформа</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.fields.status">
+        <source>Status</source>
+        <target>Статус</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.errors.csrf">
+        <source>Invalid CSRF token.</source>
+        <target>Недійсний CSRF-токен.</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.errors.transport">
+        <source>Could not reach Qamera AI. Check your network or the API base URL.</source>
+        <target>Не вдалося підключитися до Qamera AI. Перевірте мережу або базовий URL API.</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.errors.auth">
+        <source>Authentication failed. Verify the API key and that the installation is active.</source>
+        <target>Помилка автентифікації. Перевірте API-ключ і стан інсталяції.</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.errors.notConfigured">
+        <source>Qamera AI API key is not configured. Save your credentials first.</source>
+        <target>API-ключ Qamera AI не налаштовано. Спочатку збережіть облікові дані.</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

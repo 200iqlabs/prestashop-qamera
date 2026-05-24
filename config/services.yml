@@ -8,3 +8,7 @@ services:
     resource: '../src/*'
     exclude:
       - '../src/Install/*'
+
+  QameraAi\Module\Api\QameraApiClient:
+    factory: ['@QameraAi\Module\Api\Factory\QameraApiClientFactory', 'create']
+    public: true

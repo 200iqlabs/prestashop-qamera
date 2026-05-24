@@ -1,0 +1,17 @@
+includes:
+  - %currentWorkingDirectory%/vendor/prestashop/php-dev-tools/phpstan/ps-module-extension.neon
+
+parameters:
+  level: 5
+  paths:
+    - ../../src
+
+  # Install/ uses raw PS globals (Db, _DB_PREFIX_, Tab, Configuration) that
+  # are not resolvable even with the core loaded. Restoring coverage there
+  # is a follow-up; runtime code under Api/, Controller/Admin/, Service/,
+  # Repository/ stays in scope.
+  excludePaths:
+    - ../../src/Install/*
+
+  treatPhpDocTypesAsCertain: false
+  reportUnmatchedIgnoredErrors: false

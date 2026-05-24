@@ -27,22 +27,24 @@ The plugin never logs into Qamera AI directly. Your operator at Qamera AI issues
 git clone https://github.com/200iqlabs/prestashop-qamera.git
 cd prestashop-qamera
 composer install --no-dev
-zip -r qameraai.zip . -x ".git/*" "tests/*" "docker/*" ".github/*" ".gitignore" "*.md" "phpunit.xml.dist" "phpcs.xml.dist" "phpstan.neon"
+zip -r qameraai.zip . -x ".git/*" "tests/*" ".github/*" ".gitignore" "*.md" "phpunit.xml.dist" "phpcs.xml.dist" "phpstan.neon"
 ```
 
 ## Local development
 
-Two Docker Compose profiles are provided for testing against the supported PrestaShop releases:
+This repository ships only the module source. The preferred dev environment is the sibling `qameraai-prestashop` shell which hosts the PrestaShop container, MySQL, phpMyAdmin, and a `Makefile` with `make up` / `make install` / `make logs` shortcuts. Clone this repo as a subdirectory of that shell:
 
 ```bash
-# PS 9.x
-docker compose -f docker/docker-compose.ps9.yml up
-
-# PS 8.x
-docker compose -f docker/docker-compose.ps8.yml up
+git clone https://github.com/200iqlabs/prestashop-qamera.git modules/qameraai
+cd modules/qameraai && composer install
+cd ..
+make up
+make install   # runs `prestashop:module install qameraai` inside the container
 ```
 
-PS back office is at `http://localhost:8090/admin-dev`. The module is mounted from the host so edits show up after refresh. Point the configuration page at your local Qamera AI:
+PS back office is at `http://localhost:8080/admin-dev`. The module source under `./modules/qameraai/` is bind-mounted into the container so edits show up after a back-office refresh.
+
+Point the module's configuration page at your local Qamera AI:
 
 - API base: `http://host.docker.internal:3000/api/v1/plugin`
 - API key + webhook secret: from `Settings → API Keys` on a local pracownia-style account.

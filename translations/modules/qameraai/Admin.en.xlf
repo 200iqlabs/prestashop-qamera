@@ -42,6 +42,58 @@
         <source>Settings saved.</source>
         <target>Settings saved.</target>
       </trans-unit>
+      <trans-unit id="apiClient.testConnection.testing">
+        <source>Testing connection…</source>
+        <target>Testing connection…</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.success">
+        <source>Connection successful</source>
+        <target>Connection successful</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.failure">
+        <source>Connection failed</source>
+        <target>Connection failed</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.network">
+        <source>Network error reaching Qamera AI</source>
+        <target>Network error reaching Qamera AI</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.fields.accountName">
+        <source>Account</source>
+        <target>Account</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.fields.credits">
+        <source>Credits</source>
+        <target>Credits</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.fields.plan">
+        <source>Plan</source>
+        <target>Plan</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.fields.platform">
+        <source>Platform</source>
+        <target>Platform</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.fields.status">
+        <source>Status</source>
+        <target>Status</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.errors.csrf">
+        <source>Invalid CSRF token.</source>
+        <target>Invalid CSRF token.</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.errors.transport">
+        <source>Could not reach Qamera AI. Check your network or the API base URL.</source>
+        <target>Could not reach Qamera AI. Check your network or the API base URL.</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.errors.auth">
+        <source>Authentication failed. Verify the API key and that the installation is active.</source>
+        <target>Authentication failed. Verify the API key and that the installation is active.</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.errors.notConfigured">
+        <source>Qamera AI API key is not configured. Save your credentials first.</source>
+        <target>Qamera AI API key is not configured. Save your credentials first.</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

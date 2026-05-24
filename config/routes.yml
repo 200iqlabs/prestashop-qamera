@@ -5,3 +5,11 @@ _qameraai_admin_configuration:
     _controller: 'QameraAi\Module\Controller\Admin\ConfigurationController::indexAction'
     _legacy_controller: AdminQameraAiConfiguration
     _legacy_link: AdminQameraAiConfiguration
+
+_qameraai_admin_test_connection:
+  path: /qameraai/test-connection
+  methods: [POST]
+  defaults:
+    _controller: 'QameraAi\Module\Controller\Admin\TestConnectionController::indexAction'
+    _legacy_controller: AdminQameraAiConfiguration
+    _legacy_link: AdminQameraAiConfiguration

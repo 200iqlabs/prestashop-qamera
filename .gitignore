@@ -25,5 +25,8 @@ docker/.env
 /coverage/
 /.phpunit.cache/
 
+# PHPStan: PrestaShop source clone used by CI for core resolution
+/.ps-src/
+
 # Logs
 *.log
