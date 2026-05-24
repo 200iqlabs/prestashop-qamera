@@ -1,7 +1,9 @@
 # qamera-api-client Specification
 
 ## Purpose
-TBD - created by archiving change add-qamera-api-client. Update Purpose after archive.
+
+Typed PHP client for the Qamera AI Plugin API (`https://qamera.ai/api/v1/plugin`). Owns authentication and traceability headers, idempotency-key generation for write endpoints, exponential-backoff retry of transient failures, and the mapping from non-2xx error envelopes to a typed exception hierarchy. Consumed by the back-office configuration page (Test Connection), the catalog/job/product flows, and the webhook handler — every outbound call to the Qamera AI Plugin API goes through this client.
+
 ## Requirements
 ### Requirement: Client carries authentication and traceability headers on every request
 
@@ -156,7 +158,7 @@ Response DTOs SHALL be `final readonly` classes; missing required fields on deco
 
 ### Requirement: Unit tests assert retry, header, error mapping behaviour without live HTTP
 
-The change SHALL ship Vitest-style colocated unit tests using Guzzle's `MockHandler` for transport. The test suite SHALL cover at minimum:
+The change SHALL ship PHPUnit unit tests under `tests/` using Guzzle's `MockHandler` for transport. The test suite SHALL cover at minimum:
 
 - Retry decision matrix (`ConnectException`, `502`/`503`/`504`, `429` with and without `Retry-After`, non-retryable 4xx)
 - Header construction (`X-Api-Key`, `User-Agent` format, `Accept-Language`, `Idempotency-Key` presence on writes and absence on reads)
