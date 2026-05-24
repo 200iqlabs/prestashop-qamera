@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
 
+env:
+  # PrestaShop source tag used to load real core classes for PHPStan.
+  # Bump when raising the supported PS floor.
+  PS_VERSION: '9.0.0'
+
 jobs:
   static-analysis:
     name: Static analysis (PHP ${{ matrix.php }})
@@ -37,8 +42,21 @@ jobs:
       - name: PHP_CodeSniffer (PSR-12)
         run: vendor/bin/phpcs --standard=PSR12 src/ tests/
 
-      - name: PHPStan (level 5)
-        run: vendor/bin/phpstan analyse src/ --level=5 --no-progress
+      - name: Cache PrestaShop source
+        id: ps-cache
+        uses: actions/cache@v4
+        with:
+          path: .ps-src
+          key: ps-src-${{ env.PS_VERSION }}
+
+      - name: Clone PrestaShop source (for PHPStan core resolution)
+        if: steps.ps-cache.outputs.cache-hit != 'true'
+        run: git clone --depth 1 --branch ${{ env.PS_VERSION }} https://github.com/PrestaShop/PrestaShop.git .ps-src
+
+      - name: PHPStan (level 5, with PS core loaded)
+        env:
+          _PS_ROOT_DIR_: ${{ github.workspace }}/.ps-src
+        run: vendor/bin/phpstan analyse --configuration=tests/phpstan/phpstan.neon --no-progress
 
       - name: PHPUnit
         run: vendor/bin/phpunit

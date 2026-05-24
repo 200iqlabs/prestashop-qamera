@@ -25,7 +25,7 @@ The upstream API is now feature-complete (`/me`, the catalog endpoints, jobs, pr
   - `listProducts()`, `getProduct(string idOrRef)`, `deleteProduct(string idOrRef)`
   - Out of scope for this change: `/jobs/batch`, `/installations/{id}/rotate-hmac`, `/webhooks/{id}/replay` (operational only; no plugin-side need yet)
 - **Configuration controller wire-up** — the disabled "Test connection" button enables, posts to a new admin route that calls `QameraApiClient::me()` and surfaces `{account_name, credits_balance, subscription_plan, installation.platform, installation.status}` in a results panel under the save form.
-- **PHPStan restored on the controller** — adding `php-stubs/prestashop-stubs` as a dev dependency lets us drop the `excludePaths` rule for `src/Controller/Admin` introduced in the Phase 1 hotfix; `src/Install` stays excluded for now (heavy use of globals).
+- **PHPStan restored on the controller** — adopting the official `prestashop/php-dev-tools` PHPStan setup (config at `tests/phpstan/phpstan.neon` including `ps-module-extension.neon`, CI exports `_PS_ROOT_DIR_` from a cached PS source clone) lets us drop the `excludePaths` rule for `src/Controller/Admin` introduced in the Phase 1 hotfix; `src/Install` stays excluded for now (heavy use of globals). Note: no separate stubs package — `php-stubs/prestashop-stubs` does not exist on Packagist; the upstream-supported path is to load actual PS sources.
 
 ## Capabilities
 
@@ -47,8 +47,9 @@ The upstream API is now feature-complete (`/me`, the catalog endpoints, jobs, pr
   - `src/Controller/Admin/TestConnectionController.php` (or extend `ConfigurationController` with a second action — TBD in design)
   - `tests/Unit/Api/` — coverage on retry, error mapping, header construction
 - **Code (modified)**
-  - `composer.json` — add `php-stubs/prestashop-stubs` (dev), already has Guzzle + ramsey-uuid
-  - `phpstan.neon` — drop `src/Controller/Admin/*` from `excludePaths`
+  - `composer.json` — no new deps (Guzzle + ramsey-uuid + prestashop/php-dev-tools already locked); only the `analyse` script repointed at `tests/phpstan/phpstan.neon`
+  - `tests/phpstan/phpstan.neon` (NEW) — official `ps-module-extension.neon` include; drops `src/Controller/Admin/*` from analysis exclude; root `phpstan.neon` removed
+  - `.github/workflows/ci.yml` — shallow-clone PrestaShop source (cached), export `_PS_ROOT_DIR_` for the PHPStan step
   - `config/services.yml` — explicit binding for `QameraApiClient` so it picks up `Configuration` values
   - `views/templates/admin/configuration.html.twig` — enable the Test Connection button, add a results panel
   - English / Polish / Ukrainian XLIFF — new strings for Test Connection result states

@@ -97,11 +97,19 @@ Every subclass exposes `getEnvelope(): ?ErrorEnvelope` returning the parsed body
 
 **Alternative considered.** Live-validate the field on blur. Rejected — too many round-trips while the user is typing; explicit button is friendlier.
 
-### D8. `php-stubs/prestashop-stubs` restored as dev dep; PHPStan re-includes `src/Controller/Admin`
+### D8. Adopt official `prestashop/php-dev-tools` PHPStan setup; PHPStan re-includes `src/Controller/Admin`
 
-**Decision.** Phase 1 had to exclude `src/Controller/Admin/*` from PHPStan because `FrameworkBundleAdminController` is not Composer-autoloaded. With `composer require --dev php-stubs/prestashop-stubs`, PHPStan can resolve the parent class and the controller comes back under level-5 analysis. `src/Install/*` stays excluded for now — heavy use of globals (`Db`, `_DB_PREFIX_`, `Tab`, `Configuration`) means stubs would need significant manual augmentation, and the install code rarely changes.
+**Decision.** Phase 1 had to exclude `src/Controller/Admin/*` from PHPStan because `FrameworkBundleAdminController` is not Composer-autoloaded. The PrestaShop project does NOT ship a `php-stubs/prestashop-stubs` package (an earlier draft of this design assumed one existed — it does not, on Packagist or elsewhere). The official upstream recommendation is `prestashop/php-dev-tools` (already in our `require-dev`) combined with `ps-module-extension.neon` and a `_PS_ROOT_DIR_` env var pointing at a real PrestaShop source checkout — the analyser loads the actual core classes, not stubs.
 
-**Why.** The controller is where the API client actually fires from. Keeping it static-analysed catches mistakes a unit test would not.
+We adopt this approach: configuration moves to `tests/phpstan/phpstan.neon` (canonical location per `php-dev-tools` template) which includes `vendor/prestashop/php-dev-tools/phpstan/ps-module-extension.neon`. CI clones PrestaShop source once per matrix job (cached via `actions/cache` on the `_PS_VERSION` lock) and exports `_PS_ROOT_DIR_` before running PHPStan. `src/Install/*` stays excluded for now — heavy use of globals (`Db`, `_DB_PREFIX_`, `Tab`, `Configuration`) is still surfaced as undefined-method warnings even with the core loaded, because the install code touches private internals. Restoring it is a follow-up.
+
+**Why.** The controller is where the API client actually fires from. Keeping it static-analysed catches mistakes a unit test would not. Adopting the upstream setup means we inherit PS-version-specific guarantees (e.g., the `FrameworkBundleAdminController` deprecation in PS 9.0) without maintaining a parallel stub set ourselves.
+
+**Alternative considered.** Hand-rolled minimal stubs in `tests/phpstan/stubs/`. Rejected — would diverge from upstream at every PS major version bump, and we already pay for `prestashop/php-dev-tools` for the coding-standards CLI.
+
+**Trade-off accepted.** CI matrix adds ~30–60 s per PHP-version job for the PrestaShop source clone (cached after the first run). Worth it for the level-5 coverage on the controller layer.
+
+**Local dev note.** Running `composer analyse` locally requires `_PS_ROOT_DIR_` to point at a PrestaShop source tree (e.g., the parent shell's Docker bind mount). Without it, fall back to `vendor/bin/phpstan analyse src/Api src/Service src/Repository --level=5` which exercises the pure-PHP layer and needs no stubs.
 
 ## Risks / Trade-offs
 

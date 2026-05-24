@@ -47,7 +47,8 @@
   "scripts": {
     "lint": "phpcs --standard=PSR12 src/ tests/",
     "lint:fix": "phpcbf --standard=PSR12 src/ tests/",
-    "analyse": "phpstan analyse src/ --level=5",
+    "analyse": "phpstan analyse --configuration=tests/phpstan/phpstan.neon",
+    "analyse:api": "phpstan analyse src/Api/Dto src/Api/Exception src/Api/Internal src/Api/QameraApiClient.php --level=5",
     "test": "phpunit"
   }
 }

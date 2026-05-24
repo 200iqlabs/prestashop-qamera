@@ -42,6 +42,54 @@
         <source>Settings saved.</source>
         <target>Ustawienia zapisane.</target>
       </trans-unit>
+      <trans-unit id="apiClient.testConnection.testing">
+        <source>Testing connection…</source>
+        <target>Testowanie połączenia…</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.success">
+        <source>Connection successful</source>
+        <target>Połączenie udane</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.failure">
+        <source>Connection failed</source>
+        <target>Połączenie nieudane</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.network">
+        <source>Network error reaching Qamera AI</source>
+        <target>Błąd sieci przy próbie połączenia z Qamera AI</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.fields.accountName">
+        <source>Account</source>
+        <target>Konto</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.fields.credits">
+        <source>Credits</source>
+        <target>Kredyty</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.fields.plan">
+        <source>Plan</source>
+        <target>Plan</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.fields.platform">
+        <source>Platform</source>
+        <target>Platforma</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.fields.status">
+        <source>Status</source>
+        <target>Status</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.errors.csrf">
+        <source>Invalid CSRF token.</source>
+        <target>Nieprawidłowy token CSRF.</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.errors.transport">
+        <source>Could not reach Qamera AI. Check your network or the API base URL.</source>
+        <target>Nie udało się połączyć z Qamera AI. Sprawdź sieć lub bazowy URL API.</target>
+      </trans-unit>
+      <trans-unit id="apiClient.testConnection.errors.auth">
+        <source>Authentication failed. Verify the API key and that the installation is active.</source>
+        <target>Uwierzytelnianie nie powiodło się. Sprawdź klucz API oraz czy instalacja jest aktywna.</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

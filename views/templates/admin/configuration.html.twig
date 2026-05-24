@@ -75,12 +75,114 @@
           <button type="submit" class="btn btn-primary">
             {{ 'Save'|trans({}, 'Admin.Actions') }}
           </button>
-          <button type="button" class="btn btn-outline-secondary" disabled
-                  title="{{ 'Wired up in Phase 2'|trans({}, 'Modules.Qameraai.Admin') }}">
+          <button type="button"
+                  id="qameraai-test-connection"
+                  class="btn btn-outline-secondary"
+                  data-url="{{ path('_qameraai_admin_test_connection') }}"
+                  data-token="{{ csrf_token('qamera_test_connection') }}">
             {{ 'Test connection'|trans({}, 'Modules.Qameraai.Admin') }}
           </button>
         </div>
       </form>
+
+      <div id="qameraai-test-connection-result" class="mt-3" hidden>
+        <div class="alert" role="alert"></div>
+      </div>
     </div>
   </div>
+
+  <script>
+    (function () {
+      var btn = document.getElementById('qameraai-test-connection');
+      var resultWrap = document.getElementById('qameraai-test-connection-result');
+      if (!btn || !resultWrap) { return; }
+      var alertBox = resultWrap.querySelector('.alert');
+
+      var labels = {
+        testing: {{ 'Testing connection…'|trans({}, 'Modules.Qameraai.Admin')|json_encode|raw }},
+        success: {{ 'Connection successful'|trans({}, 'Modules.Qameraai.Admin')|json_encode|raw }},
+        failure: {{ 'Connection failed'|trans({}, 'Modules.Qameraai.Admin')|json_encode|raw }},
+        network: {{ 'Network error reaching Qamera AI'|trans({}, 'Modules.Qameraai.Admin')|json_encode|raw }},
+        accountName: {{ 'Account'|trans({}, 'Modules.Qameraai.Admin')|json_encode|raw }},
+        credits: {{ 'Credits'|trans({}, 'Modules.Qameraai.Admin')|json_encode|raw }},
+        plan: {{ 'Plan'|trans({}, 'Modules.Qameraai.Admin')|json_encode|raw }},
+        platform: {{ 'Platform'|trans({}, 'Modules.Qameraai.Admin')|json_encode|raw }},
+        status: {{ 'Status'|trans({}, 'Modules.Qameraai.Admin')|json_encode|raw }}
+      };
+
+      function clearBox() {
+        while (alertBox.firstChild) { alertBox.removeChild(alertBox.firstChild); }
+      }
+
+      function appendLine(parent, label, value, isFirst) {
+        if (!isFirst) { parent.appendChild(document.createElement('br')); }
+        var labelNode = document.createElement('strong');
+        labelNode.textContent = label + ': ';
+        parent.appendChild(labelNode);
+        parent.appendChild(document.createTextNode(value == null ? '' : String(value)));
+      }
+
+      function showSuccess(data) {
+        alertBox.className = 'alert alert-success';
+        clearBox();
+        var header = document.createElement('strong');
+        header.textContent = labels.success;
+        alertBox.appendChild(header);
+        alertBox.appendChild(document.createElement('br'));
+        appendLine(alertBox, labels.accountName, data.account_name, true);
+        appendLine(alertBox, labels.credits, data.credits_balance, false);
+        appendLine(alertBox, labels.plan, data.subscription_plan, false);
+        appendLine(alertBox, labels.platform, data.installation && data.installation.platform, false);
+        appendLine(alertBox, labels.status, data.installation && data.installation.status, false);
+      }
+
+      function showFailure(message, code) {
+        alertBox.className = 'alert alert-danger';
+        clearBox();
+        var header = document.createElement('strong');
+        header.textContent = labels.failure;
+        alertBox.appendChild(header);
+        alertBox.appendChild(document.createElement('br'));
+        alertBox.appendChild(document.createTextNode(message || ''));
+        if (code) {
+          alertBox.appendChild(document.createTextNode(' '));
+          var codeNode = document.createElement('code');
+          codeNode.textContent = code;
+          alertBox.appendChild(codeNode);
+        }
+      }
+
+      btn.addEventListener('click', function () {
+        btn.disabled = true;
+        resultWrap.hidden = false;
+        alertBox.className = 'alert alert-info';
+        clearBox();
+        alertBox.textContent = labels.testing;
+
+        var form = new FormData();
+        form.append('_token', btn.dataset.token);
+
+        fetch(btn.dataset.url, {
+          method: 'POST',
+          credentials: 'same-origin',
+          body: form,
+          headers: { 'Accept': 'application/json' }
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (json) {
+            if (json && json.ok) {
+              showSuccess(json);
+            } else {
+              showFailure((json && json.message) || labels.failure, json && json.code);
+            }
+          })
+          .catch(function () {
+            showFailure(labels.network, 'network_error');
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+      });
+    })();
+  </script>
 {% endblock %}
