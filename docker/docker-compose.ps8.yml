@@ -9,7 +9,7 @@ services:
     volumes:
       - ps8_mysql:/var/lib/mysql
     healthcheck:
-      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-pprestashop']
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-uroot', '-pprestashop']
       interval: 5s
       retries: 20
 
@@ -26,7 +26,7 @@ services:
       DB_PREFIX: ps_
       PS_DOMAIN: localhost:8081
       PS_INSTALL_AUTO: 1
-      PS_INSTALL_DB: 1
+      PS_INSTALL_DB: 0
       PS_LANGUAGE: en
       PS_COUNTRY: pl
       ADMIN_MAIL: admin@example.com

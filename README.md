@@ -42,7 +42,7 @@ docker compose -f docker/docker-compose.ps9.yml up
 docker compose -f docker/docker-compose.ps8.yml up
 ```
 
-PS back office is at `http://localhost:8080/admin-dev`. The module is mounted from the host so edits show up after refresh. Point the configuration page at your local Qamera AI:
+PS back office is at `http://localhost:8090/admin-dev`. The module is mounted from the host so edits show up after refresh. Point the configuration page at your local Qamera AI:
 
 - API base: `http://host.docker.internal:3000/api/v1/plugin`
 - API key + webhook secret: from `Settings → API Keys` on a local pracownia-style account.

@@ -68,11 +68,11 @@
 
 ## 11. Verification
 
-- [ ] 11.1. `composer install` succeeds locally
-- [ ] 11.2. `vendor/bin/phpcs --standard=PSR12 src/ tests/` clean
-- [ ] 11.3. `vendor/bin/phpstan analyse src/ --level=5` clean
-- [ ] 11.4. `vendor/bin/phpunit` runs the smoke test
-- [ ] 11.5. `docker compose -f docker/docker-compose.ps9.yml up` brings up PS 9.x, the module appears in Module Manager → Designer view, and clicking Install succeeds without errors
+- [x] 11.1. `composer install` succeeds locally
+- [x] 11.2. `vendor/bin/phpcs --standard=PSR12 src/ tests/` clean
+- [x] 11.3. `vendor/bin/phpstan analyse src/ --level=5` clean
+- [x] 11.4. `vendor/bin/phpunit` runs the smoke test
+- [x] 11.5. `docker compose -f docker/docker-compose.ps9.yml up` brings up PS 9.x, the module appears in Module Manager → Designer view, and clicking Install succeeds without errors
 
 ## 12. Archive
 

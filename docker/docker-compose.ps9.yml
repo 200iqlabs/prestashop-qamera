@@ -9,7 +9,7 @@ services:
     volumes:
       - ps9_mysql:/var/lib/mysql
     healthcheck:
-      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-pprestashop']
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-uroot', '-pprestashop']
       interval: 5s
       retries: 20
 
@@ -24,15 +24,15 @@ services:
       DB_USER: prestashop
       DB_PASSWD: prestashop
       DB_PREFIX: ps_
-      PS_DOMAIN: localhost:8080
+      PS_DOMAIN: localhost:8090
       PS_INSTALL_AUTO: 1
-      PS_INSTALL_DB: 1
+      PS_INSTALL_DB: 0
       PS_LANGUAGE: en
       PS_COUNTRY: pl
       ADMIN_MAIL: admin@example.com
       ADMIN_PASSWD: admin1234
     ports:
-      - '8080:80'
+      - '8090:80'
     volumes:
       - ../:/var/www/html/modules/qameraai:rw
       - ps9_data:/var/www/html
