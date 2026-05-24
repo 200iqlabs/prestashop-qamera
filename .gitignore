@@ -5,6 +5,10 @@ composer.lock
 # PrestaShop build artifacts
 /qameraai-*.zip
 
+# PrestaShop install-time generated locale-specific config (regenerated
+# per locale at every install; not source of truth).
+/config_*.xml
+
 # IDE
 .idea/
 .vscode/
