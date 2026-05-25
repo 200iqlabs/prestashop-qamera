@@ -48,7 +48,7 @@ class ProductSnapshotWriter
 
         $ref = $this->refBuilder->build($idShop, $idProduct);
 
-        $displayName = $this->extractDefaultLang($product->name ?? null, $idLangDefault, $idProduct, 'name');
+        $displayName = $this->extractDefaultLang($product->name, $idLangDefault, $idProduct, 'name');
         if ($displayName === null || $displayName === '') {
             // Spec requires display_name_snapshot NOT NULL; fall back to a
             // placeholder so the bookkeeping row still lands. Operators see
@@ -68,9 +68,9 @@ class ProductSnapshotWriter
         }
         $displayName = $this->truncate($displayName, self::NAME_MAX);
 
-        $sku = $this->normalizeReference($product->reference ?? null);
+        $sku = $this->normalizeReference($product->reference);
         $description = $this->extractDefaultLang(
-            $product->description_short ?? null,
+            $product->description_short,
             $idLangDefault,
             $idProduct,
             'description_short'
@@ -112,17 +112,14 @@ class ProductSnapshotWriter
      * is missing, we fall back to the first non-empty value and log a
      * warning so operators can clean up legacy data.
      *
-     * @param array<int, string>|string|null $field
+     * @param array<int, string>|string $field
      */
     private function extractDefaultLang(
-        array|string|null $field,
+        array|string $field,
         int $idLangDefault,
         int $idProduct,
         string $fieldName
     ): ?string {
-        if ($field === null) {
-            return null;
-        }
         if (is_string($field)) {
             $trim = trim($field);
             return $trim === '' ? null : $trim;
@@ -156,11 +153,8 @@ class ProductSnapshotWriter
         return null;
     }
 
-    private function normalizeReference(?string $reference): ?string
+    private function normalizeReference(string $reference): ?string
     {
-        if ($reference === null) {
-            return null;
-        }
         $reference = trim($reference);
         if ($reference === '') {
             return null;
