@@ -28,10 +28,12 @@ services:
     public: true
     arguments:
       $db: '@qameraai.db'
-      # PS does not change `_DB_PREFIX_` at runtime; the constant is defined
-      # in `config/defines.inc.php` at boot. Hardcoded to the upstream default
-      # — if an integrator customises it they can override this parameter
-      # in their own services overrides. (Tracked: tasks.md §5.4.)
-      $tablePrefix: 'ps_'
+      # Resolves to the runtime `_DB_PREFIX_` constant defined by PS at
+      # boot (`config/defines.inc.php`). Symfony's `!php/const` directive
+      # reads the constant during container compilation, so shops with a
+      # custom DB prefix get the correct table name — `ps_` is only the
+      # default, not a guarantee. The `Installer::createSchema` migration
+      # already uses `_DB_PREFIX_`; this keeps the writer consistent.
+      $tablePrefix: !php/const _DB_PREFIX_
       $refBuilder: '@QameraAi\Module\Sync\ProductRefBuilder'
       $logger: '@QameraAi\Module\Sync\PrestaShopLoggerWrapper'

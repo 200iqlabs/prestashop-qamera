@@ -1,5 +1,13 @@
 <?php
 
+// phpcs:ignoreFile -- This file intentionally declares PrestaShop's
+// global classes (Db, Product, Configuration, PrestaShopLogger,
+// PrestaShopDatabaseException, Context) without a namespace so that
+// unit tests can resolve the same `use Db;` / `use Product;` imports
+// that production code uses. The PSR-12 "must be in a namespace" rule
+// does not apply here; CI passes the file path explicitly so the
+// phpcs.xml.dist exclude-pattern alone is not enough.
+
 declare(strict_types=1);
 
 /**
@@ -7,9 +15,6 @@ declare(strict_types=1);
  * booting the full PS core. Loaded from tests/bootstrap.php only when
  * the real PS classes are absent — production CI matrix always picks
  * the real PS classes when available.
- *
- * phpcs:disable PSR1.Classes.ClassDeclaration.MultipleClasses
- * phpcs:disable PSR1.Files.SideEffects
  */
 
 if (!class_exists(\PrestaShopDatabaseException::class)) {

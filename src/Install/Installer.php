@@ -132,7 +132,12 @@ final class Installer
         ));
 
         if (!is_array($columns)) {
-            return true;
+            // Probe failed: we cannot tell which columns exist, so we
+            // cannot safely no-op. Fail the install loudly rather than
+            // silently leaving a Phase-1 schema in place (which would
+            // later cause NOT NULL violations on `qamera_product_id`
+            // when the writer tries to insert a `pending` row).
+            return false;
         }
 
         $byName = [];

@@ -8,7 +8,6 @@ use Configuration;
 use Context;
 use Db;
 use Product;
-use Throwable;
 
 /**
  * Writes / refreshes the `qamera_product_link` bookkeeping row for a

@@ -40,7 +40,9 @@ jobs:
         run: composer install --prefer-dist --no-progress --no-interaction
 
       - name: PHP_CodeSniffer (PSR-12)
-        run: vendor/bin/phpcs --standard=PSR12 src/ tests/
+        # No args -> phpcs picks up `phpcs.xml.dist`, which scans `src`
+        # and `tests` while honouring the `tests/Stubs/*` exclude.
+        run: vendor/bin/phpcs
 
       - name: Cache PrestaShop source
         id: ps-cache
