@@ -12,3 +12,28 @@ services:
   QameraAi\Module\Api\QameraApiClient:
     factory: ['@QameraAi\Module\Api\Factory\QameraApiClientFactory', 'create']
     public: true
+
+  qameraai.db:
+    class: Db
+    factory: ['Db', 'getInstance']
+    public: false
+
+  QameraAi\Module\Sync\ProductRefBuilder:
+    public: true
+
+  QameraAi\Module\Sync\PrestaShopLoggerWrapper:
+    public: true
+
+  QameraAi\Module\Sync\ProductSnapshotWriter:
+    public: true
+    arguments:
+      $db: '@qameraai.db'
+      # Resolves to the runtime `_DB_PREFIX_` constant defined by PS at
+      # boot (`config/defines.inc.php`). Symfony's `!php/const` directive
+      # reads the constant during container compilation, so shops with a
+      # custom DB prefix get the correct table name — `ps_` is only the
+      # default, not a guarantee. The `Installer::createSchema` migration
+      # already uses `_DB_PREFIX_`; this keeps the writer consistent.
+      $tablePrefix: !php/const _DB_PREFIX_
+      $refBuilder: '@QameraAi\Module\Sync\ProductRefBuilder'
+      $logger: '@QameraAi\Module\Sync\PrestaShopLoggerWrapper'
