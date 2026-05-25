@@ -6,6 +6,33 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 Translations: [polski](CHANGELOG.pl.md) · [українська](CHANGELOG.uk.md)
 
+## [1.1.0] — 2026-05-25
+
+Phase 2 lazy bookkeeping: the module now records a local snapshot of every product the operator saves in the back office. No upstream Qamera AI API calls happen yet — those land in Phase 3 (image-sync). PrestaShop 8.0–9.x, PHP 8.1+.
+
+### Added
+
+- **`actionProductSave` hook handler.** Fires on both `Product::add()` and `Product::update()` in PS 8/9 — the primary entry point for capturing newly-created products. The legacy `actionProductAdd` hook is dispatched only by `ProductDuplicator` in PS 9, so registering Save was necessary to cover the BO "create product" flow.
+- **`ps_qamera_product_link` snapshot columns.** Six new columns: `display_name_snapshot VARCHAR(500) NOT NULL`, `sku_snapshot VARCHAR(100) NULL`, `description_snapshot TEXT NULL`, `status ENUM('pending','registered','error') NOT NULL DEFAULT 'pending'`, `last_error_message TEXT NULL`, `last_synced_at DATETIME NULL`. The existing `qamera_product_id` column was relaxed from `NOT NULL` to `NULL` — it stays empty until Phase-3 upstream registration succeeds.
+- **Idempotent schema migration.** `Installer::createSchema` introspects `INFORMATION_SCHEMA.COLUMNS` and only runs `ALTER` statements for columns that are missing or non-matching, so repeated installs / Phase-1 upgrades both no-op cleanly. A failed introspection probe now aborts the install rather than silently leaving a Phase-1 schema in place.
+- **`QameraAi\Module\Sync\ProductSnapshotWriter`** — single `INSERT … ON DUPLICATE KEY UPDATE` keyed on `UNIQUE(id_product, id_shop)`. The UPDATE clause refreshes only snapshot columns and `updated_at`; `status`, `qamera_product_id`, `last_error_message`, `last_synced_at`, `qamera_product_ref`, and `created_at` are preserved across upserts so downstream sync state is never regressed.
+- **`QameraAi\Module\Sync\ProductRefBuilder`** — deterministic `qamera_product_ref` formatted as `ps:{id_shop}:{id_product}`. Multistore safe (different shops yield distinct refs); rejects non-positive ids.
+
+### Behaviour
+
+- Hook bookkeeping is gated on the existing `QAMERAAI_AUTO_REGISTER_PRODUCTS` toggle (default off from Phase 1). Toggle OFF is a true no-op.
+- All `\Throwable` from the writer is caught in the hook and logged via `PrestaShopLogger::addLog` at severity 2 with `object_type='QameraAiModule'`. BO "Save product" always succeeds from the operator's point of view, regardless of bookkeeping state.
+- Snapshot reads use the shop's default language (`Configuration::get('PS_LANG_DEFAULT', null, null, $idShop)`); when that translation is missing, the writer falls back to the first non-empty language value and logs a warning.
+
+### Changed
+
+- **No upstream API impact.** The `QameraApiClient` surface, the upstream `/plugin/*` endpoints, and the webhook handler are untouched by this release.
+
+### Known limitations
+
+- New-product creation still requires the BO "Save" action; orphan rows from `Product::delete()` are not cleaned up (`actionProductDelete` lands in a follow-up change).
+- `status='error'` rows refresh their snapshot on update but do not auto-retry — operator-driven retry lands with the Phase-4 product-tab UI.
+
 ## [1.0.0] — 2026-05-24
 
 Inaugural release. Brings credential storage, an installable lifecycle, and a tested HTTP client to the Qamera AI Plugin API. PrestaShop 8.0–9.x, PHP 8.1+.
@@ -25,4 +52,5 @@ Inaugural release. Brings credential storage, an installable lifecycle, and a te
 - Multistore is single-key (one API key per install). Per-shop credentials are a v2 follow-up.
 - The configuration page edits secrets but cannot rotate the webhook HMAC — that lives in the Qamera AI panel.
 
+[1.1.0]: https://github.com/200iqlabs/prestashop-qamera/releases/tag/v1.1.0
 [1.0.0]: https://github.com/200iqlabs/prestashop-qamera/releases/tag/v1.0.0
