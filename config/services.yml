@@ -12,3 +12,26 @@ services:
   QameraAi\Module\Api\QameraApiClient:
     factory: ['@QameraAi\Module\Api\Factory\QameraApiClientFactory', 'create']
     public: true
+
+  qameraai.db:
+    class: Db
+    factory: ['Db', 'getInstance']
+    public: false
+
+  QameraAi\Module\Sync\ProductRefBuilder:
+    public: true
+
+  QameraAi\Module\Sync\PrestaShopLoggerWrapper:
+    public: true
+
+  QameraAi\Module\Sync\ProductSnapshotWriter:
+    public: true
+    arguments:
+      $db: '@qameraai.db'
+      # PS does not change `_DB_PREFIX_` at runtime; the constant is defined
+      # in `config/defines.inc.php` at boot. Hardcoded to the upstream default
+      # — if an integrator customises it they can override this parameter
+      # in their own services overrides. (Tracked: tasks.md §5.4.)
+      $tablePrefix: 'ps_'
+      $refBuilder: '@QameraAi\Module\Sync\ProductRefBuilder'
+      $logger: '@QameraAi\Module\Sync\PrestaShopLoggerWrapper'

@@ -5,6 +5,13 @@
   <file>src</file>
   <file>tests</file>
 
+  <!-- Lightweight PrestaShop class stubs intentionally live outside a
+       namespace so unit tests can pick them up as the global symbols
+       PS exposes (Db, Product, Configuration, PrestaShopLogger, ...).
+       Excluded from PSR-12 because the file declares multiple classes
+       in the global namespace by design. -->
+  <exclude-pattern>tests/Stubs/*</exclude-pattern>
+
   <arg name="colors"/>
   <arg name="basepath" value="."/>
   <arg value="np"/>

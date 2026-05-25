@@ -11,7 +11,7 @@
 | 7 | Zachowanie `actionProductUpdate` przy `status='error'` | Refresh snapshotu, status pozostaje `error`. Reset do `pending` to manual operator action (przyszły change z UI w karcie produktu) |
 | 8 | Co kiedy `actionProductAdd` strzela dla produktu, który już ma wiersz (rzadkie — recovery scenarios) | `INSERT … ON DUPLICATE KEY UPDATE` traktowane jak update — refresh snapshotu, status / qamera_product_id nietknięte |
 | 9 | Container wiring | `ProductSnapshotWriter` jako Symfony service (`config/services.yml`), wstrzyknięty do `qameraai.php` przez `$this->get(ProductSnapshotWriter::class)` w hookach |
-| 10 | Logowanie błędów | `PrestaShopLogger::addLog($msg, severity=2, errorCode=null, 'QameraAi-Module', $idObject=$idProduct, allowDuplicate=true)` |
+| 10 | Logowanie błędów | `PrestaShopLogger::addLog($msg, severity=2, errorCode=null, 'QameraAiModule', $idObject=$idProduct, allowDuplicate=true)` |
 
 ## 1. Format `qamera_product_ref`
 
@@ -164,7 +164,7 @@ public function hookActionProductAdd(array $params): void
             sprintf('[QameraAi] product snapshot write failed for id_product=%d: %s', $product->id, $e->getMessage()),
             2,
             null,
-            'QameraAi-Module',
+            'QameraAiModule',
             (int) $product->id,
             true
         );
@@ -176,7 +176,7 @@ public function hookActionProductAdd(array $params): void
 
 Format zgodny z PS conventions:
 - Severity 2 (warning) — bookkeeping failure to nie crisis
-- Context label `QameraAi-Module` — filtrowanie w logu BO
+- Context label `QameraAiModule` — filtrowanie w logu BO
 - `id_object` = `id_product` — operator widzi w logu, który produkt nie ma zapisanego snapshotu
 - Wyjątek formatowany `get_class($e) . ': ' . $e->getMessage()` (bez stack trace — to nie crash)
 

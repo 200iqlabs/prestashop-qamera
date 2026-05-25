@@ -23,6 +23,13 @@ use Configuration;
 final class Installer
 {
     private const HOOKS = [
+        // PrestaShop 8/9 fire `actionProductSave` on both Product::add()
+        // and Product::update(); `actionProductAdd` is dispatched only
+        // by the BO ProductDuplicator. We register Save (covers new
+        // product creation) plus Update (covers BO edits) and Add
+        // (covers duplications). The writer's upsert is idempotent, so
+        // a Save+Update double-fire during edits is harmless.
+        'actionProductSave',
         'actionProductAdd',
         'actionProductUpdate',
         'displayAdminProductsExtra',
@@ -66,8 +73,14 @@ final class Installer
                 `id_link` INT UNSIGNED NOT NULL AUTO_INCREMENT,
                 `id_product` INT UNSIGNED NOT NULL,
                 `id_shop` INT UNSIGNED NOT NULL,
-                `qamera_product_id` CHAR(36) NOT NULL,
+                `qamera_product_id` CHAR(36) NULL,
                 `qamera_product_ref` VARCHAR(200) NOT NULL,
+                `display_name_snapshot` VARCHAR(500) NOT NULL,
+                `sku_snapshot` VARCHAR(100) NULL,
+                `description_snapshot` TEXT NULL,
+                `status` ENUM('pending','registered','error') NOT NULL DEFAULT 'pending',
+                `last_error_message` TEXT NULL,
+                `last_synced_at` DATETIME NULL,
                 `created_at` DATETIME NOT NULL,
                 `updated_at` DATETIME NOT NULL,
                 PRIMARY KEY (`id_link`),
@@ -91,6 +104,68 @@ final class Installer
 
         foreach ($statements as $sql) {
             if (!Db::getInstance()->execute($sql)) {
+                return false;
+            }
+        }
+
+        return $this->migrateProductLinkSchema($prefix);
+    }
+
+    /**
+     * Brings an existing Phase-1 `qamera_product_link` table up to the
+     * Phase-2 column set. Idempotent — each ALTER is guarded by an
+     * `INFORMATION_SCHEMA.COLUMNS` probe so a re-install on an already
+     * migrated DB is a no-op.
+     */
+    private function migrateProductLinkSchema(string $prefix): bool
+    {
+        $db = Db::getInstance();
+        $table = $prefix . 'qamera_product_link';
+        $dbName = _DB_NAME_;
+
+        $columns = $db->executeS(sprintf(
+            "SELECT COLUMN_NAME, IS_NULLABLE, DATA_TYPE, COLUMN_TYPE
+             FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s'",
+            pSQL($dbName),
+            pSQL($table)
+        ));
+
+        if (!is_array($columns)) {
+            return true;
+        }
+
+        $byName = [];
+        foreach ($columns as $row) {
+            $byName[$row['COLUMN_NAME']] = $row;
+        }
+
+        $alters = [];
+
+        if (
+            isset($byName['qamera_product_id'])
+            && strtoupper($byName['qamera_product_id']['IS_NULLABLE']) !== 'YES'
+        ) {
+            $alters[] = "ALTER TABLE `{$table}` MODIFY COLUMN `qamera_product_id` CHAR(36) NULL;";
+        }
+
+        $additions = [
+            'display_name_snapshot' => '`display_name_snapshot` VARCHAR(500) NOT NULL DEFAULT \'\'',
+            'sku_snapshot' => '`sku_snapshot` VARCHAR(100) NULL',
+            'description_snapshot' => '`description_snapshot` TEXT NULL',
+            'status' => '`status` ENUM(\'pending\',\'registered\',\'error\') NOT NULL DEFAULT \'pending\'',
+            'last_error_message' => '`last_error_message` TEXT NULL',
+            'last_synced_at' => '`last_synced_at` DATETIME NULL',
+        ];
+
+        foreach ($additions as $name => $definition) {
+            if (!isset($byName[$name])) {
+                $alters[] = "ALTER TABLE `{$table}` ADD COLUMN {$definition};";
+            }
+        }
+
+        foreach ($alters as $sql) {
+            if (!$db->execute($sql)) {
                 return false;
             }
         }

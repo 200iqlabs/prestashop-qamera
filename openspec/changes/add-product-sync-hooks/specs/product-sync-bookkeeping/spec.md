@@ -47,7 +47,7 @@ When the `actionProductUpdate` PrestaShop hook fires and `Configuration::get('QA
 
 ### Requirement: Bookkeeping failures never block the PrestaShop product save
 
-The hooks SHALL catch every `\Throwable` raised by the snapshot writer (DB connectivity loss, schema mismatch, anything) and SHALL log it via `PrestaShopLogger::addLog` at severity 2 with the context label `'QameraAi-Module'` and `id_object` set to `id_product`. The hook SHALL return normally after logging — the back-office "Save product" action MUST always succeed from the operator's point of view, regardless of bookkeeping state.
+The hooks SHALL catch every `\Throwable` raised by the snapshot writer (DB connectivity loss, schema mismatch, anything) and SHALL log it via `PrestaShopLogger::addLog` at severity 2 with the context label `'QameraAiModule'` and `id_object` set to `id_product`. The hook SHALL return normally after logging — the back-office "Save product" action MUST always succeed from the operator's point of view, regardless of bookkeeping state.
 
 #### Scenario: Database temporarily unavailable
 
