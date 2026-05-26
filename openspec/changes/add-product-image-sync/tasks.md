@@ -34,6 +34,7 @@
 
 ## 4. `PrimaryImageResolver` (`src/Sync/PrimaryImageResolver.php`)
 
+- [ ] 4.0. Extend `tests/Stubs/PrestaShopStubs.php` with a minimal `Image` class stub exposing `getCover(int $idProduct): array|false` and `getImages(int $idLang, int $idProduct): array` as static methods (matching the PS 9 core signatures). Phase-2 stubs covered `Db`, `Product`, `Configuration`, `PrestaShopLogger`, `PrestaShopDatabaseException`, `Context`; `Image` is the new one this change needs. Without the stub, `PrimaryImageResolver` tests would fail to load under the unit-only PHPUnit runner.
 - [ ] 4.1. Test first: `testCoverImageWinsOverHint` — cover exists; hint points to a non-cover image; resolver returns cover
 - [ ] 4.2. Test first: `testHintUsedWhenNoCover` — `Image::getCover` returns false; hint is valid image id for the product; resolver returns hint
 - [ ] 4.3. Test first: `testFirstByPositionFallback` — no cover, no hint, but `Image::getImages` returns 2 images; resolver returns first
@@ -45,7 +46,7 @@
 
 - [ ] 5.1. Define interface `ImageUploadStrategy::uploadImage(string $localPath): string` returning the canonical `source_url` the upstream `registerImage` will use. For `PresignedImageUploadStrategy` that value is the `assetId` from `PresignedUploadResponse` (an opaque upstream handle), NOT the `uploadUrl` itself — `uploadUrl` is a short-TTL PUT target with query-string credentials and is not safe to forward.
 - [ ] 5.2. Test first: `testHappyPathReturnsAssetId` — mocked `QameraApiClient::requestUpload` returns `PresignedUploadResponse('https://qamera-uploads.example/PUT?sig=...', 'asset-uuid', '2026-05-26T12:00:00Z')`; mock PUT succeeds; strategy returns `'asset-uuid'`
-- [ ] 5.3. Test first: `testExpiredPresignedTriggersRefresh` — first `requestUpload` returns `expires_at = now() - 1s`; strategy calls `requestUpload` again before PUT; new URL used
+- [ ] 5.3. Test first: `testExpiredPresignedTriggersRefresh` — first `requestUpload` returns a `PresignedUploadResponse` whose `$expiresAt` parses to `now() - 1s` (DTO camelCase property; upstream JSON field is `expires_at`); strategy calls `requestUpload` again before PUT; new URL used
 - [ ] 5.4. Test first: `testPutFailureRaisesTransportException` — Guzzle `ConnectException` from PUT; strategy re-raises as `TransportException`
 - [ ] 5.5. Test first: `testUpstreamUploadEndpointFailureBubbles` — `requestUpload` throws `ServerException`; strategy re-raises
 - [ ] 5.6. Implement `PresignedImageUploadStrategy` taking `QameraApiClient` + `\GuzzleHttp\ClientInterface` (for the PUT, separate from the API client since this hits S3 / Qamera CDN)

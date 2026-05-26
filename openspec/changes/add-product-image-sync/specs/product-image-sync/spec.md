@@ -111,9 +111,9 @@ PrestaShop fires `actionWatermark` once per generated image size (cart, home, la
 
 ### Requirement: Presigned upload TTL is honored
 
-The sync service SHALL check `PresignedUploadResponse::$expiresAt` (returned by `QameraApiClient::requestUpload()`) before issuing the PUT. If `expires_at <= now()`, the service SHALL request a fresh presigned URL before uploading.
+The sync service SHALL check `PresignedUploadResponse::$expiresAt` (the DTO property — the upstream JSON field is `expires_at`) before issuing the PUT. If `$expiresAt <= now()`, the service SHALL request a fresh presigned URL before uploading.
 
 #### Scenario: Expired presigned URL forces refresh
 
-- **WHEN** `requestUpload()` returns `expires_at = now() - 1s` (already expired, e.g. clock drift)
+- **WHEN** `requestUpload()` returns a `PresignedUploadResponse` whose `$expiresAt` parses to `now() - 1s` (already expired, e.g. clock drift)
 - **THEN** the sync service requests a fresh presigned URL and uses the new one for the PUT; the upload still succeeds

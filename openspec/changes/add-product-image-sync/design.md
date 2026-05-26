@@ -23,7 +23,7 @@ Phase plan z README to potwierdza: "Phase 2 — Core flow (Qamera API client, pe
 - **Bulk backfill** — Faza 3 nie sweeps istniejących `pending` wierszy w cronie. Trigger to wyłącznie hook upload. Wiersze które już istniały bez triggera obrazu (od Fazy 2) zostaną zarejestrowane dopiero gdy ktoś doda/zmieni obraz.
 - **Webhook handler** — webhook od Qamera AI o jobie się zakończył (osobny change). Faza 3 wysyła image-register i czyta synchronous response — to wystarczy do ustawienia `qamera_product_id`.
 - **Async processing / Symfony Messenger** — patrz decyzja 1 niżej (świadomie sync).
-- **Wsparcie shopów na localhoscie via publiczny URL** — presigned upload działa wszędzie, więc nie potrzebujemy fallbacku (patrz decyzja 2).
+- **Wsparcie shopów dev/localhost via publiczny URL** — presigned upload działa wszędzie, więc nie potrzebujemy fallbacku (patrz decyzja 2).
 - **Multi-shop replication** — wybrany został `actionWatermark`, który strzela per shop context (jak `actionProductSave` w Fazie 2). Replikacja do innych associated shopów nadal jest follow-up jak w Fazie 2.
 
 ## Decisions
@@ -160,7 +160,7 @@ Lokalizacja: `src/Api/Dto/ProductMetadata.php` (z innymi DTO klienta, nie `src/S
 | 1 | Sync upstream call w BO save spowalnia operatora (presigned + PUT + registerImage = ~3 roundtripy) | Akceptowalne — upload obrazu w PS już jest "ciężki" (resize, watermark, thumbs); +3 HTTP roundtripy do Qamera są w tym samym rzędzie. Mierzymy w smoke test (`tasks.md §10`); jeśli p95 > 5s, follow-up change podnosi do cron sweep. |
 | 2 | Operator nie widzi statusu rejestracji bez zaglądania do logów BO / phpMyAdmin | Akceptowalne dla Fazy 3 — UI w karcie produktu to Faza 4. CHANGELOG flaguje "Known limitation". |
 | 3 | `Image::getCover` zwraca `false` dla produktów bez cover (legacy PS lub szybko klikający operator) | Fallback chain w `PrimaryImageResolver` (decyzja 5). Plus testy. |
-| 4 | Presigned URL ma TTL (na ogół 5-15 min) — race condition gdy PUT się zawiesi | `QameraApiClient::requestUpload` zwraca też `expires_at`; jeśli `now() > expires_at`, request nowego presigned URL przed PUT. To w `ImageUploadStrategy`. |
+| 4 | Presigned URL ma TTL (na ogół 5-15 min) — race condition gdy PUT się zawiesi | `QameraApiClient::requestUpload` zwraca `PresignedUploadResponse` z polem `$expiresAt` (DTO camelCase; upstream JSON field to `expires_at`); jeśli `now() > $expiresAt`, request nowego presigned URL przed PUT. To w `ImageUploadStrategy`. |
 | 5 | PS uploaduje wiele rozmiarów (cart-default, home-default, large, etc.) — wszystkie strzelają `actionWatermark`. Spam upstream callów. | Hook-level idempotency (decyzja 6.3) + sprawdzenie `Image::isCover` lub porównanie `$id_image` z cover image-em (bardziej deliberate). Tylko cover triggeruje upstream call; inne size'y log "skipping non-cover image" i return. |
 | 6 | `product_metadata` ze snapshotu Fazy 2 może być stary (operator zmienił nazwę po `actionProductSave` ale przed obrazem). | Snapshot writer Fazy 2 odświeża się przy każdym save — w praktyce między `actionProductSave` a `actionWatermark` jest sekundy, nie godziny. Akceptowalne. Re-sync z fresh metadata to Faza 4. |
 | 7 | Pierwszy realny smoke test wywołań przeciw `https://qamera.ai/api/v1/plugin` może odsłonić bugi Fazy 1 (auth, retry, idempotency) nieujawnione w mocku | Dlatego operator-driven smoke z credentialami z `CLAUDE.md` jest **wymagany** przed merge (`tasks.md §10`). Mock'owane testy nie wystarczą. |

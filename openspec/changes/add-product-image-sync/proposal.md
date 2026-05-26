@@ -11,7 +11,7 @@ Packshoty (`POST /packshots`) zostawiamy świadomie poza zakresem — to Faza 4,
 
 ## What Changes
 
-- **Hook `actionProductImage` / `actionWatermark`** — gdy toggle `QAMERAAI_AUTO_REGISTER_PRODUCTS=1` i wiersz `qamera_product_link` ma `status IN ('pending', 'error')`: enqueue rejestracji obrazu. Konkretny hook (lub kombinacja) — design.md po rozpoznaniu PS 9 hooks dla obrazów produktów.
+- **Hook `actionWatermark`** — jedyny hook PS 8/9 strzelający po uploadzie obrazu produktu (PS 9 nie ma `actionProductImage` — patrz `design.md` decyzja 3). Gdy toggle `QAMERAAI_AUTO_REGISTER_PRODUCTS=1` i wiersz `qamera_product_link` ma `status IN ('pending', 'error')`: synchronously (w hot path BO save action, z swallow-throw zgodnym z kontraktem Fazy 2 — patrz `design.md` decyzja 1) wywołuje upstream `registerImage`. Bez kolejek, bez crona w Fazie 3.
 - **Service `ProductImageSyncService`** — orkiestruje cykl: (1) pobierz wiersz `qamera_product_link` dla produktu, (2) wybierz "primary" obraz produktu (cover/first), (3) zdobądź upstream-dostępny URL tego obrazu (presigned upload + PUT vs publiczny URL sklepu — design.md), (4) zawołaj `QameraApiClient::registerImage` z `product_metadata` z wiersza snapshotu, (5) zapisz `qamera_product_id`, `status='registered'`, `last_synced_at=NOW()` na sukces, lub `status='error'`, `last_error_message=...` na porażkę.
 - **Wymiana `RegisterImageRequest` DTO** — obecnie ma tylko `product_ref`, `source_url`, `title`. Faza 3 dodaje pole `product_metadata` (obiekt z `display_name`, `sku?`, `description?`) zgodne z upstream `ProductMetadataSchema`. To **MODYFIKACJA** istniejącego DTO + endpointu klienta — bez breaking-change'a, bo Faza 1 nigdy nie wołała `registerImage` w produkcji.
 - **Maszyna stanów `qamera_product_link.status`** — Faza 2 określiła trzy stany; Faza 3 dodaje **przejścia**: `pending → registered` (sukces upstream), `pending → error` (porażka — np. 422 validation, 5xx po retries), `error → pending` (manual reset operator z BO — out of scope tego changu, ale spec to dopuszcza), `error → registered` (operator naprawił przyczynę, kolejna próba przeszła). `registered` jest stanem terminalnym dla *rejestracji* — kolejne obrazy nie wymagają już `product_metadata`.
@@ -41,7 +41,7 @@ Packshoty (`POST /packshots`) zostawiamy świadomie poza zakresem — to Faza 4,
 - **Code (modified)**
   - `src/Api/Dto/RegisterImageRequest.php` — dodanie `?ProductMetadata $productMetadata` w konstruktorze + payload
   - `src/Api/Dto/ProductMetadata.php` (nowy) — value object współdzielony przez `RegisterImageRequest` i `RegisterPackshotRequest` w przyszłości
-  - `qameraai.php` — rejestracja nowego hooka (np. `actionProductImage`); delegacja do `ProductImageSyncService`; toggle-gate + swallow-throw zgodnie z kontraktem Fazy 2
+  - `qameraai.php` — rejestracja hooka `actionWatermark` (jedyny dostępny image-upload hook w PS 8/9); delegacja do `ProductImageSyncService`; toggle-gate + swallow-throw zgodnie z kontraktem Fazy 2
   - `src/Install/Installer.php` — dodanie nowego hooka do `self::HOOKS`
   - `config/services.yml` — rejestracja serwisów Fazy 3
 - **DB**: brak zmian schematu — wszystkie kolumny są z Fazy 2.
