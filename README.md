@@ -2,7 +2,7 @@
 
 AI-powered product photography for PrestaShop stores. Generate packshots, scenes, and full content sessions from your store products using the [Qamera AI](https://qamera.ai) platform.
 
-**Status:** Phase 2 (in progress — local product-sync bookkeeping landed; upstream API sync still pending). See the [Phase plan](#phase-plan) below.
+**Status:** Phase 3 (done — first upstream sync). Product image upload in the back office now registers the product upstream via the Qamera AI Plugin API. See the [Phase plan](#phase-plan) below.
 
 ## Compatibility
 
@@ -54,10 +54,11 @@ Point the module's configuration page at your local Qamera AI:
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Repo bootstrap (module class, install hooks, configuration page skeleton, CI, Docker) | Done |
-| 2 | Core flow (Qamera API client, per-product sync, webhook handler, "Qamera AI" product tab) | In progress (bookkeeping done) |
-| 3 | Session UI (multi-product session form, dashboard, polling) | Pending |
-| 4 | CLI + bulk (`bin/console qamera:sync-products`, cron-friendly batches) | Pending |
-| 5 | Marketplace prep (PS marketplace compliance validator, submission package) | Optional |
+| 2 | Local product-sync bookkeeping (`actionProductSave` snapshot writer, `qamera_product_link` state columns) | Done |
+| 3 | First upstream sync (`actionWatermark` image hook → presigned upload → `POST /images` with `product_metadata` → state transitions) | Done — first upstream sync |
+| 4 | Product-tab UI in BO (Qamera AI tab on the product card, packshot generation, manual retry, webhook handler) | Pending |
+| 5 | CLI + bulk (`bin/console qamera:sync-products`, cron-friendly batches) | Pending |
+| 6 | Marketplace prep (PS marketplace compliance validator, submission package) | Optional |
 
 The architecture decisions live in the upstream `qamera-ai/saas-platform` repository under `docs/decisions/prestashop-plugin-design.md` and `docs/decisions/prestashop-plugin-repo-bootstrap.md`.
 

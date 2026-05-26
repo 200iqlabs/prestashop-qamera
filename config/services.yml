@@ -37,3 +37,37 @@ services:
       $tablePrefix: !php/const _DB_PREFIX_
       $refBuilder: '@QameraAi\Module\Sync\ProductRefBuilder'
       $logger: '@QameraAi\Module\Sync\PrestaShopLoggerWrapper'
+
+  QameraAi\Module\Sync\PrimaryImageResolver:
+    public: true
+
+  # Vanilla Guzzle client used by `PresignedImageUploadStrategy` to PUT
+  # image bytes to the presigned upload URL. Separate instance from the
+  # one inside `QameraApiClient` so timeouts / headers can differ for
+  # the raw upload (no auth, longer timeout, plain octet-stream body).
+  qameraai.upload_http_client:
+    class: GuzzleHttp\Client
+    arguments:
+      - { connect_timeout: 5.0, timeout: 60.0, http_errors: true }
+    public: false
+
+  QameraAi\Module\Sync\PresignedImageUploadStrategy:
+    public: true
+    arguments:
+      $apiClient: '@QameraAi\Module\Api\QameraApiClient'
+      $httpClient: '@qameraai.upload_http_client'
+
+  QameraAi\Module\Sync\ImageUploadStrategy:
+    alias: QameraAi\Module\Sync\PresignedImageUploadStrategy
+    public: true
+
+  QameraAi\Module\Sync\ProductImageSyncService:
+    public: true
+    arguments:
+      $db: '@qameraai.db'
+      $tablePrefix: !php/const _DB_PREFIX_
+      $refBuilder: '@QameraAi\Module\Sync\ProductRefBuilder'
+      $apiClient: '@QameraAi\Module\Api\QameraApiClient'
+      $uploadStrategy: '@QameraAi\Module\Sync\PresignedImageUploadStrategy'
+      $resolver: '@QameraAi\Module\Sync\PrimaryImageResolver'
+      $logger: '@QameraAi\Module\Sync\PrestaShopLoggerWrapper'

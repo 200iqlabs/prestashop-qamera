@@ -6,6 +6,36 @@ Format zgodny z [Keep a Changelog](https://keepachangelog.com/pl/1.1.0/), a proj
 
 Tłumaczenia: [english](CHANGELOG.md) · [українська](CHANGELOG.uk.md)
 
+## [1.2.0] — 2026-05-26
+
+Faza 3 — pierwsza synchronizacja upstream: wgrywanie zdjęcia produktu w back-office rejestruje teraz ten produkt po stronie Qamera AI Plugin API. Wiersze `qamera_product_link` z Fazy 2 wreszcie zaczynają wypełniać kolumnę `qamera_product_id`. PrestaShop 8.0–9.x, PHP 8.1+.
+
+### Dodano
+
+- **Handler hooka `actionWatermark`.** PS 8/9 wystrzeliwują `actionWatermark` po uploadzie obrazu produktu (PS 9 nie ma już `actionProductImage`). Handler jest triggerem dla synchronizacji upstream. Gated na istniejącym togglu `QAMERAAI_AUTO_REGISTER_PRODUCTS`; ten sam kontrakt swallow-throw + log severity 2 co hooki snapshotowe z Fazy 2 — zapis w BO zawsze kończy się sukcesem, niezależnie od stanu upstreamu.
+- **`QameraAi\Module\Sync\ProductImageSyncService`** — orkiestruje pełny przepływ: czyta wiersz bookkeepingu, wybiera "primary" obraz (cover wygrywa z hint-image z hooka), pobiera presigned upload, PUT-uje bajty obrazu, woła `POST /images` z `product_metadata` (cascade-create) lub bez (ścieżka bare-image dla wierszy `registered`), zapisuje wynik. Dedup in-memory po `(id_product, id_image)`, żeby bulk-regenerate w PS nie wystrzelił wielokrotnych wywołań upstream.
+- **`QameraAi\Module\Sync\PrimaryImageResolver`** — łańcuch cover → hint z hooka → pierwszy by position. Zwraca `id_image` jako int (nie instancję PS `Image`), żeby reszta pipeline'u została niezależna od kształtu tablic PS.
+- **`QameraAi\Module\Sync\PresignedImageUploadStrategy`** — opakowuje `QameraApiClient::requestUpload` + surowy PUT na dedykowanym kliencie Guzzle (osobnym od klienta API, więc timeouts/nagłówki dla PUT mogą się różnić od autentykowanego ruchu JSON). Odświeża presigned URL raz, jeśli już wygasł (clock drift).
+- **`QameraAi\Module\Api\Dto\ProductMetadata`** — value object dla payloadu `product_metadata` upstreama. Wymusza upstream-owe limity rozmiarów (`display_name ≤ 500`, `sku ≤ 100`, `description ≤ 5000`) w konstruktorze, żeby callery nie zbudowały nieprawidłowego payloadu w runtime. Mieszka obok innych DTO, więc przyszły `RegisterPackshotRequest` może go reużyć.
+- **`RegisterImageRequest` akceptuje `?ProductMetadata`.** Nowy opcjonalny parametr konstruktora na ostatniej pozycji; payload całkowicie pomija `product_metadata`, gdy null (klucz nieobecny, nie `null`).
+- **`ImageResponse.productId`.** Nowe opcjonalne pole eksponujące UUID produktu nadane przez upstream w odpowiedziach cascade-create.
+
+### Zachowanie
+
+- **Przejścia stanów `qamera_product_link.status`.** Faza 3 faktycznie napędza maszynę stanów: `pending → registered` przy udanym cascade-create, `pending → error` przy dowolnej porażce w upload / PUT / register, `error → registered` przy ponownej próbie kończącej się sukcesem. Na wierszu `registered` kolejne obrazy bumpują tylko `last_synced_at` — `qamera_product_id` nigdy nie jest nadpisywany.
+- **Sanityzowany `last_error_message`.** Typy wyjątków upstreamu mapują się na deterministyczne komunikaty dla operatora: `Upstream validation: …`, `API credentials invalid (HTTP 401). Check API key in module configuration.`, `Rate limit exceeded — try again later. (HTTP 429)`, `Upstream server error (HTTP 5xx) after retries. Try again later.`, `Network error reaching Qamera AI: …` oraz `Unexpected: <Class>: <message>` dla całej reszty. Zawsze ucinany do 500 znaków.
+- **Brak wiersza bookkeepingu — no-op.** Jeśli operator włączył toggle po utworzeniu produktu, kolejny upload obrazu nie znajduje wiersza `qamera_product_link` i loguje diagnostykę severity-info bez rejestracji. Następny `actionProductSave` utworzy wiersz, a następny upload obrazu zarejestruje produkt normalnie.
+
+### Zmieniono
+
+- **`QameraApiClient` nie jest już `final`.** Zdjęte, żeby testy jednostkowe mogły zmockować klienta. Klient nadal ma tylko jedną ścieżkę produkcyjną wywołań; nic innego nie polega na zamknięciu klasy.
+
+### Znane ograniczenia
+
+- Ręczny retry `error → pending` z BO nie jest jeszcze wpięty — operatorzy retryują przez upload kolejnego obrazu lub czekają na UI karty produktu z Fazy 4.
+- Detekcja regresji `registered → error` (wcześniej-udany wiersz, który powinien re-syncnąć) to również teren Fazy 4 — wymaga przebiegu rekoncyliacji w cronie.
+- Multistore: `actionWatermark` strzela tylko w kontekście aktywnego shopu, jak w Fazie 2. Fan-out cross-shop to follow-up.
+
 ## [1.1.0] — 2026-05-25
 
 Faza 2 — lokalny bookkeeping: moduł zapisuje teraz lokalny snapshot każdego produktu, który operator zapisze w back-office. Żadne wywołania API Qamera AI jeszcze się nie dzieją — to pojawi się w Fazie 3 (image-sync). PrestaShop 8.0–9.x, PHP 8.1+.
@@ -52,5 +82,6 @@ Pierwsze wydanie. Wprowadza przechowywanie poświadczeń, instalowalny cykl życ
 - Multistore działa na jednym kluczu (jeden klucz API na instalację). Poświadczenia per-sklep to follow-up w v2.
 - Strona konfiguracji pozwala edytować sekrety, ale nie pozwala na rotację HMAC webhooka — to operacja po stronie panelu Qamera AI.
 
+[1.2.0]: https://github.com/200iqlabs/prestashop-qamera/releases/tag/v1.2.0
 [1.1.0]: https://github.com/200iqlabs/prestashop-qamera/releases/tag/v1.1.0
 [1.0.0]: https://github.com/200iqlabs/prestashop-qamera/releases/tag/v1.0.0

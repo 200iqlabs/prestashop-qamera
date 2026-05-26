@@ -14,9 +14,9 @@ The client SHALL build `RegisterImageRequest` from a new constructor parameter `
 
 #### Scenario: registerImage with product_metadata cascades upstream product creation
 
-- **GIVEN** a `RegisterImageRequest` constructed with `product_ref='ps:1:42'`, `source_url='https://qamera-uploads.example/...'`, `productMetadata=new ProductMetadata('Widget', 'WDG-001', 'hello')`
+- **GIVEN** a `RegisterImageRequest` constructed with `externalRef='ps:1:42:image:100'`, `productRef='ps:1:42'`, `assetId='<asset-uuid>'`, `productMetadata=new ProductMetadata('Widget', 'WDG-001', 'hello')`
 - **WHEN** `QameraApiClient::registerImage` is called
-- **THEN** the HTTP request body to `POST /images` is `{product_ref: 'ps:1:42', source_url: '...', product_metadata: {display_name: 'Widget', sku: 'WDG-001', description: 'hello'}}`
+- **THEN** the HTTP request body to `POST /images` is the bulk-of-one envelope `{images: [{external_ref: 'ps:1:42:image:100', product_ref: 'ps:1:42', asset_id: '<asset-uuid>', product_metadata: {display_name: 'Widget', sku: 'WDG-001', description: 'hello'}}]}`
 
 #### Scenario: registerImage without product_metadata omits the field
 

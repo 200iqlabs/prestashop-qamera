@@ -6,6 +6,36 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 Translations: [polski](CHANGELOG.pl.md) · [українська](CHANGELOG.uk.md)
 
+## [1.2.0] — 2026-05-26
+
+Phase 3 first upstream sync: uploading an image for a product in the back office now registers that product upstream via the Qamera AI Plugin API. The Phase-2 `qamera_product_link` rows finally start filling their `qamera_product_id` column. PrestaShop 8.0–9.x, PHP 8.1+.
+
+### Added
+
+- **`actionWatermark` hook handler.** PS 8/9 fire `actionWatermark` after an image upload for a product (PS 9 dropped `actionProductImage`). The handler is the trigger for the upstream sync. Gated on the existing `QAMERAAI_AUTO_REGISTER_PRODUCTS` toggle; same swallow-throw + severity-2 log contract as the Phase-2 snapshot hooks — BO save action always succeeds regardless of upstream state.
+- **`QameraAi\Module\Sync\ProductImageSyncService`** — orchestrates the full sync: load the bookkeeping row, resolve the primary image (cover preferred over the hook's hint image), request a presigned upload, PUT the image bytes, call `POST /images` with `product_metadata` (cascade-create path) or without (bare-image path on `registered` rows), and persist the result. In-memory dedup by `(id_product, id_image)` so PS's bulk-regenerate flows don't multi-fire upstream calls.
+- **`QameraAi\Module\Sync\PrimaryImageResolver`** — cover → hook hint → first-by-position fallback chain. Returns the resolved `id_image` int (not a PS `Image` instance) so the rest of the pipeline stays array-shape-agnostic.
+- **`QameraAi\Module\Sync\PresignedImageUploadStrategy`** — wraps `QameraApiClient::requestUpload` + a raw PUT on a dedicated Guzzle client (separate from the API client so PUT timeouts / headers differ from authed JSON traffic). Refreshes the presigned URL once if it has already expired (clock drift).
+- **`QameraAi\Module\Api\Dto\ProductMetadata`** — value object for the upstream `product_metadata` payload. Enforces the upstream size limits (`display_name ≤ 500`, `sku ≤ 100`, `description ≤ 5000`) in the constructor so callers cannot build an invalid payload at runtime. Lives next to the other DTOs so a future `RegisterPackshotRequest` can reuse it.
+- **`RegisterImageRequest` accepts `?ProductMetadata`.** New optional last-position constructor parameter; payload omits `product_metadata` entirely when null (key is absent, not `null`).
+- **`ImageResponse.productId`.** New optional field surfacing the upstream-assigned product UUID returned on cascade-create responses.
+
+### Behaviour
+
+- **State transitions on `qamera_product_link.status`.** Phase 3 actually drives the state machine: `pending → registered` on successful cascade-create, `pending → error` on any failure in upload / PUT / register, `error → registered` on a subsequent retry that succeeds. On a `registered` row, subsequent images bump `last_synced_at` only — `qamera_product_id` is never overwritten.
+- **Sanitized `last_error_message`.** Upstream exception types map to deterministic operator-facing messages: `Upstream validation: …`, `API credentials invalid (HTTP 401). Check API key in module configuration.`, `Rate limit exceeded — try again later. (HTTP 429)`, `Upstream server error (HTTP 5xx) after retries. Try again later.`, `Network error reaching Qamera AI: …`, and `Unexpected: <Class>: <message>` for everything else. Always truncated to 500 chars.
+- **No-bookkeeping-row no-op.** If the operator turned the toggle on after creating a product, the next image upload finds no `qamera_product_link` row and logs an info-severity diagnostic without registering anything. The next `actionProductSave` creates the row and the following image will register normally.
+
+### Changed
+
+- **`QameraApiClient` is no longer `final`.** Dropped to let unit tests double the client. The client still has only one production caller path; nothing else relies on the class being closed.
+
+### Known limitations
+
+- Manual `error → pending` retry from the BO is not wired up yet — operators reload by uploading another image or wait for the Phase-4 product-tab UI.
+- `registered → error` regression detection (a previously-successful row that should re-sync) is also Phase-4 territory — requires the cron reconciliation pass.
+- Multistore replication: `actionWatermark` fires in the active shop context only, like Phase 2. Cross-shop fan-out is a follow-up.
+
 ## [1.1.0] — 2026-05-25
 
 Phase 2 lazy bookkeeping: the module now records a local snapshot of every product the operator saves in the back office. No upstream Qamera AI API calls happen yet — those land in Phase 3 (image-sync). PrestaShop 8.0–9.x, PHP 8.1+.
@@ -52,5 +82,6 @@ Inaugural release. Brings credential storage, an installable lifecycle, and a te
 - Multistore is single-key (one API key per install). Per-shop credentials are a v2 follow-up.
 - The configuration page edits secrets but cannot rotate the webhook HMAC — that lives in the Qamera AI panel.
 
+[1.2.0]: https://github.com/200iqlabs/prestashop-qamera/releases/tag/v1.2.0
 [1.1.0]: https://github.com/200iqlabs/prestashop-qamera/releases/tag/v1.1.0
 [1.0.0]: https://github.com/200iqlabs/prestashop-qamera/releases/tag/v1.0.0

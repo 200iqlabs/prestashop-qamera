@@ -2,21 +2,21 @@
 
 ### Requirement: Product image upload triggers upstream registration when auto-register is enabled
 
-When the `actionWatermark` PrestaShop hook fires with parameters `id_image` and `id_product`, and `Configuration::get('QAMERAAI_AUTO_REGISTER_PRODUCTS')` evaluates truthy, and the bookkeeping row for that `(id_product, id_shop)` has `status='pending'` or `status='error'`, the module SHALL register the product upstream by uploading the primary image via the Qamera AI Plugin API. The flow is: (1) resolve the bookkeeping row, (2) resolve the primary image for the product, (3) request a presigned upload via `QameraApiClient::requestUpload()` — which returns `PresignedUploadResponse` with `uploadUrl` (target for PUT), `assetId` (opaque upstream handle), and `expiresAt`, (4) PUT the image bytes to `uploadUrl`, (5) call `QameraApiClient::registerImage` with `product_ref` from the row, `source_url` equal to the `assetId` from the presigned response (the canonical handle the upstream uses to resolve the uploaded asset), and `product_metadata` built from the row's snapshot columns, (6) persist the upstream response to the bookkeeping row. When the toggle evaluates falsy, the hook SHALL be a no-op. When the bookkeeping row already has `status='registered'` and `qamera_product_id IS NOT NULL`, the call SHALL still register the new image but SHALL OMIT `product_metadata` from the request (the product is already known upstream).
+When the `actionWatermark` PrestaShop hook fires with parameters `id_image` and `id_product`, and `Configuration::get('QAMERAAI_AUTO_REGISTER_PRODUCTS')` evaluates truthy, and the bookkeeping row for that `(id_product, id_shop)` has `status='pending'` or `status='error'`, the module SHALL register the product upstream by uploading the primary image via the Qamera AI Plugin API. The flow is: (1) resolve the bookkeeping row, (2) resolve the primary image for the product, (3) request a presigned upload via `QameraApiClient::requestUpload()` — which returns `PresignedUploadResponse` with `uploadUrl` (target for PUT), `assetId` (opaque upstream handle), and `expiresAt`, (4) PUT the image bytes to `uploadUrl`, (5) call `QameraApiClient::registerImage` with `product_ref` from the row, `asset_id` equal to the `assetId` from the presigned response (the canonical handle the upstream uses to resolve the uploaded asset), `external_ref` deterministically derived from `<product_ref>:image:<id_image>` (caller-supplied stable id for upstream idempotency), and `product_metadata` built from the row's snapshot columns, (6) persist the upstream response to the bookkeeping row. When the toggle evaluates falsy, the hook SHALL be a no-op. When the bookkeeping row already has `status='registered'` and `qamera_product_id IS NOT NULL`, the call SHALL still register the new image but SHALL OMIT `product_metadata` from the request (the product is already known upstream).
 
 #### Scenario: First image upload on a pending product registers it upstream
 
 - **GIVEN** a bookkeeping row for `(id_product=42, id_shop=1)` exists with `status='pending'`, `qamera_product_id=NULL`, `display_name_snapshot='Widget'`, `sku_snapshot='WDG-001'`, `description_snapshot='hello'`
 - **AND** the operator has `QAMERAAI_AUTO_REGISTER_PRODUCTS=1` and uploads an image for product 42 in the BO
 - **WHEN** `actionWatermark` fires with `id_product=42, id_image=99` and the upstream `POST /images` returns 201 with `{product_id: 'abc-uuid', image_id: 'img-uuid', ...}`
-- **THEN** the request to `/images` carries `product_ref='ps:1:42'`, `source_url=<assetId from presigned response>`, and `product_metadata={display_name:'Widget', sku:'WDG-001', description:'hello'}`
+- **THEN** the request to `/images` carries `external_ref='ps:1:42:image:99'`, `product_ref='ps:1:42'`, `asset_id=<assetId from presigned response>`, and `product_metadata={display_name:'Widget', sku:'WDG-001', description:'hello'}`
 - **AND** after the response the bookkeeping row has `status='registered'`, `qamera_product_id='abc-uuid'`, `last_synced_at=NOW()`, `last_error_message=NULL`
 
 #### Scenario: Subsequent image upload on a registered product omits product_metadata
 
 - **GIVEN** a bookkeeping row with `status='registered'`, `qamera_product_id='abc-uuid'`
 - **WHEN** the operator uploads a second image and `actionWatermark` fires
-- **THEN** the request to `/images` carries `product_ref='ps:1:42'` and `source_url=...` but does NOT include `product_metadata`
+- **THEN** the request to `/images` carries `product_ref='ps:1:42'`, `asset_id=...`, and a per-image `external_ref` but does NOT include `product_metadata`
 - **AND** the bookkeeping row keeps `status='registered'`, `qamera_product_id='abc-uuid'` unchanged; `last_synced_at` is bumped to NOW()
 
 #### Scenario: Toggle off, no upstream call
@@ -140,7 +140,7 @@ When the bookkeeping row is already `status='registered'`, the resolver is NOT c
 
 - **GIVEN** a `registered` bookkeeping row for product 42, `qamera_product_id='abc-uuid'`
 - **WHEN** the operator uploads image 105 and `actionWatermark` fires with `id_image=105`
-- **THEN** the sync service uploads image 105 directly (no resolver consultation) and registers it with `product_ref='ps:1:42'`, `source_url=<assetId>`, NO `product_metadata`
+- **THEN** the sync service uploads image 105 directly (no resolver consultation) and registers it with `external_ref='ps:1:42:image:105'`, `product_ref='ps:1:42'`, `asset_id=<assetId>`, NO `product_metadata`
 
 ### Requirement: Presigned upload TTL is honored
 
