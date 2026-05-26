@@ -1,13 +1,13 @@
 ## Why
 
-Po Fazie 2 plugin trzyma wiersze w `qamera_product_link` z `status='pending'` i `qamera_product_id=NULL` — czyli wie "ten produkt PS istnieje", ale nigdy nie powiedział o nim upstreamowi. Bookkeeping to martwy ciężar dopóki ktoś nie zacznie tych produktów rejestrować w Qamera AI. Upstream API nie ma `POST /plugin/products` — produkt powstaje wyłącznie jako side-effect `POST /plugin/images` (lub `POST /plugin/packshots`) z polem `product_metadata` (potwierdzone w `docs/knowledge/plugin-product-catalog.md` w upstream + design Fazy 2). Czas to wpiąć: pierwszy upload zdjęcia produktu → `registerImage` z `product_metadata` → upstream cascading tworzy produkt → my dostajemy `qamera_product_id`, ustawiamy `status='registered'`.
+Po Fazie 2 plugin trzyma wiersze w `qamera_product_link` z `status='pending'` i `qamera_product_id=NULL` — czyli wie "ten produkt PS istnieje", ale nigdy nie powiedział o nim upstreamowi. Bookkeeping to martwy ciężar dopóki ktoś nie zacznie tych produktów rejestrować w Qamera AI. Upstream API nie ma `POST /products` — produkt powstaje wyłącznie jako side-effect `POST /images` (lub `POST /packshots`) z polem `product_metadata` (potwierdzone podczas rozpoznania w Fazie 2 — patrz `design.md` Fazy 2 archive'owanej w `openspec/changes/archive/2026-05-25-add-product-sync-hooks/design.md`; pełna upstream-side dokumentacja `docs/knowledge/plugin-product-catalog.md` żyje w osobnym repo `qamera-ai/saas-platform`, do którego ten plugin nie ma bezpośredniego dostępu). Czas to wpiąć: pierwszy upload zdjęcia produktu → `registerImage` z `product_metadata` → upstream cascading tworzy produkt → my dostajemy `qamera_product_id`, ustawiamy `status='registered'`.
 
 Wycelowanie pierwszego image-sync w *zdjęcie produktu* (nie packshot) daje:
 - naturalny trigger po stronie operatora (dodanie obrazu produktu w BO PS to akcja, którą operator i tak robi przy katalogowaniu)
 - minimalny footprint w UI (Faza 3 nie wymaga nowej karty produktu — to Faza 4)
 - czyste następstwo po Fazie 2 (te same wiersze `qamera_product_link`, ten sam toggle, ten sam writer dla `last_error_message`/`last_synced_at`)
 
-Packshoty (`POST /plugin/packshots`) zostawiamy świadomie poza zakresem — to Faza 4, kiedy doda się karta "Qamera AI" w produkcie z przyciskami generowania.
+Packshoty (`POST /packshots`) zostawiamy świadomie poza zakresem — to Faza 4, kiedy doda się karta "Qamera AI" w produkcie z przyciskami generowania.
 
 ## What Changes
 
@@ -34,7 +34,7 @@ Packshoty (`POST /plugin/packshots`) zostawiamy świadomie poza zakresem — to 
 
 - **Code (new)**
   - `src/Sync/ProductImageSyncService.php` — orkiestrator (interface + implementation, testable)
-  - `src/Sync/Dto/ProductMetadata.php` — value object dla payloadu `product_metadata`
+  - `src/Api/Dto/ProductMetadata.php` — value object dla payloadu `product_metadata` (mieszka razem z `RegisterImageRequest` i resztą DTO klienta API, żeby był reusable dla `RegisterPackshotRequest` w Fazie 4)
   - `src/Sync/PrimaryImageResolver.php` — wybiera "primary" image dla produktu PS (cover, fallback first by position)
   - `src/Sync/ImageUploadStrategy.php` — interface dla strategii (presigned vs publiczny URL); implementacje
   - `tests/Unit/Sync/ProductImageSyncServiceTest.php` — pokrywa state transitions, error mapping, retry semantics
@@ -45,7 +45,7 @@ Packshoty (`POST /plugin/packshots`) zostawiamy świadomie poza zakresem — to 
   - `src/Install/Installer.php` — dodanie nowego hooka do `self::HOOKS`
   - `config/services.yml` — rejestracja serwisów Fazy 3
 - **DB**: brak zmian schematu — wszystkie kolumny są z Fazy 2.
-- **External services**: pierwsze realne wywołania na `https://qamera.ai/api/v1/plugin/images`. Smoke test wymaga konta plugin (credentials z CLAUDE.md). Dopiero ten change uruchamia pole `qamera_product_id`.
+- **External services**: pierwsze realne wywołania na `POST /images` (relative do base URL `https://qamera.ai/api/v1/plugin`). Smoke test wymaga konta plugin — credentials z `CLAUDE.md` (NIE skopiowane do żadnego tracked artifactu; trzymane wyłącznie w pliku CLAUDE.md i odczytywane ad-hoc przez operatora). Dopiero ten change uruchamia pole `qamera_product_id`.
 - **Dependencies**: brak nowych.
 - **Compatibility**: BO save action MUSI nadal działać przy padzie upstreama (5xx, network down). To definiuje czy rejestracja idzie synchronicznie w hooku (z full try/catch i swallow) czy asynchronicznie w cronie. **Open question — design.md.**
 - **Docs**: README Phase plan → Phase 2 = "Done", Phase 3 = "In progress" przy starcie; CHANGELOG zostanie ruszony przy mergu Fazy 3 ([1.2.0] entry).

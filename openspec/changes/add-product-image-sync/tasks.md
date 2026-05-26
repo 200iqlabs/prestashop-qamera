@@ -43,8 +43,8 @@
 
 ## 5. `ImageUploadStrategy` interface + `PresignedImageUploadStrategy`
 
-- [ ] 5.1. Define interface `ImageUploadStrategy::uploadImage(string $localPath): string` returning the `source_url` the upstream `registerImage` will use
-- [ ] 5.2. Test first: `testHappyPathReturnsUrl` — mocked `QameraApiClient::requestUpload` returns presigned response with `expires_at` in the future; mock PUT succeeds; strategy returns the upload URL stripped of query params
+- [ ] 5.1. Define interface `ImageUploadStrategy::uploadImage(string $localPath): string` returning the canonical `source_url` the upstream `registerImage` will use. For `PresignedImageUploadStrategy` that value is the `assetId` from `PresignedUploadResponse` (an opaque upstream handle), NOT the `uploadUrl` itself — `uploadUrl` is a short-TTL PUT target with query-string credentials and is not safe to forward.
+- [ ] 5.2. Test first: `testHappyPathReturnsAssetId` — mocked `QameraApiClient::requestUpload` returns `PresignedUploadResponse('https://qamera-uploads.example/PUT?sig=...', 'asset-uuid', '2026-05-26T12:00:00Z')`; mock PUT succeeds; strategy returns `'asset-uuid'`
 - [ ] 5.3. Test first: `testExpiredPresignedTriggersRefresh` — first `requestUpload` returns `expires_at = now() - 1s`; strategy calls `requestUpload` again before PUT; new URL used
 - [ ] 5.4. Test first: `testPutFailureRaisesTransportException` — Guzzle `ConnectException` from PUT; strategy re-raises as `TransportException`
 - [ ] 5.5. Test first: `testUpstreamUploadEndpointFailureBubbles` — `requestUpload` throws `ServerException`; strategy re-raises
@@ -92,15 +92,17 @@
 ## 10. PHPStan + PHPCS
 
 - [ ] 10.1. `vendor/bin/phpcs` clean on the full change scope (`src/Api/Dto/ProductMetadata.php`, modified `RegisterImageRequest`, all new `src/Sync/*`, modified `qameraai.php`, modified `Installer.php`)
-- [ ] 10.2. `vendor/bin/phpstan analyse` at level 5 — clean (PS core stubs cover `Image`; new DTO needs no special stubs)
+- [ ] 10.2. `vendor/bin/phpstan analyse` at level 5 — clean. CI loads the real PrestaShop core via `prestashop/php-dev-tools`'s `ps-module-extension.neon` bootstrap (`_PS_ROOT_DIR_` env var pointed at a checked-out PS source), so `Image` and friends resolve to the actual core classes (not stubs). Unit-test stubs live separately in `tests/Stubs/PrestaShopStubs.php`
 - [ ] 10.3. CI matrix (PHP 8.1 / 8.2 / 8.3) stays green
 
 ## 11. Manual smoke (operator, with live Qamera AI credentials)
 
-The Phase-1 credentials from `CLAUDE.md` (`mk_live_...`, installation `e55c20ec-...`) point at production `https://qamera.ai/api/v1/plugin`. **First Phase-3 smoke is the first real upstream traffic from this plugin** — proceed carefully.
+**First Phase-3 smoke is the first real upstream traffic from this plugin** — proceed carefully. Credentials are operator-provisioned: read from `CLAUDE.md` (which is `.gitignore`d and stays on the operator's workstation — it is NOT a tracked artifact, and these tasks deliberately do NOT inline keys or installation IDs) or from the Qamera AI panel directly. Paste them only into the BO configuration form; never into commit messages, PR descriptions, screenshots, or chat threads. If credentials need to be rotated mid-smoke, do so from the Qamera AI panel — the plugin only reads them from `ps_configuration`.
+
+> **Pre-existing risk**: the current `CLAUDE.md` in the operator's workstation may contain `mk_live_…` keys in plaintext. That is a separate hardening task (move into the operator's secret manager / `.env` outside of any agent-readable file). This change does not modify `CLAUDE.md`.
 
 - [ ] 11.1. `make up` + `make install` on local Docker; module installs cleanly (no DB schema changes vs Phase 2)
-- [ ] 11.2. http://localhost:8080/admin-dev → Modules → Qamera AI → configuration → set API base, API key, webhook secret per `CLAUDE.md`; enable "Automatically register new products"; click "Test connection" → must show `account_name`, `credits_balance`, `installation.status=active`
+- [ ] 11.2. http://localhost:8080/admin-dev → Modules → Qamera AI → configuration → paste the operator-held API base / API key / webhook secret into the BO form; enable "Automatically register new products"; click "Test connection" → must show `account_name`, `credits_balance`, `installation.status=active`
 - [ ] 11.3. Catalog → New product → name "Smoke Image v1", reference "SMOKE-IMG-001", short description "test"; save; upload one image (cover); save
 - [ ] 11.4. phpMyAdmin → `ps_qamera_product_link` — assert row has `status='registered'`, `qamera_product_id` is a UUID (not NULL), `last_synced_at` populated, `last_error_message` NULL
 - [ ] 11.5. Catalog → same product → upload a second image; assert `last_synced_at` bumped but `qamera_product_id` and `status='registered'` unchanged

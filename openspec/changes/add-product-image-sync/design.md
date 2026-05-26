@@ -1,8 +1,8 @@
 ## Context
 
-Faza 2 doprowadziła plugin do stanu: każdy zapis produktu w BO PS zostawia wiersz `qamera_product_link` z `status='pending'`, `qamera_product_id=NULL`, snapshot metadanych. Upstream nic o tych produktach nie wie — `POST /plugin/products` nie istnieje, produkty powstają tylko jako side-effect `POST /plugin/images` lub `POST /plugin/packshots` z polem `product_metadata` (potwierdzone w `docs/knowledge/plugin-product-catalog.md` upstream + design Fazy 2).
+Faza 2 doprowadziła plugin do stanu: każdy zapis produktu w BO PS zostawia wiersz `qamera_product_link` z `status='pending'`, `qamera_product_id=NULL`, snapshot metadanych. Upstream nic o tych produktach nie wie — `POST /products` nie istnieje, produkty powstają tylko jako side-effect `POST /images` lub `POST /packshots` z polem `product_metadata` (kontrakt rozpoznany podczas Fazy 2; pełna dokumentacja `plugin-product-catalog.md` żyje w upstream repo `qamera-ai/saas-platform`, niedostępnym z tego repo — patrz `openspec/changes/archive/2026-05-25-add-product-sync-hooks/design.md` po decyzję Fazy 2).
 
-Faza 3 podpina **pierwszy upload obrazu produktu** jako trigger rejestracji upstreamowej. Operator dodaje obraz w BO → plugin pobiera wiersz `qamera_product_link`, robi presigned upload do Qamera storage, woła `POST /plugin/images` z `product_metadata` z wiersza, zapisuje `qamera_product_id` + `status='registered'`.
+Faza 3 podpina **pierwszy upload obrazu produktu** jako trigger rejestracji upstreamowej. Operator dodaje obraz w BO → plugin pobiera wiersz `qamera_product_link`, robi presigned upload do Qamera storage, woła `POST /images` z `product_metadata` z wiersza, zapisuje `qamera_product_id` + `status='registered'`.
 
 Phase plan z README to potwierdza: "Phase 2 — Core flow (Qamera API client, per-product sync, webhook handler, 'Qamera AI' product tab)". Bookkeeping + image-sync to **core flow**; webhook handler i product-tab UI to kolejne changes (Faza 3 i 4 w nomenklaturze tasków).
 
@@ -12,13 +12,13 @@ Phase plan z README to potwierdza: "Phase 2 — Core flow (Qamera API client, pe
 
 - Pierwszy upload obrazu produktu w PS BO **automatycznie** rejestruje produkt upstream (gdy toggle `QAMERAAI_AUTO_REGISTER_PRODUCTS=1`).
 - Cykl life: `qamera_product_link.status` przechodzi `pending → registered` na sukces, `pending → error` na porażkę z czytelnym `last_error_message`.
-- Idempotency: drugie zapisanie tego samego obrazu (np. dodanie kolejnego po sukcesie pierwszego) **nie** woła upstream ponownie z `product_metadata`. Jeśli `qamera_product_id` jest wypełnione, kolejne obrazy lecą bez metadanych (czyste `POST /plugin/images` z `product_ref`).
+- Idempotency: drugie zapisanie tego samego obrazu (np. dodanie kolejnego po sukcesie pierwszego) **nie** woła upstream ponownie z `product_metadata`. Jeśli `qamera_product_id` jest wypełnione, kolejne obrazy lecą bez metadanych (czyste `POST /images` z `product_ref`).
 - BO save action MUSI zakończyć się sukcesem niezależnie od stanu upstream — wszystkie `\Throwable` z hooka są łapane i logowane (zachowanie z Fazy 2).
 - 100% test coverage state-transitions w `ProductImageSyncService` (mockowany klient + writer).
 
 **Non-Goals:**
 
-- **Packshots** — `POST /plugin/packshots` zostaje na Fazę 4 (karta "Qamera AI" w produkcie z przyciskami generowania).
+- **Packshots** — `POST /packshots` zostaje na Fazę 4 (karta "Qamera AI" w produkcie z przyciskami generowania).
 - **Manual retry UI** — `error → pending` reset będzie w Fazie 4 (UI w karcie produktu). Faza 3 tylko zostawia `last_error_message` operatorowi do podglądu w phpMyAdmin / logu BO.
 - **Bulk backfill** — Faza 3 nie sweeps istniejących `pending` wierszy w cronie. Trigger to wyłącznie hook upload. Wiersze które już istniały bez triggera obrazu (od Fazy 2) zostaną zarejestrowane dopiero gdy ktoś doda/zmieni obraz.
 - **Webhook handler** — webhook od Qamera AI o jobie się zakończył (osobny change). Faza 3 wysyła image-register i czyta synchronous response — to wystarczy do ustawienia `qamera_product_id`.
@@ -111,7 +111,7 @@ PS może mieć N obrazów per produkt. Który wysyłamy z `product_metadata` prz
 Trzy warstwy:
 
 1. **HTTP level** — `QameraApiClient::registerImage` już generuje idempotency-key (Faza 1, `src/Api/Internal/IdempotencyKeyGenerator.php`). Retries upstream nie tworzą duplikatów.
-2. **State level** — przed wywołaniem `registerImage`, serwis czyta wiersz `qamera_product_link`. Jeśli `status='registered'` i `qamera_product_id IS NOT NULL`, **NIE** dodaje `product_metadata` do requestu (kolejne obrazy lecą jako bare `POST /plugin/images` z `product_ref`). To zgodne z upstream "produkt już istnieje, dodaj kolejny obraz".
+2. **State level** — przed wywołaniem `registerImage`, serwis czyta wiersz `qamera_product_link`. Jeśli `status='registered'` i `qamera_product_id IS NOT NULL`, **NIE** dodaje `product_metadata` do requestu (kolejne obrazy lecą jako bare `POST /images` z `product_ref`). To zgodne z upstream "produkt już istnieje, dodaj kolejny obraz".
 3. **Hook level** — `actionWatermark` może strzelić wielokrotnie dla tego samego obrazu (np. PS robi resize i fires hook dla każdego thumbnail). Service używa `(id_product, id_image)` jako deduplication key in-memory podczas requestu (proste runtime cache w property — nie persistent).
 
 ### 7. Mapping błędów upstream → `last_error_message`
@@ -123,7 +123,7 @@ Trzy warstwy:
 ```
 ValidationException     → "Upstream validation: " + first error code + ": " + first error message (max 500 chars)
 AuthException           → "API credentials invalid (HTTP 401). Check API key in module configuration."
-NotFoundException       → "Upstream returned 404 — installation may be inactive. Contact Qamera AI support."
+NotFoundException       → "Upstream returned 404. Possible causes: (a) installation inactive — check status in Qamera AI panel; (b) product_ref not found upstream and product_metadata was omitted from the request (expected only on the registered → registered path)."
 RateLimitException      → "Rate limit exceeded — try again later. (HTTP 429)"
 ServerException         → "Upstream server error (HTTP 5xx) after retries. Try again later."
 TransportException      → "Network error reaching Qamera AI: " + e->getMessage() (max 500)

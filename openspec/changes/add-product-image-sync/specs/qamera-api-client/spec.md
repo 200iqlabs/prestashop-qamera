@@ -2,7 +2,7 @@
 
 ### Requirement: registerImage accepts optional product_metadata for cascading product creation
 
-`QameraApiClient::registerImage(RegisterImageRequest $request)` SHALL serialize an optional `product_metadata` object into the `POST /plugin/images` request body when the request DTO carries one. The shape of `product_metadata` SHALL match the upstream `ProductMetadataSchema`:
+`QameraApiClient::registerImage(RegisterImageRequest $request)` SHALL serialize an optional `product_metadata` object into the `POST /images` request body when the request DTO carries one. The shape of `product_metadata` SHALL match the upstream `ProductMetadataSchema`:
 
 - `display_name`: required string, max 500 characters
 - `sku`: optional string, max 100 characters
@@ -16,7 +16,7 @@ The client SHALL build `RegisterImageRequest` from a new constructor parameter `
 
 - **GIVEN** a `RegisterImageRequest` constructed with `product_ref='ps:1:42'`, `source_url='https://qamera-uploads.example/...'`, `productMetadata=new ProductMetadata('Widget', 'WDG-001', 'hello')`
 - **WHEN** `QameraApiClient::registerImage` is called
-- **THEN** the HTTP request body to `POST /plugin/images` is `{product_ref: 'ps:1:42', source_url: '...', product_metadata: {display_name: 'Widget', sku: 'WDG-001', description: 'hello'}}`
+- **THEN** the HTTP request body to `POST /images` is `{product_ref: 'ps:1:42', source_url: '...', product_metadata: {display_name: 'Widget', sku: 'WDG-001', description: 'hello'}}`
 
 #### Scenario: registerImage without product_metadata omits the field
 
