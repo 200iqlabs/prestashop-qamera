@@ -32,24 +32,24 @@ When the `actionWatermark` PrestaShop hook fires with parameters `id_image` and 
 
 ### Requirement: Primary image resolution prefers cover image with a deterministic fallback chain
 
-The module SHALL select the image to upload using `PrimaryImageResolver::resolve(int $idProduct, ?int $hintIdImage): ?Image`. The resolver SHALL try in order: (1) `Image::getCover($idProduct)` if it returns a non-empty image, (2) the `$hintIdImage` from the hook params if it points to a valid image for that product, (3) the first image returned by `Image::getImages($idProduct)` ordered by position. If all three return nothing, the resolver SHALL return null and the sync service SHALL early-return without touching the bookkeeping row's status (a missing image is not an error of the upstream sync, it is missing input).
+The module SHALL select the image to upload using `PrimaryImageResolver::resolve(int $idProduct, ?int $hintIdImage): ?int` (returns the resolved image id, NOT a PrestaShop `Image` instance — PS's `Image::getCover` and `Image::getImages` return associative arrays, so the resolver returns the `id_image` int extracted from those arrays). The resolver SHALL try in order: (1) `Image::getCover($idProduct)` if it returns a non-empty array, take its `id_image`; (2) the `$hintIdImage` from the hook params if it points to a valid image for that product; (3) the first image returned by `Image::getImages($idLang, $idProduct)` ordered by position, where `$idLang` is the shop's default language id resolved via `Configuration::get('PS_LANG_DEFAULT', null, null, $idShop)` — same convention as the Phase-2 snapshot writer. If all three return nothing, the resolver SHALL return null and the sync service SHALL early-return without touching the bookkeeping row's status (a missing image is not an error of the upstream sync, it is missing input).
 
 #### Scenario: Product with a cover image
 
 - **GIVEN** product 42 has three images and image 100 is set as cover
-- **WHEN** `PrimaryImageResolver::resolve(42, 99)` is called (hint pointing to image 99, a non-cover thumbnail)
-- **THEN** the resolver returns image 100 (cover wins over hint)
+- **WHEN** `PrimaryImageResolver::resolve(42, 99)` is called (hint pointing to image 99, a non-cover image)
+- **THEN** the resolver returns `100` (cover image id wins over hint)
 
 #### Scenario: Product without cover, hint valid
 
 - **GIVEN** product 42 has two images and no cover is set; the operator just uploaded image 99
 - **WHEN** `PrimaryImageResolver::resolve(42, 99)` is called
-- **THEN** the resolver returns image 99 (hint fallback)
+- **THEN** the resolver returns `99` (hint fallback)
 
 #### Scenario: Product with no images
 
 - **WHEN** `PrimaryImageResolver::resolve(42, null)` is called and the product has zero images
-- **THEN** the resolver returns null and the sync service skips the registration entirely without changing the bookkeeping row
+- **THEN** the resolver returns `null` and the sync service skips the registration entirely without changing the bookkeeping row
 
 ### Requirement: Upstream errors map to the bookkeeping row with sanitized last_error_message
 
@@ -92,22 +92,52 @@ When the bookkeeping row has `status='error'` and a subsequent `actionWatermark`
 - **WHEN** the operator uploads an image and `registerImage` returns 201
 - **THEN** the row has `status='registered'`, `qamera_product_id=<from response>`, `last_error_message=NULL`, `last_synced_at=NOW()`
 
-### Requirement: PS image resize thumbnails do not trigger duplicate upstream calls
+### Requirement: Duplicate hook fires for the same image are deduplicated
 
-PrestaShop fires `actionWatermark` once per generated image size (cart, home, large, thickbox, etc.). The sync service SHALL deduplicate: only the first invocation per `(id_product, id_image)` within a single request lifecycle MAY trigger upstream work; subsequent invocations with the same key SHALL be no-ops. Additionally, only invocations where the resolved primary image matches `id_image` from the hook params SHALL proceed — invocations for non-cover thumbnails SHALL be skipped.
+PrestaShop's `actionWatermark` hook MAY fire more than once for the same `(id_product, id_image)` pair within a single request lifecycle — typically in bulk image regeneration flows in the BO. The sync service SHALL deduplicate: only the first invocation per `(id_product, id_image)` MAY trigger upstream work; subsequent invocations with the same key SHALL be no-ops. The dedup cache is in-memory per request — across requests the same `id_image` MAY register again (e.g. operator clears bookkeeping and reuploads).
 
-#### Scenario: Same image fires hook three times for different sizes
+The dedup rule applies only to the *same image*. Two distinct images for the same product (e.g. cover image 100 and secondary image 101) MUST each be processed independently. Non-cover image uploads are NOT skipped — every new `id_image` triggers a `POST /images` call (with or without `product_metadata` depending on bookkeeping state — see the first requirement of this capability).
 
-- **GIVEN** product 42 has cover image 100; PS generates 3 resized variants and fires `actionWatermark` three times with `id_image=100`
-- **WHEN** the sync service handles all three invocations in one request
+#### Scenario: Same image fires hook twice in a bulk regenerate flow
+
+- **GIVEN** product 42 has cover image 100; the operator triggers BO "Regenerate thumbnails" which causes `actionWatermark` to fire twice with `id_image=100`
+- **WHEN** the sync service handles both invocations in the same request
 - **THEN** only one upstream `POST /assets/upload`, one PUT, and one `POST /images` are issued
 
-#### Scenario: Non-cover thumbnail hook is skipped
+#### Scenario: Distinct images for the same product register independently
 
-- **GIVEN** product 42 has cover image 100 and a secondary image 101
-- **WHEN** `actionWatermark` fires with `id_image=101` (a non-cover image upload, before cover was set)
-- **AND** `PrimaryImageResolver` resolves cover image to 100, not 101
-- **THEN** the sync service SHALL skip the upstream call for that invocation and SHALL NOT modify the bookkeeping row
+- **GIVEN** a registered bookkeeping row (`status='registered'`, `qamera_product_id='abc-uuid'`)
+- **WHEN** the operator uploads a secondary image 101 and `actionWatermark` fires with `id_image=101`
+- **AND** later uploads a third image 102 and `actionWatermark` fires again with `id_image=102`
+- **THEN** the sync service issues two separate `POST /images` requests — one for each new image — neither carrying `product_metadata` (the row is already registered); `last_synced_at` is bumped twice
+
+### Requirement: Primary image is used only for the cascade-create metadata payload
+
+When the bookkeeping row is in `status='pending'` or `status='error'` (i.e. the upstream product does NOT yet exist or the previous attempt failed), the sync service SHALL use `PrimaryImageResolver` to choose which image carries the `product_metadata` payload to upstream — cover image preferred over the hint image (see the "Primary image resolution" requirement). The asset uploaded in this case is the resolved primary image (not necessarily the image whose ID came in via the hook).
+
+When the bookkeeping row is already `status='registered'`, the resolver is NOT consulted — every `id_image` from the hook params SHALL be uploaded as-is and registered as a new asset for the existing upstream product (without `product_metadata`).
+
+#### Scenario: Pending row, non-cover hook fires before cover is set
+
+- **GIVEN** a `pending` bookkeeping row; product 42 has no cover yet; the operator uploads image 99
+- **WHEN** `actionWatermark` fires with `id_image=99`
+- **AND** `PrimaryImageResolver::resolve(42, 99)` returns image 99 (hint fallback per the resolver's chain)
+- **THEN** the sync service uploads image 99 and registers it with `product_metadata` from the row's snapshot
+
+#### Scenario: Pending row, non-cover hook fires while a cover exists
+
+- **GIVEN** a `pending` bookkeeping row; product 42 already has cover image 100; the operator uploads a secondary image 99
+- **WHEN** `actionWatermark` fires with `id_image=99`
+- **AND** `PrimaryImageResolver::resolve(42, 99)` returns image 100 (cover wins over hint)
+- **THEN** the sync service uploads image 100 (not 99) and registers it with `product_metadata`
+- **AND** the bookkeeping row transitions to `registered`
+- **AND** image 99 is NOT registered in this invocation — it will register when its own `actionWatermark` invocation runs (already deduped by `(id_product, id_image)` from §"duplicate hook fires" above) or when the next image upload triggers another hook
+
+#### Scenario: Registered row, every new image registers without metadata
+
+- **GIVEN** a `registered` bookkeeping row for product 42, `qamera_product_id='abc-uuid'`
+- **WHEN** the operator uploads image 105 and `actionWatermark` fires with `id_image=105`
+- **THEN** the sync service uploads image 105 directly (no resolver consultation) and registers it with `product_ref='ps:1:42'`, `source_url=<assetId>`, NO `product_metadata`
 
 ### Requirement: Presigned upload TTL is honored
 

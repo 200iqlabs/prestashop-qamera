@@ -99,12 +99,12 @@ PS może mieć N obrazów per produkt. Który wysyłamy z `product_metadata` prz
 | B. First by position | Zawsze istnieje (skoro hook strzela). | Mniej "deliberate". |
 | C. `$params['id_image']` z hooka | To **dokładnie** ten obraz który operator dodał. | Operator może dodać sub-obraz przed cover — wtedy registracja idzie z sub-image jako "primary" co jest mylące dla upstream. |
 
-**Wybór: A z fallbackiem na C.** Helper `PrimaryImageResolver::resolve($idProduct, $hintIdImage)`:
+**Wybór: A z fallbackiem na C.** Helper `PrimaryImageResolver::resolve(int $idProduct, ?int $hintIdImage): ?int` zwraca id obrazu (nie instancję — PS-owe `Image::getCover` i `Image::getImages` zwracają associative arrays, więc resolver wyciąga `id_image` z dict'a):
 
-1. Spróbuj `Image::getCover($idProduct)` — jeśli zwraca obraz, użyj.
-2. Inaczej fall back na `$hintIdImage` z hooka.
-3. Inaczej (rzadkie — hook strzela bez `id_image`?) — `Image::getImages($idProduct)` pierwszy by position.
-4. Jeśli zero — wczesny return, log "no image to upload", **nie** ustawiaj `status='error'` (to nie błąd Qamera, to brak danych).
+1. Spróbuj `Image::getCover($idProduct)` — jeśli zwraca niepustą tablicę, użyj jej `id_image`.
+2. Inaczej fall back na `$hintIdImage` z hooka (po walidacji że istnieje dla tego produktu).
+3. Inaczej (rzadkie — hook strzela bez `id_image`?) — `Image::getImages($idLang, $idProduct)` pierwszy by position; `$idLang` to default language sklepu (`Configuration::get('PS_LANG_DEFAULT', null, null, $idShop)`) — ta sama konwencja co w Phase-2 snapshot writer.
+4. Jeśli zero — wczesny return `null`, log "no image to upload", **nie** ustawiaj `status='error'` (to nie błąd Qamera, to brak danych).
 
 ### 6. Idempotency
 

@@ -34,13 +34,13 @@
 
 ## 4. `PrimaryImageResolver` (`src/Sync/PrimaryImageResolver.php`)
 
-- [ ] 4.0. Extend `tests/Stubs/PrestaShopStubs.php` with a minimal `Image` class stub exposing `getCover(int $idProduct): array|false` and `getImages(int $idLang, int $idProduct): array` as static methods (matching the PS 9 core signatures). Phase-2 stubs covered `Db`, `Product`, `Configuration`, `PrestaShopLogger`, `PrestaShopDatabaseException`, `Context`; `Image` is the new one this change needs. Without the stub, `PrimaryImageResolver` tests would fail to load under the unit-only PHPUnit runner.
+- [ ] 4.0. Extend `tests/Stubs/PrestaShopStubs.php` with a minimal `Image` class stub. PS 9 core's `Image::getCover(int $idProduct)` returns `array|false` (associative array with at least `id_image` and `cover` keys, or `false` when no cover exists). PS 9 core's `Image::getImages(int $idLang, int $idProduct): array` returns a list of associative arrays each containing `id_image`, `cover`, `position`. The stub MUST mirror those signatures so unit tests can drive the resolver without booting PS. No constructor / instance methods are needed — the resolver consumes the array shapes directly and returns `?int $idImage`, never an `Image` instance. Phase-2 stubs covered `Db`, `Product`, `Configuration`, `PrestaShopLogger`, `PrestaShopDatabaseException`, `Context`; `Image` is the new one this change needs.
 - [ ] 4.1. Test first: `testCoverImageWinsOverHint` — cover exists; hint points to a non-cover image; resolver returns cover
 - [ ] 4.2. Test first: `testHintUsedWhenNoCover` — `Image::getCover` returns false; hint is valid image id for the product; resolver returns hint
 - [ ] 4.3. Test first: `testFirstByPositionFallback` — no cover, no hint, but `Image::getImages` returns 2 images; resolver returns first
 - [ ] 4.4. Test first: `testNullReturnedForProductWithNoImages` — all three sources empty; resolver returns null
 - [ ] 4.5. Test first: `testHintForDifferentProductIgnored` — hint points to an image that belongs to a different product; resolver ignores it and falls through
-- [ ] 4.6. Implement using a static-ish class with `resolve(int $idProduct, ?int $hintIdImage): ?Image` — wraps `Image::getCover` and `Image::getImages` calls with stub-friendly indirection so unit tests can mock
+- [ ] 4.6. Implement using a static-ish class with `resolve(int $idProduct, ?int $hintIdImage): ?int` (returns the resolved `id_image` int, NOT a PS `Image` instance — PS's `Image::getCover`/`Image::getImages` return arrays). Wraps the calls with stub-friendly indirection so unit tests can mock. The resolver also takes the shop's default `$idLang` (resolved by the caller via `Configuration::get('PS_LANG_DEFAULT', null, null, $idShop)`) for the `Image::getImages` fallback — same convention as Phase-2 snapshot writer
 
 ## 5. `ImageUploadStrategy` interface + `PresignedImageUploadStrategy`
 
