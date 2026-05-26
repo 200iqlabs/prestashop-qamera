@@ -1,77 +1,107 @@
 ## Context
 
-Phase-3 smoke (`/opsx:apply add-product-image-sync` → operator smoke § 11 z `tasks.md`) wykrył że `QameraApiClient::requestUpload()` wysyła pusty body, a upstream odrzuca z `code=invalid_input` żądając `{mode: "presigned", filename, content_type, size_bytes}`. Po inspekcji `qamera-ai/saas-platform/apps/web/app/api/v1/plugin/_lib/server/schemas.ts` wyszło że:
+Phase-3 smoke wykrył jedno mismatch (`/assets/upload` body shape). Pełny audyt (general-purpose subagent porównał 15 metod `QameraApiClient.php` z `qamera-ai/saas-platform/apps/web/app/api/v1/plugin/_lib/server/schemas.ts` + route handlers per endpoint) wyłapał że **14 z 15 metod jest zerwane**. `proposal.md` listuje pełną macierz. Jedyne działające: `GET /me` (sprawdzone w smoke) i `DELETE /products/{idOrRef}` (brak body, dispatch tolerancyjny na każdym 2xx).
 
-- `/assets/upload` body to discriminated union (`mode: "presigned" | "multipart"`); presigned wymaga 4 pól, response ma 7 pól, dwa są nullable
-- `/images` to **bulk-only** (`POST /images` przyjmuje `{images: Array<RegisterImageSchema>}`, max 100); zwraca `{results: Array<RegisterImageResultSchema>}`
-- `RegisterImageSchema` ma `external_ref` (caller-supplied stable id, wymagane, max 200), `product_ref`, opcjonalny `product_metadata`, oraz `asset_id: UUID` (nie `source_url`)
-- `/packshots` zachowuje się analogicznie
+Operator wybrał scope opcję "jeden mega-change: regeneruj cały klient" (vs "tylko hot-path", "dwa changey", "per-endpoint"). Konsekwencja: ten change rewrite'uje 14 metod naraz, plus 6+ nowych sub-DTO, plus parametryzuje `sendList` po wrapper key, plus pełen zestaw contract-test fixtures snapshotów z upstream zod.
 
-Phase-1 client surface w `src/Api/QameraApiClient.php` ma signatury które nie odpowiadają temu kontraktowi. Phase-2 nie ruszał klienta. Phase-3 (PR #9) próbował go użyć i dlatego ujawnił rozjazd. Operator zdecydował (1 z 4 opcji w turze konsultacyjnej) że fix wjeżdża w osobnym change'u off main, a Phase-3 rebase'uje się na to po mergu.
+Rozmiar zmiany jest duży (~1500 LOC), ale skoncentrowany na jednym capability (`qamera-api-client`) i jednym katalogu (`src/Api/`). PR #9 (Phase 3) sit-time po mergu fixu = czas na rebase wg pkt 5 niżej.
 
 ## Goals / Non-Goals
 
 **Goals:**
-- `QameraApiClient::requestUpload(filename, contentType, sizeBytes)` SHALL hit `/assets/upload` z payloadem akceptowanym przez upstream (mode=presigned, 4 fields).
-- `QameraApiClient::registerImage($request)` SHALL hit `/images` z bulk wrapperem, nawet dla pojedynczego obrazu (klient sam wrapuje). Caller widzi single-image API z punktu widzenia ergonomii (DI), klient pod spodem mówi bulk.
-- `QameraApiClient::registerPackshot($request)` SHALL działać symetrycznie do `registerImage`.
-- `tests/Contract/QameraApiContractTest.php` SHALL walidować że JSON wysyłany przez klienta matchuje pełen shape upstream zod (przez snapshot fixtures z hash-em git ref upstream, weryfikowane PHPUnit-em przeciw skopiowanym oczekiwanym kształtom).
-- Wszystkie istniejące unit testy (`QameraApiClientTest`) muszą przejść po update sygnatur.
+- 14 metod klienta SHALL serializować/deserializować shape matchujący aktualny `schemas.ts`. Smoke przeciw real upstream SHALL przechodzić end-to-end dla: `/me`, `/assets/upload`, `/images` (single bulk), `/packshots` (single bulk), `/ai-models`, `/sceneries`, `/presets`, `/aspect-ratios`, `/pricing`.
+- `sendList` SHALL przyjmować wrapper key jako parametr; każda list-method klienta SHALL podawać swój klucz.
+- Contract test SHALL walidować shape dla każdego endpointu w scope-ie przeciw zamrożonemu JSON fixture z `_commit` header capturowanym z `saas-platform` repo.
+- Wszystkie istniejące unit testy (`QameraApiClientTest`, `JsonDecoderTest`) SHALL przejść po regenerze sygnatur i DTO. Casey które zakładają stare nazwy pól (`source_url`, `previewUrl`, `title`, `resultUrls`, …) SHALL być usunięte.
 
 **Non-Goals:**
-- **Wsparcie multipart upload mode** w `/assets/upload`. Plugin używa tylko presigned.
-- **Bulk API dla wielu obrazów na raz**. Klient dalej eksponuje `registerImage($single)`; pod spodem wrapuje + unwrapuje. Bulk będzie potrzebne dopiero gdy plugin zacznie reaktywne re-syncowanie kilku produktów na raz (przyszła faza, prawdopodobnie kombinacja z cronem).
-- **Naprawa pozostałych endpointów** (`/jobs*`, `/products*`, listy katalogu, …). To follow-up.
-- **Automatyczna walidacja przez live `pnpm tsx` na upstream zod**. Contract test używa zamrożonych snapshotów (JSON fixtures z hash-em git ref). Jeśli upstream zod się zmieni, snapshoty wymagają ręcznego update (z OpenSpec change kontekstem).
-- **Migracja Phase-3 spec content w tym change'u**. PR #9 ma własny delta na `qamera-api-client` (`product_metadata` jako optional na RegisterImageSchema); zostanie zachowany po rebase.
+- Pokrycie 9 nieobsługiwanych endpointów upstream (lista w `proposal.md §F`). Każdy doda się gdy faza tego wymaga.
+- Multipart upload mode dla `/assets/upload`. Plugin używa tylko presigned.
+- Generated client z OpenAPI / `zod → PHP`. Upstream nie publikuje OpenAPI; ten temat wraca przy Fazie 5.
+- Webhook handling (separate from `/webhooks/{delivery_id}/replay`).
+- Wsparcie wielu API key per shop (multistore). Dalej single key per install (Phase-1 decision).
 
 ## Decisions
 
-### 1. Klient eksponuje single-image API, nawet jeśli upstream jest bulk-only
+### 1. Single-in / bulk-pod-spodem dla `/images` i `/packshots`
 
 | Opcja | Plus | Minus |
 |---|---|---|
-| **A. Single-in, bulk-pod-spodem** (klient wrapuje) | Caller w `ProductImageSyncService` widzi prosty `registerImage($request) → ImageResponse`. Nie musi się przejmować bulkiem. | Klient ma logikę pakowania/rozpakowywania. Jeśli bulk-with-error-on-item-3 zdarzy się w przyszłości, single-in API nie potrafi tego ergonomicznie wyrazić. |
-| B. Bulk-in API natywnie | Spójność z upstreamem. Łatwy do rozszerzenia. | Wszystkie callery muszą wrapować pojedyncze obrazy w listę. Phase 3 (PR #9) musiałby przerobić signatury wewnętrzne. |
+| **A. Single-in API, klient wrappuje** | Caller (Phase 3 service) widzi prosty `registerImage($single) → ImageResponse`. Nie musi się przejmować bulkiem. | Klient ma logikę pakowania/rozpakowywania. Bulk-with-partial-error nie wyraźnie ergonomiczne. |
+| B. Bulk-in natywnie | Spójność z upstreamem. Łatwy do rozszerzenia. | Wszystkie callery wrappują pojedyncze itemy. |
 | C. Oba | Maksymalna elastyczność. | Dwie metody do utrzymania, jedna kontrakt. |
 
-**Wybór: A.** Phase 3 i Phase 4 są single-image / single-packshot per `actionWatermark` invocation. Bulk będzie miało sens dopiero przy cron-resync (przyszła faza), wtedy można dodać `registerImages(array<Request>)` jako drugi entry-point obok single. Na razie A.
+**Wybór: A.** Phase 3 i 4 są single-image / single-packshot per hook invocation. Bulk będzie miało sens dopiero przy cron-resync (przyszła faza); wtedy dodajemy `registerImages(array<Request>)` jako drugi entry-point.
 
-Konsekwencja implementacji: jeśli upstream zwróci `{results: []}` (zero), klient rzuca `ValidationException::malformedResponse('results[0]')`. Jeśli zwróci więcej niż 1 (nie powinien — wysłaliśmy 1), klient bierze pierwszy i loguje warning (defensive).
+Implementacja: `registerImage($request)` woła `dispatch('POST', '/images', ['images' => [$request->toPayload()]])`, czyta `['results']`, asserts size==1, decoduje pierwszy item jako `ImageResponse`. Empty `results` lub size>1 → `ValidationException::malformedResponse('results[0]')`.
 
-### 2. `external_ref` w `RegisterImageRequest` — kto generuje?
+### 2. `external_ref` w `RegisterImageRequest`/`RegisterPackshotRequest` — caller-supplied
 
-Upstream `RegisterImageSchema` wymaga `external_ref: string(1..200)`. To stable identifier per `(installation, external_ref)` — upstream używa do idempotency lookup ("repeat call with same external_ref returns status: 'existing'"). Caller (Phase 3 service) musi go wygenerować.
+Upstream `RegisterImageSchema` wymaga `external_ref: string(1..200)` — stable identifier per `(installation, external_ref)` używany do idempotency lookup ("repeat z tym samym `external_ref` zwraca `status:'existing'`"). Caller decyduje co to jest.
 
-Decyzja: **caller dostarcza `external_ref`**. Klient go NIE generuje. Dla Phase 3 service to będzie najprawdopodobniej `qamera_product_ref + ':' + id_image` (np. `ps:1:42:99`), żeby ten sam upload obrazu re-fired (np. resize thumbnails) trafiał w to samo `external_ref` i upstream odpowiadał `status='existing'`. Phase 3 service decyduje co dokładnie wstawia — spec tego dokumentuje w jego osobnym change'u.
+W Phase 3 service to będzie najprawdopodobniej `qamera_product_ref + ':' + id_image` (np. `ps:1:42:99`) — żeby resize-thumbnails resfire'owały hooka w to samo `external_ref`. Phase 3 spec to udokumentuje w jego własnym change'u (`add-product-image-sync`). W tym change'u tylko definiujemy że klient akceptuje `external_ref` jako required string(1..200) bez interpretacji.
 
-### 3. `PresignedUploadResponse` — które pola są nullable?
+### 3. Wrapper key parametryzacja w `sendList`
 
-Upstream:
-```ts
-{
-  asset_id: string,         // always
-  bucket: string,           // always
-  storage_path: string,     // always
-  upload_url: string | null,   // null in multipart mode
-  upload_token: string | null, // null in multipart mode
-  expires_at: string | null,   // null in multipart mode (no signed URL → no TTL)
-}
+Każdy list endpoint upstream ma inny wrapper key — `ai_models`, `sceneries`, `presets`, `aspect_ratios`, `pricing`, `jobs`, `items` (dla `/products`). Hard-coded `items` w Phase-1 łamie 6 endpointów.
+
+Nowa sygnatura:
+```php
+private function sendList(string $method, string $path, string $wrapperKey, string $elementClass): array
 ```
 
-W PHP DTO odzwierciedlamy nullability 1:1 — `?string $uploadUrl`, `?string $uploadToken`, `?string $expiresAt`. Pomimo że klient woła tylko mode=presigned (gdzie wszystkie 3 są wypełnione), DTO MUSI być uczciwe — inaczej PHPStan i unit testy będą fałszować to co serwer może zwrócić.
+Każda list-method klienta podaje swój klucz. Dla `/pricing` (które zwraca `{pricing:[…], currency:"credits"}`) NIE używamy `sendList` — `getPricing` parsuje response do `Pricing` DTO który ma list pricing + currency field.
 
-`PresignedImageUploadStrategy` (Phase 3) MUSI sprawdzić że `uploadUrl !== null` przed PUT-em (defensive — gdyby ktoś kiedyś wywołał z `mode=multipart`, dostaniemy NPE).
+### 4. `/jobs` POST session-lifecycle shape — pełen regen DTO
 
-### 4. Contract test — snapshot vs generated
+Upstream `SubmitJobRequestSchema` zawiera zagnieżdżone `session_config` i `subjects[]`. Drzewo:
+
+```
+SubmitJobRequest
+├── session_config: SessionConfig { aspect_ratio, model_id?, scenery_id?, preset_id?, suggestions? }
+├── subjects: Subject[]
+│   └── Subject { packshot_asset_id, product_label, product_ref, images_count, ai_model, reference_asset_ids?, provider_settings?, product_name?, product_specific_category? }
+├── callback_url?
+├── external_metadata?
+└── priority?
+```
+
+Response:
+```
+SubmitJobResponse {
+  order_id,
+  status,
+  subjects: SubmitJobResponseSubject[]
+}
+SubmitJobResponseSubject { product_ref, job_ids[] }
+```
+
+PHP odzwierciedlamy 1:1. `SessionConfig` i `Subject` jako osobne `final` DTO w `src/Api/Dto/`. Konstruktor `SubmitJobRequest` przyjmuje `SessionConfig + array<Subject> + optional<…>`. Walidacja: `subjects` 1..1000 (upstream max), `session_config.aspect_ratio` musi być wartością ze `AspectRatioSchema` enum (re-export w PHP jako stringi).
+
+`getJob`/`listJobs` parsują `JobDto` z 16 pól. `outputs: JobOutput[]` jako sub-DTO. Status enum: `pending|in_progress|completed|failed|retry_pending|cancelled|expired`.
+
+### 5. Phase-3 PR #9 rebase strategy
+
+Po mergu tego fixu w main, PR #9 (`add-product-image-sync`) wymaga rebase. Konflikty:
+
+- **`src/Api/QameraApiClient.php`** — Phase 3 nie modyfikuje (drop final), fix robi pełny rewrite. **Resolution:** fix wygrywa, drop-final z Phase 3 jest zachowany (klient `class QameraApiClient` bez `final` po obu mergach).
+- **`src/Api/Dto/RegisterImageRequest.php`** — Phase 3 dodaje `?ProductMetadata`, fix usuwa `source_url`/`title` i dodaje `external_ref`/`asset_id`. **Resolution:** zachować obie zmiany — final DTO ma `external_ref`, `product_ref`, `asset_id`, `?ProductMetadata`.
+- **`src/Api/Dto/ImageResponse.php`** — Phase 3 dodaje `?productId`, fix robi pełny refactor (`externalRef`, `productId`, `imageId`, `status`). **Resolution:** fix wygrywa, Phase 3 zmiana wpada do śmietnika (`productId` już jest).
+- **`src/Sync/PresignedImageUploadStrategy.php`** (Phase 3-only) — sygnatura `uploadImage(localPath)` zmienia się na `uploadImage(localPath, filename, contentType, sizeBytes)` żeby przekazać metadane do `requestUpload`. Plik Phase-3-only — Phase 3 fix-up w rebase.
+- **`src/Sync/ProductImageSyncService.php`** (Phase 3-only) — build `RegisterImageRequest` z `external_ref` + `asset_id` (z `requestUpload` response) zamiast `source_url`. Phase 3 fix-up w rebase.
+- **`openspec/changes/add-product-image-sync/specs/qamera-api-client/spec.md`** — Phase 3 delta na `product_metadata` zostaje, ale tekst requirementów Reference'ujący `source_url` musi się zaktualizować pod `asset_id`. Phase 3 fix-up w rebase.
+
+Phase 3 owner zdecyduje czy rebase robimy w tej samej sesji co merge fixu, czy później. Spec niczego o tym nie mówi.
+
+### 6. Contract test approach — snapshot vs generated
 
 | Opcja | Plus | Minus |
 |---|---|---|
-| **A. Zamrożone JSON snapshots** | PHP-only, brak Node dependency. Łatwo dodać do CI. Wykrywa nieoczekiwane zmiany w upstream tak długo jak operator ręcznie odświeża snapshot przy każdej zmianie. | Snapshot driftuje od upstream zod. Wymaga dyscypliny ("zmieniasz zod → odśwież snapshot"). |
-| B. Live zod via `pnpm tsx` w CI | Zawsze aktualne. | Wymaga Node w CI matrixie. Cross-repo dependency. Slow CI (Node bootstrap). |
+| **A. Zamrożone JSON snapshots** | PHP-only, brak Node dependency. Łatwo dodać do CI. Wykrywa nieoczekiwane zmiany w upstream tak długo jak operator ręcznie odświeża snapshot przy każdej zmianie. | Snapshot driftuje od upstream zod. Wymaga dyscypliny. |
+| B. Live zod via `pnpm tsx` w CI | Zawsze aktualne. | Wymaga Node w CI matrixie. Cross-repo dependency. Slow CI. |
 | C. Generated PHP fixtures z `zod-to-json-schema` | Programowo świeże. | Wymaga build steps po stronie saas-platform repo i synchronizacji. |
 
-**Wybór: A.** Phase 3 smoke wyłapie drift natychmiastowo (HTTP 400 invalid_input). Snapshot to "ostatni zwery­fikowany shape" — primary purpose to wyłapanie regresji po naszej stronie (np. ktoś usunie pole), nie po upstream. Snapshoty żyją w `tests/Contract/Fixtures/`, każdy z header-komentarzem w JSON-ie ze ścieżką źródłową i git ref.
+**Wybór: A.** Smoke wyłapuje drift natychmiastowo (HTTP 400 invalid_input → testy padają, łapiemy w PR). Snapshot to "ostatni zwery­fikowany shape" — primary purpose to wyłapanie regresji po naszej stronie (np. ktoś usunie pole), nie po upstream.
 
 Format snapshotu (JSON):
 ```json
@@ -79,30 +109,67 @@ Format snapshotu (JSON):
   "_source": "qamera-ai/saas-platform:apps/web/app/api/v1/plugin/_lib/server/schemas.ts",
   "_commit": "<git rev short>",
   "_captured_at": "2026-05-26",
-  "request": { /* example valid POST /assets/upload presigned request body */ },
-  "response": { /* example valid 201 response body */ }
+  "_note": "<short note about endpoint behavior, np. wrapper key, nullability semantics>",
+  "request": { /* przykład valid request body */ },
+  "response_2xx": { /* przykład valid 2xx body */ },
+  "response_4xx": { /* przykład envelope dla typowego błędu, gdzie ma sens */ }
 }
 ```
 
-### 5. Phase 3 rebase strategy
+Fixtury per endpoint w scope-ie: `me`, `assets-upload`, `images`, `packshots`, `ai-models`, `sceneries`, `presets`, `aspect-ratios`, `pricing`, `jobs-submit`, `jobs-get`, `jobs-list`, `products-list`, `products-detail`. ~14 fixturów.
 
-Po mergu tego fixu w main, Phase 3 (PR #9) wymaga rebase. Konflikty na:
-- `src/Api/QameraApiClient.php` — Phase 3 nie modyfikuje, czysty
-- `src/Api/Dto/RegisterImageRequest.php` — **konflikt**: Phase 3 dodaje `?ProductMetadata $productMetadata`, fix usuwa `source_url`/`title` i dodaje `external_ref`/`asset_id`. Resolution: zachować obie zmiany — final DTO ma `external_ref`, `product_ref`, `asset_id`, `?ProductMetadata`.
-- `src/Api/Dto/ImageResponse.php` — Phase 3 dodaje `?productId`; fix robi pełny refactor (`externalRef`, `productId`, `imageId`, `status`). Resolution: fix wygrywa, Phase 3 zmiana wpada do śmietnika (productId już jest).
-- `src/Sync/PresignedImageUploadStrategy.php` (tylko Phase 3): sygnatura `uploadImage(localPath)` zmienia się na `uploadImage(localPath, filename, contentType, sizeBytes)` żeby przekazać metadane do `requestUpload`. Plik Phase-3-only — Phase 3 fix-up w rebase.
-- `src/Sync/ProductImageSyncService.php` (Phase 3-only): build `RegisterImageRequest` z `external_ref` + `asset_id` zamiast `source_url`. Phase 3 fix-up w rebase.
-- `openspec/changes/add-product-image-sync/specs/qamera-api-client/spec.md` — Phase 3 delta na `product_metadata` zostaje, ale tekst requiremnetów Reference'ujący `source_url` musi się zaktualizować pod `asset_id`. Phase 3 fix-up w rebase.
+### 7. JsonDecoder — extra-field tolerance + nested DTO
 
-Phase 3 owner (ten sam człowiek co tu — operator Paweł) zdecyduje czy rebase robimy w tej samej sesji co merge fixu, czy później. Spec niczego o tym nie mówi.
+JsonDecoder już ignoruje unknown server-side keys (forward compat). To pozostaje. Nowość: zagnieżdżone DTO (`SessionConfig` w `SubmitJobRequest`, `Subject[]` w `SubmitJobRequest`, `JobOutput[]` w `JobDto`, `Installation` w `MeResponse` — `Installation` już jest).
+
+JsonDecoder już wspiera nested via reflection (`$param->getType()->getName()` na class-string). Lists-of-objects (np. `subjects: Subject[]`) muszą używać `#[ArrayOf(Subject::class)]` attribute na ctor param (Phase-1 mechanism). Nowe DTO dodają te attributes gdzie trzeba.
+
+### 8. `MeResponse.installation.scopes` — minor add
+
+`InstallationInfo` DTO dziś nie ma `scopes: array<string>`. Upstream zwraca `installation.scopes: ['plugin.assets:upload', 'plugin.catalog:write', …]`. Phase-1 nie używa scopes do niczego, ale dodać żeby DTO matchował kontrakt. Brak breaking impact (tylko `TestConnectionController` woła `/me`, on patrzy na `account_name`/`credits_balance` — nie ruszamy).
+
+### 9. Pricing DTO przerobiony z flat na list-with-currency
+
+Upstream `/pricing` zwraca:
+```json
+{
+  "pricing": [
+    {"job_type":"packshot","provider":"openai","model":"gpt-image-1","credit_cost":5},
+    ...
+  ],
+  "currency": "credits"
+}
+```
+
+Phase-1 `Pricing` DTO ma `creditsPerImage`, `creditsPerPackshot`, `monthlyQuota?` — wszystkie wymyślone. Nowy:
+```php
+final class Pricing {
+  public function __construct(
+    /** @var PricingEntry[] */
+    public readonly array $entries,
+    public readonly string $currency,
+  ) {}
+}
+
+final class PricingEntry {
+  public readonly string $jobType;
+  public readonly string $provider;
+  public readonly string $model;
+  public readonly int $creditCost;
+}
+```
+
+Brak konsumentów Phase-1 dla `getPricing` — bezpiecznie breakować.
 
 ## Risks / Trade-offs
 
 | # | Ryzyko | Mitigation |
 |---|---|---|
-| 1 | Pozostałe endpointy klienta też są niezgodne i nie wiemy ile | Smoke przeciw `/me` przeszedł — przynajmniej auth + retry + envelope-decoding działają end-to-end. Pełen audit reszty po Fazie 4. |
-| 2 | Snapshot fixtures driftują od upstream zod | Każdy snapshot ma `_commit` field — operator weryfikuje przed mergem nowych change'ów. Mid-term: rozważyć generated approach (decyzja 4 opcja C). |
-| 3 | Klient single-in-bulk-out tracimy widoczność błędów per-item | Phase 3 jest single-image — bulk się nie zdarzy. Gdy bulk wejdzie (cron resync), dodajemy `registerImages(array)` z bulk-error reporting. Symetrycznie packshots. |
-| 4 | Phase 3 rebase będzie bolesny | Decyzja 5 listuje konkretne konflikty. Każdy ma znany resolution. PR #9 sit-time po mergu fixu: 1-2 dni max (zależnie od operatora). |
-| 5 | `external_ref` semantyka nie jest jeszcze stabilna w Phase 3 callerze | Phase 3 spec dokumentuje to w jego własnym change'u. Tutaj definiujemy że klient go akceptuje jako required string(1..200) bez interpretacji — caller's job. |
-| 6 | Phase 1 testy `QameraApiClientTest` muszą się przepisać i mogą się przy okazji okazać niezgodne z resztą upstream | Reading existing test casey przed update — jeśli któryś case zakłada coś co upstream odrzuca, wyłapuje fixują się tutaj. Out-of-scope endpointy (np. submitJob) testy zostają z mockowanymi payloadami niezweryfikowanymi przeciw upstream — explicit TODO marker w teście. |
+| 1 | Duży PR (~1500 LOC) → ciężki review | Scope coherent (jedno capability, jeden katalog). Code change to głównie `final class XDto` rewrites + matching unit tests — repetitive, łatwy do scrollowania. Contract test fixtures dokumentują shape inline. |
+| 2 | Snapshot fixtures driftują od upstream zod | Każdy ma `_commit` field — operator weryfikuje przed mergem. Mid-term: rozważyć generated approach (decyzja 6 opcja C). |
+| 3 | `/jobs` POST session-lifecycle DTO są skomplikowane (zagnieżdżone subjects[]) → łatwo o bug w JsonDecoder reflection | Dedicated unit testy per sub-DTO. Contract test fixture dla `jobs-submit` z pełnym subjects+session_config. |
+| 4 | Phase 3 PR #9 rebase będzie bolesny | Decyzja 5 listuje konkretne konflikty. Każdy ma znany resolution. Sit-time PR #9 po mergu fixu: 1-2 dni. |
+| 5 | Pozostałe 9 niezaimplementowanych endpointów upstream może mieć więcej rozjazdów wewnątrz (np. session lifecycle ma wpływ na `/orders/{id}`) | Out of scope. Każdy doda się z własnym specem gdy faza go potrzebuje. |
+| 6 | Phase-1 unit testy mogą zakładać shape który już od dawna nie istnieje | Każdy test będzie przejrzany; case'y zakładające wymyślone pola wpadają do śmietnika. Coverage zostanie utrzymane (TDD per task w `tasks.md`). |
+| 7 | `external_ref` semantyka nie jest stabilna; Phase 3 może zmienić swoją konwencję | Spec definiuje że klient akceptuje `external_ref: string(1..200)` bez interpretacji. Phase 3 service definiuje swoją konwencję w jego własnym change. |
+| 8 | Smoke wymaga rotacji credentiali (z `CLAUDE.md`) — operator powiedział "na razie nie rotujemy" | Smoke odpalalny i tak — credentials w `CLAUDE.md` są aktywne, smoke nie modyfikuje stanu upstream invasively (tylko POST /assets/upload + POST /images z `external_ref='smoke-…'`). Cleanup ręczny po smoke. |

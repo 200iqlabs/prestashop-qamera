@@ -1,56 +1,99 @@
 ## Why
 
-Faza 1 zbudowała `QameraApiClient` z jedną metodą per upstream endpoint, ale **nigdy nie odpaliła tych metod przeciw realnemu serwerowi** poza `/me`. Testy używały mockowanych payloadów, które autor wymyślił, nie tych których upstream żąda. Faza-3 smoke (`/opsx:apply add-product-image-sync`) jako pierwsza dotknęła `/assets/upload` i `/images` na produkcji — i oba kontrakty są rozjechane z upstream zod schemami z `qamera-ai/saas-platform/apps/web/app/api/v1/plugin/_lib/server/schemas.ts`:
+Phase-3 smoke (`/opsx:apply add-product-image-sync`, PR #9) ujawnił że `QameraApiClient::requestUpload()` wysyła pusty body do upstream, który żąda discriminated union `{mode:"presigned", filename, content_type, size_bytes}`. Po inspekcji `qamera-ai/saas-platform/apps/web/app/api/v1/plugin/_lib/server/schemas.ts` (commit z 2026-05-26, ref `<TBD §1.3>`) wyszło że **rozjazd to nie 3 endpointy, tylko prawie cała powierzchnia klienta**. Pełen audyt 15 metod `QameraApiClient`:
 
-| Endpoint | Stan klienta vs upstream |
-|---|---|
-| `GET /me` | ✅ Zgodne |
-| `POST /assets/upload` | ❌ Klient wysyła pusty body. Upstream żąda `{mode: "presigned", filename, content_type, size_bytes}`. Response DTO też niekompletny — brak `bucket`, `storage_path`, `upload_token`; `expires_at` jest non-null w PHP DTO ale nullable w upstream (null dla trybu multipart). |
-| `POST /images` | ❌ Klient wysyła **single object** `{product_ref, source_url, …}`. Upstream żąda **bulk wrappera** `{images: [{external_ref, product_ref, asset_id, product_metadata?}]}`. Pole `source_url` nie istnieje upstream — używają `asset_id` (UUID). Brakuje wymaganego `external_ref`. Response: nasz DTO single object `{id, productRef, sourceUrl, status}`; upstream zwraca `{results: [{external_ref, product_id, image_id, status: 'created'|'existing'}]}`. |
-| `POST /packshots` | ❌ Najprawdopodobniej ten sam wzorzec co `/images` (bulk wrapper + `asset_id` + `external_ref`). Klient ma single-object `RegisterPackshotRequest`. Nie zsmoke'owane — wyjdzie w Fazie 4. |
-| Pozostałe endpointy | ❓ Nie zweryfikowane (`listAiModels`, `listProducts`, `submitJob`, `getJob`, `listJobs`, `getProduct`, `deleteProduct`, `getPricing`, `listPresets`, etc.) — audit poza zakresem tej iteracji, ale OK będę musiał odpalić smoke przed Fazą 4. |
+| Stan | Endpointy | Liczność |
+|---|---|---|
+| ✅ Działa | `GET /me`, `DELETE /products/{idOrRef}` | 2 |
+| ❌ Pusty/single body zamiast bulk+discriminator | `POST /assets/upload`, `POST /images`, `POST /packshots` | 3 |
+| ❌ `sendList` zakłada wrapper `{items:[…]}` ale upstream używa per-endpoint key (`ai_models`, `sceneries`, `presets`, `aspect_ratios`, `pricing`, `jobs`) + element DTO wymyślony | `GET /ai-models`, `GET /sceneries`, `GET /presets`, `GET /aspect-ratios`, `GET /pricing`, `GET /jobs` | 6 |
+| ❌ Pre-lifecycle shape (klient predates 2026-05-22 BREAKING) | `POST /jobs` | 1 |
+| ❌ `resultUrls:string[]` zamiast `outputs:JobOutput[]` (+ 12 pól missing) | `GET /jobs/{id}` | 1 |
+| ❌ Element DTO pola wymyślone (`title`/`status` vs `display_name`/`external_ref`/`source_metadata`/…) | `GET /products`, `GET /products/{idOrRef}` | 2 |
 
-Konsekwencja: **PR #9 (`add-product-image-sync`) nie da się zsmoke'ować** dopóki ten fix nie wjedzie. Bez `/assets/upload` poprawnego payload-u nie ma uploadu obrazu. Bez `/images` bulk wrappera + `asset_id` nie ma rejestracji produktu upstream. Faza-3 unit testy są zielone bo zmockowane — ale realny ruch leci na ścianę 400 `invalid_input`.
+**Net: 14 z 15 metod klienta wymaga przepisania.** Tylko `/me` (które smoke przeszedł w Phase-3 review) i `DELETE /products` (które nie ma body) są funkcjonalne. Phase-1 client został zbudowany przeciw zgadywanym shape-om — testy zmockowały to co autor wymyślił, nie to czego serwer żąda.
 
-Decyzja scope-u (uzgodniona z operatorem): naprawiamy **tylko** te trzy endpointy które Phase 3 / Phase 4 dotykają (`/assets/upload`, `/images`, `/packshots`). Pozostałe pola minowe (`/jobs`, `/products`, listy katalogu) zostają **w follow-upie** — żeby ten change był reviewable i smoke'owalny w jednym tchu, nie żeby przerobił całą powierzchnię klienta na raz.
+Decyzja scope-u (uzgodniona z operatorem, opcja "jeden mega-change: regeneruj cały klient"): naprawiamy **wszystkie 15 metod naraz**, alignment do aktualnego `schemas.ts`. Jeden coherent breaking change, jeden round review, jeden smoke. Wszystkie kolejne fazy (3, 4, sesje, jobs, cron-resync) budują na solidnym kliencie zamiast łatać kolejne endpointy.
 
 ## What Changes
 
-- **`POST /assets/upload` — fix body + response DTO.** `QameraApiClient::requestUpload()` przyjmuje teraz `(string $filename, string $contentType, int $sizeBytes)` zamiast bez-argumentowego wywołania; serializuje `{mode: "presigned", filename, content_type, size_bytes}`. `PresignedUploadResponse` zyskuje `bucket: string`, `storagePath: string`, `?string $uploadToken`, a `uploadUrl` + `expiresAt` zmieniają się na `?string` (nullable — `null` w trybie multipart, którego klient nie wspiera, ale walidator nie może przebijać upstreama).
-- **`POST /images` — bulk wrapper + nowy DTO + bulk response.** `RegisterImageRequest` traci pola `source_url`, `title`. Zyskuje wymagane `external_ref` (caller-supplied stable id; w plugin module będzie to ten sam `qamera_product_ref` co `product_ref`, ALE dla obrazu — `qamera_image_ref` jeśli operator chce per-image identyfikator, na razie reusujemy `product_ref:image_id` jako konwencję) i `asset_id` (UUID z `requestUpload` response). `QameraApiClient::registerImage($request)` opakowuje pojedynczy request jako `{images: [<single>]}` i parsuje response `{results: [<single>]}` → wyciąga pierwszy item jako `ImageResponse`. Nowy `ImageResponse` ma: `externalRef, productId, imageId, status: 'created'|'existing'`. Backward compat nie istnieje — Phase 1 nigdy nie wywołał tej metody na produkcji.
-- **`POST /packshots` — symetria do `/images`.** `RegisterPackshotRequest` zyskuje `external_ref`, `asset_id`; traci `source_url`. `QameraApiClient::registerPackshot()` wrappuje + unwrappuje analogicznie. Nowy `PackshotResponse` ma kształt `RegisterPackshotResult` z upstreamu.
-- **Contract test fixtures.** Nowy `tests/Contract/QameraApiContractTest.php` ładuje fixturey JSON (skopiowane jako snapshot z upstream zod) i waliduje że requesty wychodzące z klienta + odpowiedzi które klient parsuje matchują pełen shape. Bez ładowania zod w PHP — to są zamrożone snapshoty z `qamera-ai/saas-platform/.../schemas.ts` aktualne na 2026-05-26. Każdy snapshot ma komentarz z hash-em git ref upstream skąd został wzięty.
-- **Faza 3 (`add-product-image-sync`) zostanie zrebase'owana** po mergu tego changu. `PresignedImageUploadStrategy::uploadImage` zmieni signaturę (przyjmie metadata, nie tylko ścieżkę), bo musi przekazać `filename`/`content_type`/`size_bytes` do `requestUpload`. `ProductImageSyncService` przerobi DTO budowy.
+### A. `POST /assets/upload`, `POST /images`, `POST /packshots` — body + DTO rewrite
+
+`requestUpload($filename, $contentType, $sizeBytes)` wysyła `{mode:"presigned", filename, content_type, size_bytes}` (discriminator + 3 wymagane pola). `PresignedUploadResponse` zyskuje `bucket`, `storagePath`, `?uploadToken`; `uploadUrl`/`expiresAt` stają się nullable.
+
+`registerImage($request)` opakowuje pojedynczy request jako `{images:[<single>]}` (upstream przyjmuje tylko bulk wrapper, 1..100). `RegisterImageRequest` traci `source_url`/`title`, zyskuje wymagane `external_ref` (caller-supplied stable id, 1..200) i `asset_id` (UUID z `requestUpload`). Response parsowany jako `{results:[<single>]}` → wyciągamy `ImageResponse{externalRef, productId, imageId, status:'created'|'existing'}`.
+
+`registerPackshot` analogicznie — `{packshots:[…]}` wrapper, `external_ref`+`asset_id`+optional `source_image_ref`, response `{results:[…]}` → `PackshotResponse{externalRef, productId, packshotId, status}`.
+
+### B. List endpointy — wrapper key + element DTO regen
+
+`QameraApiClient::sendList` zostaje sparametryzowany na nazwę wrapper-key (dziś jest hard-coded `items`). Każdy list endpoint dostaje regenerowany element DTO matchujący upstream zod:
+
+| Endpoint | Wrapper key | Element DTO (nowe pola) |
+|---|---|---|
+| `GET /ai-models` | `ai_models` | `AiModelDto{id, provider, model, outputType, supportedAspectRatios[], baseCreditCost}` — drop wymyślone `name`/`description` |
+| `GET /sceneries` | `sceneries` | `SceneryDto{id, name, thumbnail, voting, status, source, createdAt}` — `thumbnail` nie `previewUrl` |
+| `GET /presets` | `presets` | `PresetDto{id, slug, name, descriptionI18n, creditCost, outputType, isFree, coverUrl, quantityGuidelines, qualityGuidelines, gallery}` — drop wymyślone `category` |
+| `GET /aspect-ratios` | `aspect_ratios` | `AspectRatioDto{value, label, default}` — drop wymyślone `id`/`ratio` |
+| `GET /pricing` | `pricing` + `currency` | Zwraca **listę** `PricingEntryDto{jobType, provider, model, creditCost}`, nie flat object — całość `Pricing` DTO przerobiona z flat na list-with-currency |
+| `GET /jobs` | `jobs` + `nextCursor` | `JobDto` (16 pól, patrz pkt C) + filtry rozszerzone o `createdAfter`/`createdBefore` |
+| `GET /products` | `items` + `nextCursor` (zachowane!) | `ProductListItem{id, externalRef, displayName, sku, description, sourceMetadata, imageCount, packshotCount, deletedAt, createdAt, updatedAt}` — wymyślone `title`/`status` znikają; filtry rozszerzone o `ref`/`includeDeleted`, drop wymyślone `status` |
+
+### C. `/jobs` POST + GET — pełen session-lifecycle alignment
+
+`POST /jobs` upstream predates wymaga session-lifecycle shape:
+```
+SubmitJobRequest = {
+  session_config: { aspect_ratio, model_id?, scenery_id?, preset_id?, suggestions? },
+  subjects: [{ packshot_asset_id, product_label, product_ref, images_count, ai_model, reference_asset_ids?, provider_settings?, product_name?, product_specific_category? }],
+  callback_url?, external_metadata?, priority?
+}
+```
+Response: `{order_id, status, subjects:[{product_ref, job_ids[]}]}`.
+
+`SubmitJobRequest` PHP DTO + `SubmitJobResponse` DTO przerobione od podstaw. `SessionConfig`, `Subject` jako sub-DTO. `JobResponse` dla `getJob`/`listJobs` rozszerzone do pełnych 16 pól (`orderId, jobType, provider, model, unitCost, attemptCount, outputs[JobOutput], error, externalMetadata, packshotAssetId, productLabel, productRef, voting, votingAt, createdAt, updatedAt, completedAt`). `JobOutput{url, type, width, height, …}` jako sub-DTO.
+
+### D. `/me` minor patch + `/products/{idOrRef}` rewrite
+
+`InstallationInfo` zyskuje `scopes: array<string>` (brakujące dziś). `ProductResponse` (dla `getProduct`) przerobiony do `ProductDetailResponse{id, externalRef, displayName, sku, description, sourceMetadata, deletedAt, createdAt, updatedAt, images: ProductImageDto[], imagesTruncated, packshots: ProductPackshotDto[], packshotsTruncated}` — drop wymyślone `title`/`status`, dodaj zagnieżdżone `images`/`packshots` listy z dwoma nowymi DTO.
+
+### E. Contract test infra + snapshot fixtures dla całej powierzchni
+
+`tests/Contract/Fixtures/<endpoint>.fixture.json` z header (`_source`, `_commit`, `_captured_at`) per endpoint który dotykamy. Fixtury obejmują request body (gdzie POST) + response body (przykład 2xx) + przykład 4xx envelope dla kluczowych endpointów. `tests/Contract/QameraApiContractTest.php` waliduje że klient produkuje requesty matchujące fixturom i parsuje response matchujące fixturom.
+
+### F. Out of scope (świadomie) — 9 endpointów upstream które klient w ogóle nie ma
+
+`POST /jobs/batch`, `POST /jobs/{id}/accept`, `POST /jobs/{id}/reject`, `GET /jobs/{id}/refresh-url`, `GET /orders/{id}`, `POST /orders/{id}/clone`, `GET /packshots` (lista), `GET /packshots/{idOrRef}`, `GET /models` (osobny od `/ai-models`), `POST /installations/{id}/rotate-hmac`, `POST /webhooks/{delivery_id}/replay`.
+
+Każdy dopiszemy gdy konkretna faza ich potrzebuje. `/installations/.../rotate-hmac` zostaje jednoznacznie blocked operatorem (sekret rotuje się tylko w panelu Qamera AI per Phase-1 decision); pozostałe to follow-up scope.
 
 ## Capabilities
 
 ### Modified Capabilities
 
-- `qamera-api-client`: **major rewrite trzech endpointów**. Dodaje wymagania dla `requestUpload` (4-polowy discriminated union body, 7-polowy response DTO z nullable fields), `registerImage` (bulk wrapper + `external_ref` + `asset_id` zamiast `source_url`), `registerPackshot` (symetria). Dodaje wymaganie dla contract-test snapshotów. Phase-3 spec `qamera-api-client` (modyfikujący `product_metadata` opcjonalność) zostanie z PR #9 zachowany po rebase — te dwa zestawy zmian są ortogonalne.
+- `qamera-api-client`: **major regenerate całej powierzchni**. 14 z 15 metod się zmienia (sygnatury + DTO). Wszystkie 14 element-DTO list-endpointów przerobione. `sendList` parametryzowany. Dodane: `SessionConfig`, `Subject`, `JobOutput`, `PricingEntry`, `ProductImageDto`, `ProductPackshotDto` jako sub-DTO. Dodane contract-test fixtures dla pełnej powierzchni. `MeResponse.installation.scopes` dodane. PR #9 (`add-product-image-sync`) delta na ten sam capability (`product_metadata` jako optional na `RegisterImage`) zostanie zachowany po rebase.
 
 ## Impact
 
-- **Code (modified)**
-  - `src/Api/QameraApiClient.php` — sygnatury `requestUpload`, `registerImage`, `registerPackshot`; `registerImage` i `registerPackshot` opakowują single w bulk + unwrappują response
-  - `src/Api/Dto/PresignedUploadResponse.php` — dodatkowe pola, nullable typy
-  - `src/Api/Dto/RegisterImageRequest.php` — `external_ref`, `asset_id`; usunięte `source_url`, `title`
-  - `src/Api/Dto/RegisterPackshotRequest.php` — `external_ref`, `asset_id`; usunięte `source_url`
-  - `src/Api/Dto/ImageResponse.php` — refactor: `externalRef`, `productId`, `imageId`, `status`
-  - `src/Api/Dto/PackshotResponse.php` — refactor analogicznie
-- **Code (new)**
-  - `tests/Contract/Fixtures/*.json` — zamrożone snapshoty zod (z hash-em upstream)
-  - `tests/Contract/QameraApiContractTest.php` — walidacja shape requestów i responses przeciw fixturom
-- **Tests (modified)**
-  - `tests/Unit/Api/QameraApiClientTest.php` — istniejące casey muszą się przepisać pod nowe sygnatury (`requestUpload(arg, arg, arg)`, bulk-wrap dla images/packshots)
+- **Code (modified)** — niemal wszystko pod `src/Api/`:
+  - `src/Api/QameraApiClient.php` — 14 sygnatur metod, parametryzacja `sendList`, dodatkowa walidacja per metoda
+  - `src/Api/Dto/*.php` — wszystkie 16+ istniejących DTO regenerowane; struktura katalogu utrzymana
+- **Code (new)**:
+  - `src/Api/Dto/SessionConfig.php`, `Subject.php`, `JobOutput.php`, `PricingEntry.php`, `ProductImageDto.php`, `ProductPackshotDto.php`, `OrderSubject.php` (dla submit response) — sub-DTO które pojawiają się tylko w upstream
+  - `tests/Contract/Fixtures/*.fixture.json` — pełen zestaw snapshotów (~13 fixturów)
+  - `tests/Contract/QameraApiContractTest.php` — runner walidujący kontrakt
+- **Tests (modified)**:
+  - `tests/Unit/Api/QameraApiClientTest.php` — większość casey wymaga update pod nowe sygnatury
+  - `tests/Unit/Api/Internal/JsonDecoderTest.php` — może wymagać dodatkowych casey dla zagnieżdżonych DTO
 - **DB**: zero zmian schematu.
-- **External services**: po mergu, ten klient pierwszy raz faktycznie zda smoke przeciw `/assets/upload` i `/images`. Walidacja: smoke skrypt w `tests/Smoke/` (untracked, nie commitowany — patrz blocker §11 z `add-product-image-sync`).
+- **External services**: po mergu klient pierwszy raz robi end-to-end smoke przeciw `/assets/upload`, `/images`, `/jobs` POST/GET, list endpointom katalogu i `/products` GET. Smoke skrypt w `tests/Smoke/` (untracked).
 - **Dependencies**: brak nowych.
-- **Compatibility**: **breaking change na publicznej sygnaturze klienta**. Akceptowalne bo `QameraApiClient` ma w produkcji wyłącznie jednego konsumenta (`TestConnectionController` woła tylko `me()`) plus testy. Phase 3 (PR #9) jest jedynym kolejnym konsumentem i będzie zrebase'owany.
-- **Docs**: README phase plan zostawiamy bez zmian (fix nie przesuwa faz). CHANGELOG `[1.2.0]` zostaje zaktualizowany w PR #9 — tu nie ruszamy.
+- **Compatibility**: **breaking change publicznej sygnatury klienta**. Wszystkie 14 zmienionych metod. Pre-merge konsumenci klienta to: `TestConnectionController` (woła tylko `me()` — OK, drop `installation.scopes` add nie breaks). Nikt jeszcze nie woła reszty na produkcji. PR #9 (Phase 3) konsumuje `requestUpload`/`registerImage` — rebase wg `design.md §5`. Dobry timing — przed Fazą 4 (która chce `registerPackshot` i list endpointów dla catalog drop-downów) cały klient jest stabilny.
+- **Docs**: README phase plan bez zmian. `CHANGELOG [1.2.0]` w PR #9 zostanie zaktualizowany przy archive Phase-3 żeby uwzględnić ten fix (uzgodnić timing przy archive).
 
 ## Out of scope (świadomie)
 
-- **Audit pozostałych endpointów** (`/jobs*`, `/products*`, `/orders*`, list-endpointy katalogu, `/pricing`, `/installations/[id]/rotate-hmac`, `/webhooks/[delivery_id]/replay`, `/jobs/[id]/refresh-url`). Te zostaną pokryte gdy któraś z przyszłych faz ich dotknie — z osobnym change'em per dotknięty endpoint, idąc tym samym wzorcem.
-- **Konwersja całego klienta na generated-from-OpenAPI**. Upstream nie publikuje OpenAPI spec poza repo; rozważymy gdy/jeśli takie OpenAPI powstanie. Na razie ręczne DTO + contract snapshoty.
-- **Multipart upload mode** w `/assets/upload`. Plugin używa tylko trybu presigned (decyzja 2 z `add-product-image-sync/design.md`). Multipart pomijamy aż do faktycznej potrzeby.
-- **Authentication via `Authorization: Bearer`**. Upstream akceptuje `X-Api-Key`; klient już go używa; nic do zmiany.
+- 9 nieobsługiwanych przez klienta endpointów upstream (lista w §F) — follow-up scope per faza.
+- Multipart upload mode w `/assets/upload` — plugin używa tylko presigned (decyzja 2 z `add-product-image-sync/design.md`).
+- Generated client (`zod` → PHP DTO) — upstream nie publikuje OpenAPI; rozważymy przy Fazie 5 (marketplace prep).
+- Webhook handler — `webhooks/{delivery_id}/replay` to konsument **dla** webhook'ów upstream, plugin sam przyjmuje webhooks; oddzielny temat.
