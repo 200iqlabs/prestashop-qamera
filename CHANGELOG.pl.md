@@ -8,7 +8,7 @@ Tłumaczenia: [english](CHANGELOG.md) · [українська](CHANGELOG.uk.md)
 
 ## [1.1.0] — 2026-05-25
 
-Faza 2 — lokalny bookkeeping: moduł zapisuje teraz lokalny snapshot każdego produktu, który operator zapisze w back-office. Żaden wywołanie API Qamera AI jeszcze się nie dzieje — to pojawi się w Fazie 3 (image-sync). PrestaShop 8.0–9.x, PHP 8.1+.
+Faza 2 — lokalny bookkeeping: moduł zapisuje teraz lokalny snapshot każdego produktu, który operator zapisze w back-office. Żadne wywołania API Qamera AI jeszcze się nie dzieją — to pojawi się w Fazie 3 (image-sync). PrestaShop 8.0–9.x, PHP 8.1+.
 
 ### Dodano
 

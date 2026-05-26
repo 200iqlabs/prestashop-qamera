@@ -6,9 +6,11 @@ Defines how local bookkeeping rows in `qamera_product_link` are created and refr
 
 ## Requirements
 
-### Requirement: Hook actionProductAdd records a pending bookkeeping row when auto-register is enabled
+### Requirement: New product saves record a pending bookkeeping row when auto-register is enabled
 
-When the `actionProductAdd` PrestaShop hook fires and `Configuration::get('QAMERAAI_AUTO_REGISTER_PRODUCTS')` evaluates truthy, the module SHALL insert a row into `ps_qamera_product_link` capturing the new product's identity (`id_product`, `id_shop`), a deterministic `qamera_product_ref` derived from `(id_shop, id_product)`, and a snapshot of the product's metadata (`display_name`, optional `sku`, optional `description`) read in the shop's default language. The row's `status` SHALL be `'pending'` and `qamera_product_id` SHALL be `NULL` — no call is made to the Qamera AI Plugin API at this stage. When the toggle evaluates falsy, the hook SHALL be a no-op.
+When a PrestaShop product-save hook fires for a new product and `Configuration::get('QAMERAAI_AUTO_REGISTER_PRODUCTS')` evaluates truthy, the module SHALL insert a row into `ps_qamera_product_link` capturing the new product's identity (`id_product`, `id_shop`), a deterministic `qamera_product_ref` derived from `(id_shop, id_product)`, and a snapshot of the product's metadata (`display_name`, optional `sku`, optional `description`) read in the shop's default language. The row's `status` SHALL be `'pending'` and `qamera_product_id` SHALL be `NULL` — no call is made to the Qamera AI Plugin API at this stage. When the toggle evaluates falsy, the hook SHALL be a no-op.
+
+The primary entry point is the `actionProductSave` hook, which PrestaShop 8/9 fire from both `Product::add()` and `Product::update()`. The module SHALL ALSO bind the same handler to `actionProductAdd` (dispatched in PS 9 by `ProductDuplicator` for the BO "Duplicate product" flow) so that duplicated products are also captured. The upsert is keyed on `UNIQUE(id_product, id_shop)`, so a Save+Update double-fire during a BO edit refreshes the snapshot exactly once.
 
 #### Scenario: Toggle on, new product created
 
