@@ -41,7 +41,7 @@ The method SHALL throw `\InvalidArgumentException` before any HTTP call when arg
 
 `RegisterImageRequest` constructor parameters (in this order): `string $externalRef` (1..200, caller-supplied stable identifier — upstream uses it as the idempotency key per `(installation_id, external_ref)`), `string $productRef` (1..200, serialized as `product_ref`), `string $assetId` (UUID; the `assetId` returned by a prior `requestUpload` — serialized as `asset_id`), `?ProductMetadata $productMetadata = null` (optional, triggers upstream cascade-create when present).
 
-The method SHALL parse the response as `{"results": [<RegisterImageResult>]}` and extract the first item. `ImageResponse` SHALL carry `externalRef`, `productId` (UUID), `imageId` (UUID), `status` (`'created'` | `'existing'`). If `results` is empty or has more than 1 item, the client SHALL throw `ValidationException::malformedResponse('results[0]')` — the bulk-of-1 contract is non-negotiable.
+The method SHALL parse the response as `{"results": [<RegisterImageResult>]}` and extract the first (and only expected) item. `ImageResponse` SHALL carry `externalRef`, `productId` (UUID), `imageId` (UUID), `status` (`'created'` | `'existing'`). If `results` is empty OR contains more than 1 item, the client SHALL throw a `ValidationException` whose message identifies the unexpected `results` size (e.g. `"unexpected results size: 0, expected 1"` or `"unexpected results size: 2, expected 1"`). The bulk-of-1 contract is non-negotiable — we sent 1 item, upstream guarantees 1 item back; any other size is a real bug, not something to sweep into a take-first-and-log. (The existing `ValidationException::malformedResponse()` factory formats its message as "missing required field …", which is misleading for the "too many" case, so the implementation MAY introduce a dedicated factory such as `ValidationException::unexpectedResultsSize(int $got, int $expected)`.)
 
 #### Scenario: Single-image request is wrapped in bulk array
 
@@ -62,7 +62,13 @@ The method SHALL parse the response as `{"results": [<RegisterImageResult>]}` an
 #### Scenario: Empty results array surfaces as ValidationException
 
 - **GIVEN** upstream returns `{"results":[]}`
-- **THEN** `registerImage` throws `ValidationException` with a message identifying `results[0]` as missing
+- **THEN** `registerImage` throws `ValidationException` whose message identifies the unexpected `results` size (0, expected 1)
+
+#### Scenario: More than one result also throws ValidationException
+
+- **GIVEN** upstream returns `{"results":[<first>, <second>]}` (contract violation — we sent 1)
+- **THEN** `registerImage` throws `ValidationException` whose message identifies the unexpected `results` size (2, expected 1)
+- **AND** the client does NOT silently return the first element
 
 ### Requirement: registerPackshot mirrors registerImage shape
 

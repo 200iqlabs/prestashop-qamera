@@ -33,7 +33,9 @@ Rozmiar zmiany jest duży (~1500 LOC), ale skoncentrowany na jednym capability (
 
 **Wybór: A.** Phase 3 i 4 są single-image / single-packshot per hook invocation. Bulk będzie miało sens dopiero przy cron-resync (przyszła faza); wtedy dodajemy `registerImages(array<Request>)` jako drugi entry-point.
 
-Implementacja: `registerImage($request)` woła `dispatch('POST', '/images', ['images' => [$request->toPayload()]])`, czyta `['results']`, asserts size==1, decoduje pierwszy item jako `ImageResponse`. Empty `results` lub size>1 → `ValidationException::malformedResponse('results[0]')`.
+Implementacja: `registerImage($request)` woła `dispatch('POST', '/images', ['images' => [$request->toPayload()]])`, czyta `['results']`, asserts `count($results) === 1`, decoduje pierwszy item jako `ImageResponse`. Empty `results` LUB size > 1 → `ValidationException` z komunikatem identyfikującym nieoczekiwany rozmiar (np. `"unexpected results size: 2, expected 1"`). NIE używamy `ValidationException::malformedResponse('results[0]')`, bo jego komunikat ("missing required field …") jest mylący dla przypadku "too many". Implementacja MOŻE dodać dedykowany factory `ValidationException::unexpectedResultsSize(int $got, int $expected)` — to detail implementacji, nie kontraktu.
+
+Świadomie wybieramy **throw** zamiast "take first and log warning". Wysłaliśmy bulk-of-1, upstream gwarantuje bulk-of-1; każdy inny rozmiar to bug po stronie serwera, nie sytuacja do zamiatania pod dywan.
 
 ### 2. `external_ref` w `RegisterImageRequest`/`RegisterPackshotRequest` — caller-supplied
 

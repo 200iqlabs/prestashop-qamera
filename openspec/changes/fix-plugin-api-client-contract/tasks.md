@@ -4,7 +4,7 @@
 
 - [x] 1.1. Branch `fix-plugin-api-client-contract` off latest `main`
 - [ ] 1.2. Create `tests/Contract/` + `tests/Contract/Fixtures/`
-- [ ] 1.3. Capture upstream `_commit` SHA — operator runs `git -C C:/Projects/saas-platform rev-parse --short HEAD` and we paste the value into every fixture's `_commit` header in §11.x
+- [ ] 1.3. Capture upstream `_commit` SHA — operator runs `git -C <path-to-local-saas-platform-checkout> rev-parse --short HEAD` (path-agnostic; in this operator's environment that's `C:/Projects/saas-platform`, in CI / another machine it would be wherever the repo is cloned). Paste the value into every fixture's `_commit` header in §14.x
 
 ## 2. `MeResponse.installation.scopes` minor add
 
@@ -42,9 +42,9 @@
 
 - [ ] 6.1. Test first: `testRegisterImageWrapsSingleInBulkArray`
 - [ ] 6.2. Test first: `testRegisterImageUnwrapsBulkResponse`
-- [ ] 6.3. Test first: `testRegisterImageEmptyResultsArrayThrowsMalformedResponse`
-- [ ] 6.4. Test first: `testRegisterImageMultiResultsTakesFirstAndLogs` — defensive; `markTestIncomplete` if logger isn't injected at client layer (note in test)
-- [ ] 6.5. Implement: wrap `$request->toPayload()` as `['images' => [$payload]]`. Parse `results`, assert size==1, decode first into `ImageResponse`.
+- [ ] 6.3. Test first: `testRegisterImageEmptyResultsArrayThrowsValidationException` — `{"results":[]}` → exception whose message identifies the unexpected size (0, expected 1)
+- [ ] 6.4. Test first: `testRegisterImageMultipleResultsAlsoThrowsValidationException` — `{"results":[<a>, <b>]}` → exception whose message identifies the unexpected size (2, expected 1). NOT a "take first + log warning" path — we sent 1, upstream guarantees 1; any other size is a real bug.
+- [ ] 6.5. Implement: wrap `$request->toPayload()` as `['images' => [$payload]]`. Parse `results`, enforce `count($results) === 1` (throw on 0 or >1), decode the single item into `ImageResponse`. Implementation MAY introduce a dedicated `ValidationException::unexpectedResultsSize(int $got, int $expected)` factory rather than reusing `malformedResponse()` whose message is misleading for the "too many" case.
 
 ## 7. `RegisterPackshotRequest` + `PackshotResponse` DTO rewrite
 
@@ -59,7 +59,9 @@
 
 - [ ] 8.1. Test first: `testRegisterPackshotWrapsSingleInBulkArray`
 - [ ] 8.2. Test first: `testRegisterPackshotUnwrapsBulkResponse`
-- [ ] 8.3. Implement: symmetric to §6.5.
+- [ ] 8.3. Test first: `testRegisterPackshotEmptyResultsArrayThrowsValidationException` — symmetric to §6.3
+- [ ] 8.4. Test first: `testRegisterPackshotMultipleResultsAlsoThrowsValidationException` — symmetric to §6.4
+- [ ] 8.5. Implement: symmetric to §6.5 — `count($results) === 1` enforced; same factory choice.
 
 ## 9. `sendList` parametryzacja + list endpointy
 
