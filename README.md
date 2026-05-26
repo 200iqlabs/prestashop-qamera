@@ -2,7 +2,7 @@
 
 AI-powered product photography for PrestaShop stores. Generate packshots, scenes, and full content sessions from your store products using the [Qamera AI](https://qamera.ai) platform.
 
-**Status:** Phase 1 (bootstrap). Not yet functional — see the [Phase plan](#phase-plan) below.
+**Status:** Phase 2 (in progress — local product-sync bookkeeping landed; upstream API sync still pending). See the [Phase plan](#phase-plan) below.
 
 ## Compatibility
 
@@ -53,8 +53,8 @@ Point the module's configuration page at your local Qamera AI:
 
 | Phase | Scope | Status |
 |---|---|---|
-| 1 | Repo bootstrap (module class, install hooks, configuration page skeleton, CI, Docker) | In progress |
-| 2 | Core flow (Qamera API client, per-product sync, webhook handler, "Qamera AI" product tab) | Pending |
+| 1 | Repo bootstrap (module class, install hooks, configuration page skeleton, CI, Docker) | Done |
+| 2 | Core flow (Qamera API client, per-product sync, webhook handler, "Qamera AI" product tab) | In progress (bookkeeping done) |
 | 3 | Session UI (multi-product session form, dashboard, polling) | Pending |
 | 4 | CLI + bulk (`bin/console qamera:sync-products`, cron-friendly batches) | Pending |
 | 5 | Marketplace prep (PS marketplace compliance validator, submission package) | Optional |

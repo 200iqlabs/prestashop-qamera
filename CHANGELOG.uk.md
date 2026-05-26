@@ -6,6 +6,33 @@
 
 Переклади: [english](CHANGELOG.md) · [polski](CHANGELOG.pl.md)
 
+## [1.1.0] — 2026-05-25
+
+Фаза 2 — локальний bookkeeping: модуль тепер записує локальний снапшот кожного товару, який оператор зберігає в бек-офісі. Жодних звернень до API Qamera AI ще не відбувається — це з'явиться у Фазі 3 (image-sync). PrestaShop 8.0–9.x, PHP 8.1+.
+
+### Додано
+
+- **Обробник хука `actionProductSave`.** Спрацьовує і для `Product::add()`, і для `Product::update()` у PS 8/9 — основна точка входу для нових товарів. Застарілий хук `actionProductAdd` у PS 9 диспатчиться лише з `ProductDuplicator`, тож реєстрація `actionProductSave` була необхідна, щоб покрити створення товарів у БО.
+- **Нові колонки в `ps_qamera_product_link`.** Шість нових колонок: `display_name_snapshot VARCHAR(500) NOT NULL`, `sku_snapshot VARCHAR(100) NULL`, `description_snapshot TEXT NULL`, `status ENUM('pending','registered','error') NOT NULL DEFAULT 'pending'`, `last_error_message TEXT NULL`, `last_synced_at DATETIME NULL`. Наявна колонка `qamera_product_id` була послаблена з `NOT NULL` до `NULL` — вона лишається порожньою, поки upstream-реєстрація у Фазі 3 не завершиться успіхом.
+- **Ідемпотентна міграція схеми.** `Installer::createSchema` опитує `INFORMATION_SCHEMA.COLUMNS` і виконує `ALTER` лише для відсутніх або невідповідних колонок, тому повторні інсталяції/оновлення з Фази 1 є безпечними. Невдала перевірка зараз перериває інсталяцію замість того, щоб мовчки лишити стару схему.
+- **`QameraAi\Module\Sync\ProductSnapshotWriter`** — один `INSERT … ON DUPLICATE KEY UPDATE` з ключем `UNIQUE(id_product, id_shop)`. Гілка UPDATE оновлює лише колонки снапшоту та `updated_at`; `status`, `qamera_product_id`, `last_error_message`, `last_synced_at`, `qamera_product_ref`, `created_at` зберігаються між апсертами, тож стан синхронізації нижче за течією ніколи не регресує.
+- **`QameraAi\Module\Sync\ProductRefBuilder`** — детермінований `qamera_product_ref` у форматі `ps:{id_shop}:{id_product}`. Multistore-safe (різні магазини дають різні refи); відхиляє некоректні id.
+
+### Поведінка
+
+- Bookkeeping у хуках обмежений існуючим перемикачем `QAMERAAI_AUTO_REGISTER_PRODUCTS` (за замовчуванням OFF з Фази 1). Перемикач OFF — це справжній no-op.
+- Будь-який `\Throwable` від writerа ловиться у хуку і логується через `PrestaShopLogger::addLog` із severity 2 та `object_type='QameraAiModule'`. Збереження товару в БО завжди завершується успіхом з погляду оператора, незалежно від стану bookkeepingу.
+- Снапшот читається у мові магазину за замовчуванням (`Configuration::get('PS_LANG_DEFAULT', null, null, $idShop)`); якщо переклад відсутній, writer падає до першого непорожнього значення і записує попередження.
+
+### Змінено
+
+- **Без впливу на upstream API.** Поверхня `QameraApiClient`, ендпоінти `/plugin/*` та обробник вебхуків цим релізом не зачіпаються.
+
+### Відомі обмеження
+
+- Створення нового товару й далі вимагає дії "Зберегти" в БО; осиротілі рядки після `Product::delete()` поки не прибираються (`actionProductDelete` з'явиться в наступному change).
+- Рядки зі `status='error'` оновлюють снапшот при редагуванні, але не повторюють синхронізацію автоматично — ручний retry оператора з'явиться разом із UI у вкладці товару (Фаза 4).
+
 ## [1.0.0] — 2026-05-24
 
 Перший випуск. Додає зберігання облікових даних, інсталяційний життєвий цикл модуля та протестований HTTP-клієнт до Qamera AI Plugin API. PrestaShop 8.0–9.x, PHP 8.1+.
@@ -25,4 +52,5 @@
 - Мультимагазин працює на одному ключі (один API-ключ на інсталяцію). Облікові дані на магазин — follow-up у v2.
 - Сторінка конфігурації дає змогу редагувати секрети, але не дозволяє ротувати HMAC вебхука — це відбувається у панелі Qamera AI.
 
+[1.1.0]: https://github.com/200iqlabs/prestashop-qamera/releases/tag/v1.1.0
 [1.0.0]: https://github.com/200iqlabs/prestashop-qamera/releases/tag/v1.0.0
