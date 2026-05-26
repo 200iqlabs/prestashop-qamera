@@ -28,7 +28,7 @@ When the `actionWatermark` PrestaShop hook fires with parameters `id_image` and 
 
 - **GIVEN** a product whose `(id_product, id_shop)` is not present in `ps_qamera_product_link` (toggle was off when the product was created, then was turned on later)
 - **WHEN** the operator uploads an image (toggle now on)
-- **THEN** the hook handler SHALL NOT attempt registration (there is no snapshot to send); instead it SHALL log a debug entry "no bookkeeping row, skipping" and return. The next `actionProductSave` will create the row, and the *next* image upload will register.
+- **THEN** the hook handler SHALL NOT attempt registration (there is no snapshot to send); instead it SHALL emit a single `PrestaShopLogger::addLog` entry at severity 1 (info — diagnostic, not a warning) with `object_type='QameraAiModule'`, `object_id=<idProduct>`, `allowDuplicate=true`, and a message of the form `'[QameraAi] no bookkeeping row for id_product=<n>, id_shop=<n>; skipping image sync. Next actionProductSave will create the row.'` — same shape and channel as the Phase-2 swallow-throw log entries. Then return without further work.
 
 ### Requirement: Primary image resolution prefers cover image with a deterministic fallback chain
 

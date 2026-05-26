@@ -45,7 +45,9 @@ Packshoty (`POST /packshots`) zostawiamy świadomie poza zakresem — to Faza 4,
   - `src/Install/Installer.php` — dodanie nowego hooka do `self::HOOKS`
   - `config/services.yml` — rejestracja serwisów Fazy 3
 - **DB**: brak zmian schematu — wszystkie kolumny są z Fazy 2.
-- **External services**: pierwsze realne wywołania na `POST /images` (relative do base URL `https://qamera.ai/api/v1/plugin`). Smoke test wymaga konta plugin — credentials z `CLAUDE.md` (NIE skopiowane do żadnego tracked artifactu; trzymane wyłącznie w pliku CLAUDE.md i odczytywane ad-hoc przez operatora). Dopiero ten change uruchamia pole `qamera_product_id`.
+- **External services**: pierwsze realne wywołania na `POST /images` (relative do base URL `https://qamera.ai/api/v1/plugin`). Smoke test wymaga konta plugin (credentials z Qamera AI panelu).
+  - **Security blocker przed §11 smoke**: \`CLAUDE.md\` jest aktualnie *tracked* w repo i zawiera live \`mk_live_…\` key + installation UUID. To pre-existing leak (nie wprowadzony tym change'em, ale ten change pierwszy faktycznie używałby tych credentials). Operator MUSI najpierw zrotować klucz w Qamera AI panelu, usunąć linie z \`CLAUDE.md\` (potencjalnie z rewrite historii), przenieść credentials do untracked local file (\`.env.smoke\` w \`.gitignore\`) lub external secret managera. Patrz \`tasks.md\` §11 dla pełnej procedury.
+  - Dopiero ten change uruchamia pole \`qamera_product_id\`.
 - **Dependencies**: brak nowych.
 - **Compatibility**: BO save action MUSI nadal działać przy padzie upstreama (5xx, network down). To definiuje czy rejestracja idzie synchronicznie w hooku (z full try/catch i swallow) czy asynchronicznie w cronie. **Open question — design.md.**
 - **Docs**: README Phase plan → Phase 2 = "Done", Phase 3 = "In progress" przy starcie; CHANGELOG zostanie ruszony przy mergu Fazy 3 ([1.2.0] entry).

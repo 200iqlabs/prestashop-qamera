@@ -45,7 +45,7 @@
 ## 5. `ImageUploadStrategy` interface + `PresignedImageUploadStrategy`
 
 - [ ] 5.1. Define interface `ImageUploadStrategy::uploadImage(string $localPath): string` returning the canonical `source_url` the upstream `registerImage` will use. For `PresignedImageUploadStrategy` that value is the `assetId` from `PresignedUploadResponse` (an opaque upstream handle), NOT the `uploadUrl` itself — `uploadUrl` is a short-TTL PUT target with query-string credentials and is not safe to forward.
-- [ ] 5.2. Test first: `testHappyPathReturnsAssetId` — mocked `QameraApiClient::requestUpload` returns `PresignedUploadResponse('https://qamera-uploads.example/PUT?sig=...', 'asset-uuid', '2026-05-26T12:00:00Z')`; mock PUT succeeds; strategy returns `'asset-uuid'`
+- [ ] 5.2. Test first: `testHappyPathReturnsAssetId` — mocked `QameraApiClient::requestUpload` returns `PresignedUploadResponse('https://qamera-uploads.example/PUT?sig=...', 'asset-uuid', $expiresAt)` where `$expiresAt` is built relative to the test clock (e.g. `(new \DateTimeImmutable())->modify('+15 minutes')->format(\DateTimeInterface::ATOM)`), so the test does not become stale or flaky as wall-clock drifts past a hardcoded ISO timestamp; mock PUT succeeds; strategy returns `'asset-uuid'`
 - [ ] 5.3. Test first: `testExpiredPresignedTriggersRefresh` — first `requestUpload` returns a `PresignedUploadResponse` whose `$expiresAt` parses to `now() - 1s` (DTO camelCase property; upstream JSON field is `expires_at`); strategy calls `requestUpload` again before PUT; new URL used
 - [ ] 5.4. Test first: `testPutFailureRaisesTransportException` — Guzzle `ConnectException` from PUT; strategy re-raises as `TransportException`
 - [ ] 5.5. Test first: `testUpstreamUploadEndpointFailureBubbles` — `requestUpload` throws `ServerException`; strategy re-raises
@@ -99,9 +99,11 @@
 
 ## 11. Manual smoke (operator, with live Qamera AI credentials)
 
-**First Phase-3 smoke is the first real upstream traffic from this plugin** — proceed carefully. Credentials are operator-provisioned: read from `CLAUDE.md` (which is `.gitignore`d and stays on the operator's workstation — it is NOT a tracked artifact, and these tasks deliberately do NOT inline keys or installation IDs) or from the Qamera AI panel directly. Paste them only into the BO configuration form; never into commit messages, PR descriptions, screenshots, or chat threads. If credentials need to be rotated mid-smoke, do so from the Qamera AI panel — the plugin only reads them from `ps_configuration`.
+**First Phase-3 smoke is the first real upstream traffic from this plugin** — proceed carefully.
 
-> **Pre-existing risk**: the current `CLAUDE.md` in the operator's workstation may contain `mk_live_…` keys in plaintext. That is a separate hardening task (move into the operator's secret manager / `.env` outside of any agent-readable file). This change does not modify `CLAUDE.md`.
+> **CRITICAL — pre-existing security incident, not introduced by this change**: the repository currently tracks `CLAUDE.md` and that file contains live production credentials (`mk_live_…` API key + installation UUID + an instruction to rotate the webhook HMAC). This is a leak: anyone with read access to the repo can lift the keys. The Phase-3 smoke MUST NOT proceed before the operator: (a) **rotates** the leaked API key and webhook HMAC in the Qamera AI panel, (b) **removes** the credential lines from `CLAUDE.md` (and rewrites repo history if required), (c) **adds** a local untracked secrets file (e.g. `.env.smoke` listed in `.gitignore`) or uses an external secret manager, (d) updates `CLAUDE.md` to reference that untracked source instead of inlining values. Treat this as a blocker for §11 and a separate, higher-priority hardening task.
+
+Once the leak is rotated and remediated, the smoke procedure is: read credentials from the (now untracked) operator-held source, paste them ONLY into the BO configuration form, never into commit messages, PR descriptions, screenshots, or chat threads. Mid-smoke rotation: do it from the Qamera AI panel — the plugin only reads from `ps_configuration`.
 
 - [ ] 11.1. `make up` + `make install` on local Docker; module installs cleanly (no DB schema changes vs Phase 2)
 - [ ] 11.2. http://localhost:8080/admin-dev → Modules → Qamera AI → configuration → paste the operator-held API base / API key / webhook secret into the BO form; enable "Automatically register new products"; click "Test connection" → must show `account_name`, `credits_balance`, `installation.status=active`
