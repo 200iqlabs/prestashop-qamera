@@ -96,7 +96,10 @@ When the bookkeeping row has `status='error'` and a subsequent `actionWatermark`
 
 PrestaShop's `actionWatermark` hook MAY fire more than once for the same `(id_product, id_image)` pair within a single request lifecycle — typically in bulk image regeneration flows in the BO. The sync service SHALL deduplicate: only the first invocation per `(id_product, id_image)` MAY trigger upstream work; subsequent invocations with the same key SHALL be no-ops. The dedup cache is in-memory per request — across requests the same `id_image` MAY register again (e.g. operator clears bookkeeping and reuploads).
 
-The dedup rule applies only to the *same image*. Two distinct images for the same product (e.g. cover image 100 and secondary image 101) MUST each be processed independently. Non-cover image uploads are NOT skipped — every new `id_image` triggers a `POST /images` call (with or without `product_metadata` depending on bookkeeping state — see the first requirement of this capability).
+The dedup rule applies only to the *same image*. Two distinct images for the same product (e.g. cover image 100 and secondary image 101) MUST each be processed independently per their own `id_image` key. The downstream-state rules for what each invocation actually does are split by bookkeeping state:
+
+- **`pending` / `error` row (cascade-create path)**: the first successful invocation MAY upload a *different* image than the hook's `id_image` — specifically, the image returned by `PrimaryImageResolver` (cover preferred over hint). That uploaded image is the one registered with `product_metadata` to drive the upstream cascade-create. The hook's hint image is NOT separately registered in this invocation. It WILL register later — either when the operator's next image action fires another `actionWatermark` (the row is `registered` by then, so the bare-image rule below applies), or in a future bulk-sync feature.
+- **`registered` row (bare-image path)**: every new `id_image` from the hook SHALL trigger a `POST /images` call without `product_metadata`. The resolver is NOT consulted. There is no "skip non-cover" rule on a registered row.
 
 #### Scenario: Same image fires hook twice in a bulk regenerate flow
 

@@ -66,7 +66,8 @@
 - [ ] 6.11. Test first: `testToggleOffIsNoop` — `QAMERAAI_AUTO_REGISTER_PRODUCTS=0`; service early-returns
 - [ ] 6.12. Test first: `testPrimaryImageResolverReturningNullIsNoop` — product has no images; service does NOT change `status` (a missing image is missing input, not an error)
 - [ ] 6.13. Test first: `testHookFiresMultipleTimesForResizeThumbnailsDeduplicated` — three calls with same `(id_product, id_image)`; only one upstream call issued
-- [ ] 6.14. Test first: `testNonCoverThumbnailHookSkipsUpstreamCall` — hint `id_image` differs from resolved primary; service skips
+- [ ] 6.14. Test first: `testPendingRowUsesResolvedPrimaryNotHintForCascadeCreate` — pre-seeded `status='pending'`; mocked `PrimaryImageResolver::resolve(42, 99)` returns `100` (cover wins over hint); service uploads image 100 (NOT image 99) and registers it with `product_metadata`. Upstream call IS issued (not skipped). Row transitions to `registered`. Image 99 is NOT separately registered in this invocation — it will register later when its own `actionWatermark` invocation runs (by then the row is `registered`, bare-image path)
+- [ ] 6.14b. Test first: `testRegisteredRowNeverSkipsHintImage` — pre-seeded `status='registered'`, `qamera_product_id` set; hook fires with `id_image=99`; resolver is NOT consulted; service uploads image 99 directly and calls `POST /images` with `product_ref` + `source_url` but NO `product_metadata`
 - [ ] 6.15. Test first: `testLastErrorMessageTruncatedAt500Chars` — exception message 1000 chars; stored value is exactly 500 chars
 - [ ] 6.16. Implement constructor: `__construct(Db $db, string $tablePrefix, ProductRefBuilder $refBuilder, QameraApiClient $apiClient, ImageUploadStrategy $uploadStrategy, PrimaryImageResolver $resolver, PrestaShopLoggerWrapper $logger)`
 - [ ] 6.17. Implement `syncOnImageAdded(int $idProduct, int $idImage): void` with the full flow + state transitions + error mapping
