@@ -18,6 +18,28 @@ PrestaShop module that talks to the Qamera AI Plugin API (`https://qamera.ai/api
 - **Composer install BEFORE `make up`** — PS installer scans modules/ on first boot and tries to load `QameraAi\Module\…`; without `vendor/`, the container exits 1. Run `composer install` in this directory before triggering `make up` from the parent `qameraai-prestashop/` shell.
 - **Dev environment lives in the parent shell**, not in this repo. `qameraai-prestashop/` (parent of `modules/qameraai/`) owns `docker-compose.yml` + `Makefile`. Do NOT reintroduce a `docker/` directory here — duplicates risk port collisions (parent binds `qameraai-ps` on 8080).
 
+## Git worktrees
+
+Composer and PHP are NOT on the Windows host PATH — the dev container is the only PHP runtime. The parent `docker-compose.yml` bind-mounts the main checkout (`./modules/qameraai`) into `/var/www/html/modules/qameraai`; worktrees under `.claude/worktrees/<branch>` are NOT bind-mounted and are therefore invisible to `make up` / `make shell` / `make install`. Use worktrees for **isolated editing + unit tests + static analysis only**, not for PrestaShop integration smoke (which has to happen in the main checkout).
+
+Setup procedure (one-time per worktree):
+
+1. From the main checkout on `main`: `git worktree add .claude/worktrees/<branch> <branch>` (the branch should already exist remotely, e.g. after pushing OpenSpec artifacts from the main checkout).
+2. Enter via the native `EnterWorktree path=…` tool, not by `cd` — that registers the session correctly for harness state.
+3. Install vendor INSIDE the worktree via one-shot docker, since the dev container won't see this path:
+   ```powershell
+   docker run --rm -v "<absolute-worktree-path>:/app" -w /app composer:2 install --no-interaction --prefer-dist
+   ```
+   That gives you `vendor/bin/phpunit`, `phpstan`, `phpcs` resolvable in-tree.
+4. Run unit tests + PHPStan + PHPCS via the same pattern when needed:
+   ```powershell
+   docker run --rm -v "<absolute-worktree-path>:/app" -w /app php:8.1-cli vendor/bin/phpunit
+   ```
+   (swap `php:8.1-cli` → `8.2`/`8.3` to mirror CI matrix).
+5. `.claude/worktrees/` is gitignored — see commit `7942811`. Do NOT commit the worktree contents into the parent tree.
+
+For PrestaShop runtime smoke (install/uninstall, BO Configuration, webhook delivery against the live container), exit the worktree, switch the main checkout to the branch, and use `make` targets — the bind-mount makes that path the only one the PS container can resolve `QameraAi\Module\…` from.
+
 ## Credentials for smoke testing
 
 Production Qamera AI install bound to the `pracownia-qamery-ai` account.
