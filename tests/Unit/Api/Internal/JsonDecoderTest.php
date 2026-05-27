@@ -33,6 +33,7 @@ final class JsonDecoderTest extends TestCase
                 'id' => 'e55c20ec-7e70-41a1-8b2f-aced02d82a7f',
                 'platform' => 'prestashop',
                 'status' => 'active',
+                'scopes' => ['plugin.assets:upload', 'plugin.catalog:write'],
             ],
             'data_processors' => [
                 ['name' => 'OpenAI', 'purpose' => 'image generation'],
@@ -45,9 +46,33 @@ final class JsonDecoderTest extends TestCase
         self::assertSame('Pracownia Qamery AI', $me->accountName);
         self::assertInstanceOf(InstallationInfo::class, $me->installation);
         self::assertSame('prestashop', $me->installation->platform);
+        self::assertSame(['plugin.assets:upload', 'plugin.catalog:write'], $me->installation->scopes);
         self::assertCount(2, $me->dataProcessors);
         self::assertInstanceOf(DataProcessor::class, $me->dataProcessors[0]);
         self::assertSame('OpenAI', $me->dataProcessors[0]->name);
+    }
+
+    public function testMeResponseInstallationCarriesScopes(): void
+    {
+        $payload = [
+            'account_id' => 'acct_123',
+            'account_name' => 'X',
+            'account_slug' => 'x',
+            'credits_balance' => 0,
+            'subscription_plan' => 'free',
+            'rate_limit_per_min' => 60,
+            'installation' => [
+                'id' => 'i',
+                'platform' => 'prestashop',
+                'status' => 'active',
+                'scopes' => ['plugin.catalog:read'],
+            ],
+            'data_processors' => [],
+        ];
+
+        $me = $this->decoder->decode(MeResponse::class, $payload);
+
+        self::assertSame(['plugin.catalog:read'], $me->installation->scopes);
     }
 
     public function testIgnoresUnknownFields(): void
@@ -59,7 +84,7 @@ final class JsonDecoderTest extends TestCase
             'credits_balance' => 1500,
             'subscription_plan' => 'pro',
             'rate_limit_per_min' => 60,
-            'installation' => ['id' => 'i1', 'platform' => 'prestashop', 'status' => 'active'],
+            'installation' => ['id' => 'i1', 'platform' => 'prestashop', 'status' => 'active', 'scopes' => []],
             'data_processors' => [],
             'experimental_feature_flag' => true,
             'another_unknown' => ['nested' => 'value'],
@@ -79,7 +104,7 @@ final class JsonDecoderTest extends TestCase
             'credits_balance' => 0,
             'subscription_plan' => 'free',
             'rate_limit_per_min' => 60,
-            'installation' => ['id' => 'i', 'platform' => 'prestashop', 'status' => 'active'],
+            'installation' => ['id' => 'i', 'platform' => 'prestashop', 'status' => 'active', 'scopes' => []],
             'data_processors' => [],
         ];
 

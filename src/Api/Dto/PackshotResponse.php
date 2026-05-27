@@ -7,10 +7,10 @@ namespace QameraAi\Module\Api\Dto;
 final class PackshotResponse
 {
     public function __construct(
-        public readonly string $id,
-        public readonly string $productRef,
+        public readonly string $externalRef,
+        public readonly string $productId,
+        public readonly string $packshotId,
         public readonly string $status,
-        public readonly ?string $resultUrl = null,
     ) {
     }
 }

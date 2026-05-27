@@ -1,0 +1,26 @@
+{
+  "_source": "qamera-ai/saas-platform:apps/web/app/api/v1/plugin/_lib/server/schemas.ts",
+  "_commit": "abee4e7f",
+  "_captured_at": "2026-05-27",
+  "_note": "GET /products — wrapper key items + next_cursor (kept from Phase 1). source_metadata is required (z.record), may be empty object.",
+  "endpoint": "GET /products",
+  "request": null,
+  "response_2xx": {
+    "items": [
+      {
+        "id": "33333333-3333-3333-3333-333333333333",
+        "external_ref": "ps:1:42",
+        "display_name": "Widget",
+        "sku": "WDG-001",
+        "description": null,
+        "source_metadata": {"prestashop_product_id": 42, "shop_id": 1},
+        "image_count": 3,
+        "packshot_count": 1,
+        "deleted_at": null,
+        "created_at": "2026-05-20T08:30:00Z",
+        "updated_at": "2026-05-27T10:02:30Z"
+      }
+    ],
+    "next_cursor": null
+  }
+}

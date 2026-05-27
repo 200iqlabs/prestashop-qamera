@@ -9,10 +9,10 @@ use QameraAi\Module\Api\Internal\ArrayOf;
 final class ProductsListResponse
 {
     /**
-     * @param ProductResponse[] $items
+     * @param ProductListItem[] $items
      */
     public function __construct(
-        #[ArrayOf(ProductResponse::class)]
+        #[ArrayOf(ProductListItem::class)]
         public readonly array $items,
         public readonly ?string $nextCursor = null,
     ) {

@@ -9,11 +9,11 @@ use QameraAi\Module\Api\Internal\ArrayOf;
 final class JobsListResponse
 {
     /**
-     * @param JobResponse[] $items
+     * @param JobDto[] $jobs
      */
     public function __construct(
-        #[ArrayOf(JobResponse::class)]
-        public readonly array $items,
+        #[ArrayOf(JobDto::class)]
+        public readonly array $jobs,
         public readonly ?string $nextCursor = null,
     ) {
     }

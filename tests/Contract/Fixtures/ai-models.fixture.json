@@ -1,0 +1,28 @@
+{
+  "_source": "qamera-ai/saas-platform:apps/web/app/api/v1/plugin/_lib/server/schemas.ts",
+  "_commit": "abee4e7f",
+  "_captured_at": "2026-05-27",
+  "_note": "GET /ai-models — wrapper key ai_models. Filtered server-side by plan; no client-side plan re-derivation.",
+  "endpoint": "GET /ai-models",
+  "request": null,
+  "response_2xx": {
+    "ai_models": [
+      {
+        "id": "openai/gpt-image-1",
+        "provider": "openai",
+        "model": "gpt-image-1",
+        "output_type": "image",
+        "supported_aspect_ratios": ["1:1", "4:5", "9:16"],
+        "base_credit_cost": 5
+      },
+      {
+        "id": "runway/gen-3-alpha",
+        "provider": "runway",
+        "model": "gen-3-alpha",
+        "output_type": "video",
+        "supported_aspect_ratios": ["16:9", "9:16"],
+        "base_credit_cost": 50
+      }
+    ]
+  }
+}

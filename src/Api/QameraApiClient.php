@@ -14,7 +14,7 @@ use Psr\Http\Message\ResponseInterface;
 use QameraAi\Module\Api\Dto\AiModel;
 use QameraAi\Module\Api\Dto\AspectRatio;
 use QameraAi\Module\Api\Dto\ImageResponse;
-use QameraAi\Module\Api\Dto\JobResponse;
+use QameraAi\Module\Api\Dto\JobDto;
 use QameraAi\Module\Api\Dto\JobsListFilters;
 use QameraAi\Module\Api\Dto\JobsListResponse;
 use QameraAi\Module\Api\Dto\MeResponse;
@@ -22,13 +22,14 @@ use QameraAi\Module\Api\Dto\PackshotResponse;
 use QameraAi\Module\Api\Dto\Preset;
 use QameraAi\Module\Api\Dto\PresignedUploadResponse;
 use QameraAi\Module\Api\Dto\Pricing;
-use QameraAi\Module\Api\Dto\ProductResponse;
+use QameraAi\Module\Api\Dto\ProductDetailResponse;
 use QameraAi\Module\Api\Dto\ProductsListFilters;
 use QameraAi\Module\Api\Dto\ProductsListResponse;
 use QameraAi\Module\Api\Dto\RegisterImageRequest;
 use QameraAi\Module\Api\Dto\RegisterPackshotRequest;
 use QameraAi\Module\Api\Dto\Scenery;
 use QameraAi\Module\Api\Dto\SubmitJobRequest;
+use QameraAi\Module\Api\Dto\SubmitJobResponse;
 use QameraAi\Module\Api\Exception\ApiException;
 use QameraAi\Module\Api\Exception\AuthException;
 use QameraAi\Module\Api\Exception\NotFoundException;
@@ -91,7 +92,7 @@ final class QameraApiClient
      */
     public function listAiModels(): array
     {
-        return $this->sendList('GET', '/ai-models', AiModel::class);
+        return $this->sendList('GET', '/ai-models', 'ai_models', AiModel::class);
     }
 
     /**
@@ -99,7 +100,7 @@ final class QameraApiClient
      */
     public function listSceneries(): array
     {
-        return $this->sendList('GET', '/sceneries', Scenery::class);
+        return $this->sendList('GET', '/sceneries', 'sceneries', Scenery::class);
     }
 
     /**
@@ -107,7 +108,7 @@ final class QameraApiClient
      */
     public function listPresets(): array
     {
-        return $this->sendList('GET', '/presets', Preset::class);
+        return $this->sendList('GET', '/presets', 'presets', Preset::class);
     }
 
     /**
@@ -115,7 +116,7 @@ final class QameraApiClient
      */
     public function listAspectRatios(): array
     {
-        return $this->sendList('GET', '/aspect-ratios', AspectRatio::class);
+        return $this->sendList('GET', '/aspect-ratios', 'aspect_ratios', AspectRatio::class);
     }
 
     public function getPricing(): Pricing
@@ -125,27 +126,58 @@ final class QameraApiClient
 
     public function registerImage(RegisterImageRequest $request): ImageResponse
     {
-        return $this->send('POST', '/images', $request->toPayload(), ImageResponse::class);
+        $payload = $this->dispatch('POST', '/images', ['images' => [$request->toPayload()]]);
+
+        return $this->unwrapSingleResult($payload, ImageResponse::class);
     }
 
     public function registerPackshot(RegisterPackshotRequest $request): PackshotResponse
     {
-        return $this->send('POST', '/packshots', $request->toPayload(), PackshotResponse::class);
+        $payload = $this->dispatch('POST', '/packshots', ['packshots' => [$request->toPayload()]]);
+
+        return $this->unwrapSingleResult($payload, PackshotResponse::class);
     }
 
-    public function requestUpload(): PresignedUploadResponse
+    /**
+     * Request a presigned upload URL for one binary asset.
+     *
+     * @throws \InvalidArgumentException When `$filename` is empty / >256 chars,
+     *                                   `$contentType` is empty, or `$sizeBytes`
+     *                                   is non-positive / > 52428800 (50 MiB).
+     *                                   Validation runs before any HTTP call.
+     */
+    public function requestUpload(string $filename, string $contentType, int $sizeBytes): PresignedUploadResponse
     {
-        return $this->send('POST', '/assets/upload', [], PresignedUploadResponse::class);
+        if ($filename === '' || strlen($filename) > 256) {
+            throw new \InvalidArgumentException(
+                'filename must be 1..256 characters'
+            );
+        }
+        if ($contentType === '') {
+            throw new \InvalidArgumentException('content_type must not be empty');
+        }
+        if ($sizeBytes <= 0 || $sizeBytes > 52428800) {
+            throw new \InvalidArgumentException(
+                'size_bytes must be a positive integer ≤ 52428800 (50 MiB)'
+            );
+        }
+
+        return $this->send('POST', '/assets/upload', [
+            'mode' => 'presigned',
+            'filename' => $filename,
+            'content_type' => $contentType,
+            'size_bytes' => $sizeBytes,
+        ], PresignedUploadResponse::class);
     }
 
-    public function submitJob(SubmitJobRequest $request): JobResponse
+    public function submitJob(SubmitJobRequest $request): SubmitJobResponse
     {
-        return $this->send('POST', '/jobs', $request->toPayload(), JobResponse::class);
+        return $this->send('POST', '/jobs', $request->toPayload(), SubmitJobResponse::class);
     }
 
-    public function getJob(string $id): JobResponse
+    public function getJob(string $id): JobDto
     {
-        return $this->send('GET', '/jobs/' . rawurlencode($id), null, JobResponse::class);
+        return $this->send('GET', '/jobs/' . rawurlencode($id), null, JobDto::class);
     }
 
     public function listJobs(JobsListFilters $filters): JobsListResponse
@@ -162,11 +194,15 @@ final class QameraApiClient
         return $this->send('GET', '/products?' . $query, null, ProductsListResponse::class);
     }
 
-    public function getProduct(string $idOrRef): ProductResponse
+    public function getProduct(string $idOrRef): ProductDetailResponse
     {
-        return $this->send('GET', '/products/' . rawurlencode($idOrRef), null, ProductResponse::class);
+        return $this->send('GET', '/products/' . rawurlencode($idOrRef), null, ProductDetailResponse::class);
     }
 
+    /**
+     * Server response body (if any) is discarded — DELETE is best-effort
+     * idempotent and callers only care whether a non-error status came back.
+     */
     public function deleteProduct(string $idOrRef): void
     {
         $this->dispatch('DELETE', '/products/' . rawurlencode($idOrRef), null);
@@ -190,22 +226,46 @@ final class QameraApiClient
     /**
      * @template T of object
      *
+     * @param class-string<T>      $elementClass
+     * @param array<string, mixed> $payload
+     *
+     * @return T
+     */
+    private function unwrapSingleResult(array $payload, string $elementClass): object
+    {
+        $results = $payload['results'] ?? null;
+        if (!is_array($results)) {
+            throw ValidationException::malformedResponse('results');
+        }
+        if (count($results) !== 1) {
+            throw ValidationException::unexpectedResultsSize(count($results), 1);
+        }
+        $first = $results[0];
+        if (!is_array($first)) {
+            throw ValidationException::malformedResponse('results[0]');
+        }
+
+        return $this->decoder->decode($elementClass, $first);
+    }
+
+    /**
+     * @template T of object
+     *
      * @param class-string<T> $elementClass
      *
      * @return T[]
      */
-    private function sendList(string $method, string $path, string $elementClass): array
+    private function sendList(string $method, string $path, string $wrapperKey, string $elementClass): array
     {
         $payload = $this->dispatch($method, $path, null);
-        $items = $payload['items'] ?? $payload;
-        if (!is_array($items)) {
-            throw ValidationException::malformedResponse('items');
+        if (!array_key_exists($wrapperKey, $payload) || !is_array($payload[$wrapperKey])) {
+            throw ValidationException::malformedResponse($wrapperKey);
         }
 
         $out = [];
-        foreach ($items as $item) {
+        foreach ($payload[$wrapperKey] as $item) {
             if (!is_array($item)) {
-                throw ValidationException::malformedResponse('items[]');
+                throw ValidationException::malformedResponse($wrapperKey . '[]');
             }
             $out[] = $this->decoder->decode($elementClass, $item);
         }

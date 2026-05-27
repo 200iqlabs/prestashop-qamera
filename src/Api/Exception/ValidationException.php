@@ -17,4 +17,15 @@ final class ValidationException extends ApiException
             sprintf('Malformed Qamera AI response: missing required field "%s"', $missingField),
         );
     }
+
+    public static function unexpectedResultsSize(int $got, int $expected): self
+    {
+        return new self(
+            sprintf(
+                'Malformed Qamera AI response: unexpected results size: %d, expected %d',
+                $got,
+                $expected
+            ),
+        );
+    }
 }

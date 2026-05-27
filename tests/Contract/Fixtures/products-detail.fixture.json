@@ -1,0 +1,51 @@
+{
+  "_source": "qamera-ai/saas-platform:apps/web/app/api/v1/plugin/_lib/server/schemas.ts",
+  "_commit": "abee4e7f",
+  "_captured_at": "2026-05-27",
+  "_note": "GET /products/{idOrRef} — embeds images and packshots (each capped at 100; *_truncated flags fallback to dedicated listing).",
+  "endpoint": "GET /products/{idOrRef}",
+  "request": null,
+  "response_2xx": {
+    "id": "33333333-3333-3333-3333-333333333333",
+    "external_ref": "ps:1:42",
+    "display_name": "Widget",
+    "sku": "WDG-001",
+    "description": null,
+    "source_metadata": {"prestashop_product_id": 42, "shop_id": 1},
+    "deleted_at": null,
+    "created_at": "2026-05-20T08:30:00Z",
+    "updated_at": "2026-05-27T10:02:30Z",
+    "images": [
+      {
+        "id": "44444444-4444-4444-4444-444444444444",
+        "external_ref": "ps:1:42",
+        "product_id": "33333333-3333-3333-3333-333333333333",
+        "asset_id": "11111111-1111-1111-1111-111111111111",
+        "byte_size": 12345,
+        "content_type": "image/jpeg",
+        "width": 1024,
+        "height": 1280,
+        "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "created_at": "2026-05-20T08:30:00Z"
+      }
+    ],
+    "images_truncated": false,
+    "packshots": [
+      {
+        "id": "66666666-6666-6666-6666-666666666666",
+        "external_ref": "ps:1:42:pk-1",
+        "product_id": "33333333-3333-3333-3333-333333333333",
+        "source_image_id": "44444444-4444-4444-4444-444444444444",
+        "asset_id": "55555555-5555-5555-5555-555555555555",
+        "byte_size": 204800,
+        "content_type": "image/jpeg",
+        "width": 1024,
+        "height": 1280,
+        "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+        "generated_by_job_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        "created_at": "2026-05-27T10:02:30Z"
+      }
+    ],
+    "packshots_truncated": false
+  }
+}

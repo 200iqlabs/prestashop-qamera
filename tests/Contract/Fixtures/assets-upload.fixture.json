@@ -1,0 +1,21 @@
+{
+  "_source": "qamera-ai/saas-platform:apps/web/app/api/v1/plugin/_lib/server/schemas.ts",
+  "_commit": "abee4e7f",
+  "_captured_at": "2026-05-27",
+  "_note": "POST /assets/upload — presigned variant. Body matches PresignedAssetUploadRequestSchema discriminator; response matches AssetUploadResponseSchema.",
+  "endpoint": "POST /assets/upload",
+  "request": {
+    "mode": "presigned",
+    "filename": "cover.jpg",
+    "content_type": "image/jpeg",
+    "size_bytes": 12345
+  },
+  "response_2xx": {
+    "asset_id": "11111111-1111-1111-1111-111111111111",
+    "bucket": "plugin_assets",
+    "storage_path": "acct/inst/asset/cover.jpg",
+    "upload_url": "https://storage.qamera.ai/signed/cover.jpg?token=abc",
+    "upload_token": "eyJhbGciOiJIUzI1NiJ9.dummy.signature",
+    "expires_at": "2026-05-27T14:00:00Z"
+  }
+}

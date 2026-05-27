@@ -1,0 +1,26 @@
+{
+  "_source": "qamera-ai/saas-platform:apps/web/app/api/v1/plugin/_lib/server/schemas.ts",
+  "_commit": "abee4e7f",
+  "_captured_at": "2026-05-27",
+  "_note": "GET /me — no request body. Response: account info + installation block with scopes (added 2026-05-26).",
+  "endpoint": "GET /me",
+  "request": null,
+  "response_2xx": {
+    "account_id": "00000000-0000-0000-0000-000000000001",
+    "account_name": "Pracownia Qamery AI",
+    "account_slug": "pracownia-qamery-ai",
+    "credits_balance": 1500,
+    "subscription_plan": "pro",
+    "rate_limit_per_min": 60,
+    "data_processors": [
+      {"name": "OpenAI", "purpose": "image generation"},
+      {"name": "AWS S3", "purpose": "asset storage"}
+    ],
+    "installation": {
+      "id": "e55c20ec-7e70-41a1-8b2f-aced02d82a7f",
+      "platform": "prestashop",
+      "status": "active",
+      "scopes": ["plugin.assets:upload", "plugin.catalog:write", "plugin.catalog:read"]
+    }
+  }
+}

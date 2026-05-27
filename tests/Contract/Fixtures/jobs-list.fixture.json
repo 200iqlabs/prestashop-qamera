@@ -1,0 +1,36 @@
+{
+  "_source": "qamera-ai/saas-platform:apps/web/app/api/v1/plugin/_lib/server/schemas.ts",
+  "_commit": "abee4e7f",
+  "_captured_at": "2026-05-27",
+  "_note": "GET /jobs — wrapper key jobs + next_cursor at root. Filters: status, created_after, created_before, limit (1..200 default 50), cursor.",
+  "endpoint": "GET /jobs",
+  "request": null,
+  "response_2xx": {
+    "jobs": [
+      {
+        "id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        "order_id": "99999999-9999-9999-9999-999999999999",
+        "status": "completed",
+        "job_type": "packshot",
+        "provider": "openai",
+        "model": "gpt-image-1",
+        "unit_cost": 5,
+        "attempt_count": 1,
+        "outputs": [
+          {"url": "https://cdn.qamera.ai/outputs/aaaa/01.jpg", "type": "image", "width": 1024, "height": 1280, "size_bytes": 204800}
+        ],
+        "error": null,
+        "external_metadata": null,
+        "packshot_asset_id": "55555555-5555-5555-5555-555555555555",
+        "product_label": "Widget Hero",
+        "product_ref": "ps:1:42",
+        "voting": null,
+        "voting_at": null,
+        "created_at": "2026-05-27T10:00:00Z",
+        "updated_at": "2026-05-27T10:02:30Z",
+        "completed_at": "2026-05-27T10:02:30Z"
+      }
+    ],
+    "next_cursor": "opaque-cursor-token"
+  }
+}
