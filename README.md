@@ -49,6 +49,24 @@ Point the module's configuration page at your local Qamera AI:
 - API base: `http://host.docker.internal:3000/api/v1/plugin`
 - API key + webhook secret: from `Settings → API Keys` on a local pracownia-style account.
 
+### Running tests
+
+Three tiers, in increasing cost:
+
+- **Unit** — fast (~3s in container), hermetic, PS stubbed:
+  ```bash
+  docker compose exec prestashop bash -c 'cd /var/www/html/modules/qameraai && vendor/bin/phpunit --testsuite=unit'
+  ```
+  This is the inner loop. Add `--testsuite=unit,contract` to also run the Pact-style fixture suite.
+
+- **Integration** — boots a real PS9 kernel inside the container, exercises real `Db`, `Image`, `_PS_PRODUCT_IMG_DIR_`. Requires `make up` to be running:
+  ```bash
+  docker compose exec prestashop bash -c 'cd /var/www/html/modules/qameraai && vendor/bin/phpunit -c phpunit.integration.xml.dist'
+  ```
+  HTTP transport to `qamera.ai` is always mocked via Guzzle `MockHandler`; the kernel is rebound at boot to `http://qamera-test.invalid` so any forgotten rebind fails with a DNS error instead of leaking real credentials. See `openspec/specs/integration-test-harness/spec.md` for the full contract.
+
+- **Smoke** — operator-driven end-to-end against a real Qamera AI install. Lives outside CI and Git history. Run it before a release; see the internal runbook (do NOT embed credentials in this repo).
+
 ## Phase plan
 
 | Phase | Scope | Status |
