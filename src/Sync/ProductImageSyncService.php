@@ -35,15 +35,6 @@ class ProductImageSyncService
 {
     private const ERROR_MAX = 500;
 
-    /**
-     * In-memory dedup cache for `(idProduct, idImage)` pairs already
-     * processed in this request. PS may fire `actionWatermark` more
-     * than once per image during bulk regenerate flows.
-     *
-     * @var array<string, true>
-     */
-    private array $seen = [];
-
     public function __construct(
         private readonly Db $db,
         private readonly string $tablePrefix,
@@ -52,6 +43,7 @@ class ProductImageSyncService
         private readonly ImageUploadStrategy $uploadStrategy,
         private readonly PrimaryImageResolver $resolver,
         private readonly PrestaShopLoggerWrapper $logger,
+        private readonly InMemoryDedupCache $dedupCache,
     ) {
     }
 
@@ -61,11 +53,9 @@ class ProductImageSyncService
             return;
         }
 
-        $dedupKey = $idProduct . ':' . $idImage;
-        if (isset($this->seen[$dedupKey])) {
+        if ($this->dedupCache->seen($idProduct . ':' . $idImage)) {
             return;
         }
-        $this->seen[$dedupKey] = true;
 
         $idShop = $this->resolveCurrentShopId();
         $row = $this->loadBookkeepingRow($idProduct, $idShop);

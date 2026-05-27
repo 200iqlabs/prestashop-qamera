@@ -17,6 +17,7 @@ use QameraAi\Module\Api\Exception\TransportException;
 use QameraAi\Module\Api\Exception\ValidationException;
 use QameraAi\Module\Api\QameraApiClient;
 use QameraAi\Module\Sync\ImageUploadStrategy;
+use QameraAi\Module\Sync\InMemoryDedupCache;
 use QameraAi\Module\Sync\PrestaShopLoggerWrapper;
 use QameraAi\Module\Sync\PrimaryImageResolver;
 use QameraAi\Module\Sync\ProductImageSyncService;
@@ -69,7 +70,8 @@ final class ProductImageSyncServiceTest extends TestCase
             $this->apiClient,
             $this->uploadStrategy,
             $this->resolver,
-            $this->logger
+            $this->logger,
+            new InMemoryDedupCache()
         ) extends ProductImageSyncService {
             protected function resolveImagePath(int $idImage): string
             {
