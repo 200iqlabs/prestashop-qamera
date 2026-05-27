@@ -141,20 +141,20 @@ Phase-1 PHP fields that no longer exist (`name`/`description` on `AiModel`, `pre
 
 ```json
 {
-  "session_config": { "aspect_ratio": "...", "model_id": "...", "scenery_id": "...", "preset_id": "...", "suggestions": [...] },
+  "session_config": { "aspect_ratio": "4:5", "model_id": "...", "scenery_id": "...", "preset_id": "...", "suggestions": "free-text guidance ≤ 2000 chars" },
   "subjects": [
-    { "packshot_asset_id": "<uuid>", "product_label": "...", "product_ref": "...", "images_count": <int>, "ai_model": "provider/model", "reference_asset_ids": [...], "provider_settings": {...}, "product_name": "...", "product_specific_category": "..." }
+    { "packshot_asset_id": "<uuid>", "product_label": "...", "product_ref": "...", "images_count": <int>, "ai_model": "provider/model", "reference_asset_ids": [...], "provider_settings": {...}, "product_name": "...", "product_specific_category": "...", "product_side": "...", "product_general_category": "...", "auto_register_packshot": false, "packshot_external_ref": "..." }
   ],
   "callback_url": "...",
   "external_metadata": {...},
-  "priority": "..."
+  "priority": 0
 }
 ```
 
-PHP DTO structure:
-- `SubmitJobRequest` constructor: `SessionConfig $sessionConfig`, `array<Subject> $subjects` (1..1000), `?string $callbackUrl = null`, `?array<string,mixed> $externalMetadata = null`, `?string $priority = null`
-- `SessionConfig` constructor: `string $aspectRatio`, `?string $modelId = null`, `?string $sceneryId = null`, `?string $presetId = null`, `?array<string> $suggestions = null`
-- `Subject` constructor: `string $packshotAssetId`, `string $productLabel` (1..200), `string $productRef` (1..200), `int $imagesCount` (1..50), `string $aiModel`, `?array<string> $referenceAssetIds = null`, `?array<string,mixed> $providerSettings = null`, `?string $productName = null`, `?string $productSpecificCategory = null`
+PHP DTO structure (matches upstream zod at `schemas.ts@abee4e7f`):
+- `SubmitJobRequest` constructor: `SessionConfig $sessionConfig`, `array<Subject> $subjects` (1..100; upstream `.max(100)`), `?string $callbackUrl = null`, `?array<string,mixed> $externalMetadata = null`, `?int $priority = null` (-100..100; upstream `z.number().int().min(-100).max(100)`)
+- `SessionConfig` constructor: `string $aspectRatio` (validated against `ALLOWED_ASPECT_RATIOS` allowlist), `?string $modelId = null`, `?string $sceneryId = null`, `?string $presetId = null`, `?string $suggestions = null` (≤ 2000 chars; upstream `z.string().max(2000)` — NOT an array)
+- `Subject` constructor (13 fields total): required `string $packshotAssetId`, `string $productLabel` (1..200), `string $productRef` (1..200), `int $imagesCount` (1..50), `string $aiModel` (regex `provider/model`); optional `?array<string> $referenceAssetIds`, `?array<string,mixed> $providerSettings`, `?string $productName`, `?string $productSpecificCategory`, `?string $productSide`, `?string $productGeneralCategory`, `?bool $autoRegisterPackshot`, `?string $packshotExternalRef` (≤ 200)
 
 Response parses into `SubmitJobResponse { string $orderId, string $status, SubmitJobResponseSubject[] $subjects }`. `SubmitJobResponseSubject { string $productRef, string[] $jobIds }`.
 
@@ -170,9 +170,9 @@ Response parses into `SubmitJobResponse { string $orderId, string $status, Submi
 
 ### Requirement: JobDto carries full upstream job shape including outputs
 
-`getJob(string $id): JobDto` and `listJobs(JobsListFilters $filters): JobsListResponse` SHALL parse jobs into a `JobDto` that exposes every upstream field. Fields (camelCase): `id, orderId, jobType, provider, model, status, unitCost, attemptCount, outputs: JobOutput[], error: ?ErrorBody, externalMetadata: ?array, packshotAssetId: ?string, productLabel: ?string, productRef: ?string, voting: ?string ('accepted'|'rejected'), votingAt: ?string, createdAt, updatedAt, completedAt: ?string`.
+`getJob(string $id): JobDto` and `listJobs(JobsListFilters $filters): JobsListResponse` SHALL parse jobs into a `JobDto` that exposes every upstream field. Fields (camelCase): `id, orderId: ?string (upstream `.nullable()`), jobType, provider, model, status, unitCost, attemptCount, outputs: JobOutput[], error: ?ErrorBody, externalMetadata: ?array, packshotAssetId: ?string, productLabel: ?string, productRef: ?string, voting: ?string ('accepted'|'rejected'), votingAt: ?string, createdAt, updatedAt, completedAt: ?string`.
 
-`JobOutput` constructor: `string $url, string $type, ?int $width, ?int $height, ?int $sizeBytes, ?string $mimeType`. The Phase-1 `JobResponse.resultUrls: string[]` SHALL be removed; callers SHALL iterate `JobDto.outputs[].url` instead.
+`JobOutput` constructor: `string $url, string $type, ?int $width, ?int $height, ?int $sizeBytes`. Upstream `JobOutputSchema` has no `mime_type` field — callers SHALL read `JobOutput.type` for the MIME-ish discriminator. The Phase-1 `JobResponse.resultUrls: string[]` SHALL be removed; callers SHALL iterate `JobDto.outputs[].url` instead.
 
 `JobsListFilters` SHALL accept `?string $status, ?string $createdAfter, ?string $createdBefore, int $limit (1..200, default 50), ?string $cursor`. Phase-1 `JobsListFilters` without `created_after`/`created_before` is replaced.
 

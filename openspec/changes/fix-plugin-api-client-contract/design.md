@@ -78,7 +78,7 @@ SubmitJobResponse {
 SubmitJobResponseSubject { product_ref, job_ids[] }
 ```
 
-PHP odzwierciedlamy 1:1. `SessionConfig` i `Subject` jako osobne `final` DTO w `src/Api/Dto/`. Konstruktor `SubmitJobRequest` przyjmuje `SessionConfig + array<Subject> + optional<…>`. Walidacja: `subjects` 1..1000 (upstream max), `session_config.aspect_ratio` musi być wartością ze `AspectRatioSchema` enum (re-export w PHP jako stringi).
+PHP odzwierciedlamy 1:1. `SessionConfig` i `Subject` jako osobne `final` DTO w `src/Api/Dto/`. Konstruktor `SubmitJobRequest` przyjmuje `SessionConfig + array<Subject> + optional<…>`. Walidacja: `subjects` 1..100 (upstream `.max(100)`), `session_config.aspect_ratio` musi być wartością ze `AspectRatioSchema` allowlist (1:1, 4:5, 9:16, 16:9, 3:4 — re-exposed w PHP jako `SessionConfig::ALLOWED_ASPECT_RATIOS`). Pełna lista deviacji od pierwszego szkicu specu (gdzie błędnie podaliśmy 1..1000, `?array<string> suggestions`, `?string priority` itd.) udokumentowana w `tasks.md §20`.
 
 `getJob`/`listJobs` parsują `JobDto` z 16 pól. `outputs: JobOutput[]` jako sub-DTO. Status enum: `pending|in_progress|completed|failed|retry_pending|cancelled|expired`.
 
@@ -118,7 +118,7 @@ Format snapshotu (JSON):
 }
 ```
 
-Fixtury per endpoint w scope-ie: `me`, `assets-upload`, `images`, `packshots`, `ai-models`, `sceneries`, `presets`, `aspect-ratios`, `pricing`, `jobs-submit`, `jobs-get`, `jobs-list`, `products-list`, `products-detail`. ~14 fixturów.
+Fixtury per endpoint w scope-ie (15 plików): `me`, `assets-upload`, `assets-upload-multipart-response` (osobny wariant pod nullable upload fields), `images`, `packshots`, `ai-models`, `sceneries`, `presets`, `aspect-ratios`, `pricing`, `jobs-submit`, `jobs-get`, `jobs-list`, `products-list`, `products-detail`.
 
 ### 7. JsonDecoder — extra-field tolerance + nested DTO
 

@@ -72,30 +72,30 @@
 ### 10. Per-endpoint list method updates + element DTO regen
 
 - [x] 10.1. **`/ai-models`**: rewrite `AiModel` DTO to `(string $id, string $provider, string $model, string $outputType, array $supportedAspectRatios, int $baseCreditCost)`. Update `listAiModels()` to pass `'ai_models'`. Add unit test for decoder + endpoint call.
-- [x] 10.2. **`/sceneries`**: rewrite `Scenery` to `(string $id, string $name, string $thumbnail, string $voting, string $status, string $source, string $createdAt)`. Update `listSceneries()`. Tests.
-- [x] 10.3. **`/presets`**: rewrite `Preset` to `(string $id, string $slug, string $name, array $descriptionI18n, int $creditCost, string $outputType, bool $isFree, ?string $coverUrl, array $quantityGuidelines, array $qualityGuidelines, array $gallery)`. Update `listPresets()`. Tests.
+- [x] 10.2. **`/sceneries`**: rewrite `Scenery` to `(string $id, string $name, ?string $thumbnail, ?string $voting, ?string $status, string $source, string $createdAt)`. Update `listSceneries()`. Tests. *(thumbnail/voting/status nullable per upstream zod — deviation §20.)*
+- [x] 10.3. **`/presets`**: rewrite `Preset` to `(string $id, ?string $slug, string $name, array $descriptionI18n, int $creditCost, ?string $outputType, bool $isFree, ?string $coverUrl, string $quantityGuidelines, string $qualityGuidelines, array $gallery)`. Update `listPresets()`. Tests. *(slug/outputType nullable; quantity/quality guidelines are upstream `z.string()` free-text, NOT arrays — deviation §20.)*
 - [x] 10.4. **`/aspect-ratios`**: rewrite `AspectRatio` to `(string $value, string $label, bool $default)`. Update `listAspectRatios()`. Tests.
 - [x] 10.5. **`/pricing`**: introduce `PricingEntry` DTO `(string $jobType, string $provider, string $model, int $creditCost)`. Rewrite `Pricing` DTO to `(array<PricingEntry> $entries, string $currency)`. `getPricing()` does NOT use `sendList` — dedicated parsing path. Tests for both DTO + endpoint.
 
 ## 11. `/jobs` POST — session-lifecycle DTO
 
 - [x] 11.1. Create `SessionConfig` DTO with constructor and tests
-- [x] 11.2. Create `Subject` DTO with constructor (9 fields per design.md §4) and tests including required-field validation
+- [x] 11.2. Create `Subject` DTO with constructor (13 fields — 9 from design.md §4 + 4 extras per upstream `SubjectSchema`: `product_side`, `product_general_category`, `auto_register_packshot`, `packshot_external_ref`) and tests including required-field validation. *(deviation §20.)*
 - [x] 11.3. Test first: `SubmitJobRequest::testToPayloadSerializesNestedShape` — full upstream-matching shape
-- [x] 11.4. Implement `SubmitJobRequest`: ctor `(SessionConfig $sessionConfig, array<Subject> $subjects, ?string $callbackUrl = null, ?array $externalMetadata = null, ?string $priority = null)`. Validation: `subjects` 1..1000.
+- [x] 11.4. Implement `SubmitJobRequest`: ctor `(SessionConfig $sessionConfig, array<Subject> $subjects, ?string $callbackUrl = null, ?array $externalMetadata = null, ?int $priority = null)`. Validation: `subjects` 1..100 (upstream `.max(100)`), `priority` in -100..100. *(`priority` is int not string; `subjects` cap is 100 not 1000 — deviation §20.)*
 - [x] 11.5. Create `SubmitJobResponseSubject` DTO
 - [x] 11.6. Rewrite `SubmitJobResponse` to `(string $orderId, string $status, array<SubmitJobResponseSubject> $subjects)`. Drop Phase-1 `JobResponse` reuse.
 - [x] 11.7. Test: `submitJob()` end-to-end with mocked Guzzle returns `SubmitJobResponse` shape
 
 ## 12. `/jobs/{id}` GET + `/jobs` GET — full JobDto
 
-- [x] 12.1. Create `JobOutput` DTO `(string $url, string $type, ?int $width, ?int $height, ?int $sizeBytes, ?string $mimeType)`
+- [x] 12.1. Create `JobOutput` DTO `(string $url, string $type, ?int $width = null, ?int $height = null, ?int $sizeBytes = null)`. *(No `mimeType` — upstream `JobOutputSchema` has no such field; callers read `JobOutput.type` instead — deviation §20.)*
 - [x] 12.2. Create `ErrorBody` DTO (matching upstream `ErrorBodySchema`) or reuse existing one if present
 - [x] 12.3. Rewrite `JobDto` (currently `JobResponse`) with 16 fields per spec §"JobDto carries full upstream job shape"
 - [x] 12.4. Update `getJob()` return type. Tests.
 - [x] 12.5. Rewrite `JobsListFilters` to include `?createdAfter, ?createdBefore`. Drop nothing — `status, limit, cursor` already there.
-- [x] 12.6. Rewrite `JobsListResponse` wrapper key to `jobs`. Tests.
-- [x] 12.7. Update `listJobs()` to use `sendList(..., 'jobs', JobDto::class)` plus separate `next_cursor` extraction.
+- [x] 12.6. Rewrite `JobsListResponse` so `JsonDecoder` maps the upstream `jobs` wrapper into `JobDto[]` plus the sibling `next_cursor` field. Tests.
+- [x] 12.7. Update `listJobs()` to return `JobsListResponse` directly via `send()`. (Original plan was `sendList(..., 'jobs', JobDto::class)` + separate `next_cursor` extraction; settled on the dedicated wrapper DTO because the response carries the `next_cursor` sibling that `sendList`'s array-extraction path would lose — same approach as `listProducts()`.)
 
 ## 13. `/products` GET + `/products/{idOrRef}` GET — full product DTOs
 
