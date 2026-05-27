@@ -29,6 +29,11 @@ docker/.env
 /coverage/
 /.phpunit.cache/
 
+# Operator smoke runners — by convention they live untracked under tests/Smoke/
+# (see CLAUDE.md "Credentials for smoke testing"). Bootstrap PrestaShop, call
+# live qamera.ai endpoints with BO-stored credentials — never CI.
+/tests/Smoke/
+
 # PHPStan: PrestaShop source clone used by CI for core resolution
 /.ps-src/
 

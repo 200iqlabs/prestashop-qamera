@@ -140,28 +140,28 @@
 
 ## 17. Manual smoke (operator)
 
-- [ ] 17.1. `tests/Smoke/connection_check.php` (untracked) — call `me()`, assert account/credits/installation populated (regression)
-- [ ] 17.2. Call `requestUpload('cover.jpg', 'image/jpeg', 12345)` against real `/assets/upload` → 201 with non-null `assetId`, `uploadUrl`, `expiresAt`. PUT a 12345-byte dummy to `uploadUrl` → 200.
-- [ ] 17.3. Call `registerImage(new RegisterImageRequest('smoke-ext-1', 'ps:1:9999', $assetIdFromStep2, new ProductMetadata('Smoke', 'SMK-1', 'desc')))` → `ImageResponse{productId, imageId, status:'created'}`
-- [ ] 17.4. Re-run step 3 with same `external_ref` → `status:'existing'` (idempotency check)
-- [ ] 17.5. Call `getPricing()` → non-empty `entries`, `currency='credits'`
-- [ ] 17.6. Call `listAiModels()`, `listSceneries()`, `listPresets()`, `listAspectRatios()` → each returns ≥1 element of correct DTO shape
-- [ ] 17.7. Call `listProducts(new ProductsListFilters(limit: 5))` → `items` populated with `ProductListItem` DTO (assert `displayName` populated for the synthetic smoke product from §17.3)
-- [ ] 17.8. Call `getProduct($productIdFrom17.3)` → `ProductDetailResponse` with embedded `images: [...]` matching the one registered in §17.3
-- [ ] 17.9. (Phase-4 territory, optional now) Call `submitJob(...)` against `/jobs` POST with a minimal session_config + 1 subject → `SubmitJobResponse` with `orderId`. Decide whether to actually run real jobs against operator-held account or stop at request-shape-verified.
-- [ ] 17.10. Cleanup: delete the smoke product upstream via `deleteProduct($productId)` — verifies the only Phase-1-verified working endpoint still works post-refactor.
+- [x] 17.1. `tests/Smoke/connection_check.php` (untracked) — call `me()`, assert account/credits/installation populated (regression)
+- [x] 17.2. Call `requestUpload('cover.jpg', 'image/jpeg', 12345)` against real `/assets/upload` → 201 with non-null `assetId`, `uploadUrl`, `expiresAt`. PUT a 12345-byte dummy to `uploadUrl` → 200.
+- [x] 17.3. Call `registerImage(new RegisterImageRequest('smoke-ext-1', 'ps:1:9999', $assetIdFromStep2, new ProductMetadata('Smoke', 'SMK-1', 'desc')))` → `ImageResponse{productId, imageId, status:'created'}`
+- [x] 17.4. Re-run step 3 with same `external_ref` → `status:'existing'` (idempotency check)
+- [x] 17.5. Call `getPricing()` → non-empty `entries`, `currency='credits'`
+- [x] 17.6. Call `listAiModels()`, `listSceneries()`, `listPresets()`, `listAspectRatios()` → each returns ≥1 element of correct DTO shape
+- [x] 17.7. Call `listProducts(new ProductsListFilters(limit: 5))` → `items` populated with `ProductListItem` DTO (assert `displayName` populated for the synthetic smoke product from §17.3)
+- [x] 17.8. Call `getProduct($productIdFrom17.3)` → `ProductDetailResponse` with embedded `images: [...]` matching the one registered in §17.3
+- [x] 17.9. (Phase-4 territory, optional now) Call `submitJob(...)` against `/jobs` POST with a minimal session_config + 1 subject → `SubmitJobResponse` with `orderId`. Decide whether to actually run real jobs against operator-held account or stop at request-shape-verified.
+- [x] 17.10. Cleanup: delete the smoke product upstream via `deleteProduct($productId)` — verifies the only Phase-1-verified working endpoint still works post-refactor.
 
 ## 18. PR + merge
 
-- [ ] 18.1. PR is already open (#10 draft). Mark as ready when implementation lands.
-- [ ] 18.2. Address Copilot + manual review comments
-- [ ] 18.3. Merge after green CI + smoke (§17) signed off
-- [ ] 18.4. **Trigger Phase-3 PR #9 rebase** (separate operator action) — design.md §5 lists the conflicts and resolutions
+- [x] 18.1. PR is already open (#10 draft). Mark as ready when implementation lands.
+- [x] 18.2. Address Copilot + manual review comments
+- [x] 18.3. Merge after green CI + smoke (§17) signed off
+- [x] 18.4. **Trigger Phase-3 PR #9 rebase** (separate operator action) — design.md §5 lists the conflicts and resolutions
 
 ## 19. Archive
 
-- [ ] 19.1. `/opsx:archive fix-plugin-api-client-contract` rolling deltas into `openspec/specs/qamera-api-client/spec.md`
-- [ ] 19.2. CHANGELOG (en/pl/uk) — merge into Phase-3 `[1.2.0]` entry at archive time, OR cut a `[1.2.0-rc1]` for the fix alone (operator decides based on Phase-3 timeline)
+- [x] 19.1. `/opsx:archive fix-plugin-api-client-contract` rolling deltas into `openspec/specs/qamera-api-client/spec.md`
+- [x] 19.2. CHANGELOG (en/pl/uk) — **deferred to Phase-3 `[1.2.0]`** (operator decision 2026-05-27): when PR #9 archives, its CHANGELOG entry covers both Phase 3 + this contract fix under one `[1.2.0]` heading. Rationale: PR #9 is the next merge in flight; single user-facing release note is cleaner than rc1 + final.
 
 ## 20. Implementation notes — deviations from spec/design (upstream truth wins)
 
