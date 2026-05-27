@@ -285,7 +285,7 @@ class ProductImageSyncService
      */
     protected function resolveImagePath(int $idImage): string
     {
-        $base = defined('_PS_PRODUCT_IMG_DIR_') ? (string) constant('_PS_PRODUCT_IMG_DIR_') : '';
+        $base = defined('_PS_PROD_IMG_DIR_') ? (string) constant('_PS_PROD_IMG_DIR_') : '';
         $folder = self::buildImageFolder($idImage);
         return $base . $folder . $idImage . '.jpg';
     }
