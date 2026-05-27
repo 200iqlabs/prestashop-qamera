@@ -222,7 +222,7 @@ class ProductImageSyncService
         }
 
         $productId = $response->productId;
-        if ($productId === null || $productId === '') {
+        if ($productId === '') {
             // Upstream did not return a product_id despite cascade-create
             // input — record the row as an error rather than silently
             // marking it registered with a NULL qamera_product_id.
