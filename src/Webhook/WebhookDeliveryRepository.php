@@ -13,13 +13,15 @@ use Db;
  * DUPLICATE KEY UPDATE delivery_id = delivery_id` is a no-op on collision,
  * so concurrent inserts with the same id produce exactly one row. The
  * outcome is read off `Db::Affected_Rows()` — MySQL reports `1` for a
- * fresh insert and `0` for the no-op-update branch, which lets us
- * distinguish `accepted` from `duplicate` without a follow-up SELECT.
+ * fresh insert and `0` for the no-op-update branch, which distinguishes
+ * `accepted` from `duplicate` without a probe-before-insert SELECT.
  *
- * This is critical for the byte-identical-retry case: an earlier version
- * disambiguated via re-reading `raw_payload`, which incorrectly returned
- * `accepted` for both racers when the retry payload was identical to the
- * original (the normal at-least-once delivery semantics).
+ * On the duplicate path the repository runs ONE follow-up SELECT to
+ * fetch the original row's `received_at` so the handler can satisfy the
+ * spec's "Operator-visible logging → Duplicate" requirement (warning
+ * log line MUST include the original received_at). This second query
+ * runs only on the rare duplicate path; the happy path stays at one
+ * round-trip.
  *
  * DB exceptions surface to the caller (the controller emits 500 per D10).
  */
@@ -36,7 +38,7 @@ class WebhookDeliveryRepository
         string $eventType,
         string $rawPayload,
         int $receivedAtEpoch
-    ): string {
+    ): DeliveryRecordResult {
         $receivedAt = gmdate('Y-m-d H:i:s', $receivedAtEpoch);
         $sql = sprintf(
             'INSERT INTO `%sqamera_webhook_delivery` '
@@ -54,16 +56,24 @@ class WebhookDeliveryRepository
             throw new RepositoryException('insert failed');
         }
 
-        // Affected_Rows() after INSERT … ON DUPLICATE KEY UPDATE col=col:
-        // MySQL/MariaDB returns 1 for a fresh insert and 0 for the no-op
-        // update branch — the `col=col` self-assignment leaves the row
-        // unchanged so the update path reports zero affected rows. This
-        // distinguishes accepted-vs-duplicate without a follow-up SELECT.
         $affected = (int) $this->db->Affected_Rows();
+        if ($affected >= 1) {
+            return new DeliveryRecordResult(DeliveryOutcome::ACCEPTED, $receivedAt);
+        }
 
-        return $affected >= 1
-            ? DeliveryOutcome::ACCEPTED
-            : DeliveryOutcome::DUPLICATE;
+        // Duplicate path: read back the original `received_at` so the
+        // handler can include it in the warning log line per spec.
+        $row = $this->db->getRow(sprintf(
+            'SELECT `received_at` FROM `%sqamera_webhook_delivery` WHERE `delivery_id` = \'%s\'',
+            $this->tablePrefix,
+            $this->escape($deliveryId)
+        ));
+
+        $originalReceivedAt = (is_array($row) && isset($row['received_at']))
+            ? (string) $row['received_at']
+            : $receivedAt;
+
+        return new DeliveryRecordResult(DeliveryOutcome::DUPLICATE, $originalReceivedAt);
     }
 
     private function escape(string $value): string

@@ -7,6 +7,7 @@ namespace QameraAi\Module\Tests\Unit\Webhook;
 use PHPUnit\Framework\TestCase;
 use QameraAi\Module\Tests\Support\FakeDb;
 use QameraAi\Module\Webhook\DeliveryOutcome;
+use QameraAi\Module\Webhook\DeliveryRecordResult;
 use QameraAi\Module\Webhook\RepositoryException;
 use QameraAi\Module\Webhook\WebhookDeliveryRepository;
 
@@ -20,23 +21,32 @@ final class WebhookDeliveryRepositoryTest extends TestCase
         $db = new FakeDb();
         $repo = new WebhookDeliveryRepository($db, self::PREFIX);
 
-        $outcome = $repo->recordAccepted('d1', 'job.completed', '{"hello":"world"}', self::NOW);
+        $result = $repo->recordAccepted('d1', 'job.completed', '{"hello":"world"}', self::NOW);
 
-        self::assertSame(DeliveryOutcome::ACCEPTED, $outcome);
-        $insert = implode("\n", array_filter($db->executed, static fn (string $s): bool => str_contains($s, 'INSERT INTO')));
+        self::assertInstanceOf(DeliveryRecordResult::class, $result);
+        self::assertSame(DeliveryOutcome::ACCEPTED, $result->outcome);
+        self::assertSame(gmdate('Y-m-d H:i:s', self::NOW), $result->receivedAt);
+        $insert = implode("\n", array_filter(
+            $db->executed,
+            static fn (string $s): bool => str_contains($s, 'INSERT INTO')
+        ));
         self::assertStringContainsString('INSERT INTO `ps_qamera_webhook_delivery`', $insert);
         self::assertStringContainsString('ON DUPLICATE KEY UPDATE', $insert);
     }
 
-    public function testDuplicateInsertReturnsDuplicate(): void
+    public function testDuplicateInsertReturnsDuplicateWithOriginalReceivedAt(): void
     {
+        $original = '2026-05-26 12:00:00';
         $db = new FakeDb();
-        $db->seedRow('d1', '2026-05-26 12:00:00', 'job.completed', 'old');
+        $db->seedRow('d1', $original, 'job.completed', 'old');
 
         $repo = new WebhookDeliveryRepository($db, self::PREFIX);
-        $outcome = $repo->recordAccepted('d1', 'job.completed', 'new', self::NOW);
+        $result = $repo->recordAccepted('d1', 'job.completed', 'new', self::NOW);
 
-        self::assertSame(DeliveryOutcome::DUPLICATE, $outcome);
+        self::assertSame(DeliveryOutcome::DUPLICATE, $result->outcome);
+        // Spec "Operator-visible logging → Duplicate" requires the original
+        // received_at to flow back so the handler can log it.
+        self::assertSame($original, $result->receivedAt);
         // Existing row's payload must not be mutated.
         self::assertSame('old', $db->rows['d1']['raw_payload']);
     }
@@ -75,8 +85,10 @@ final class WebhookDeliveryRepositoryTest extends TestCase
         $b = $repoB->recordAccepted('d-concurrent', 'job.completed', 'B', self::NOW + 1);
 
         self::assertCount(1, $db->rows);
-        self::assertSame(DeliveryOutcome::ACCEPTED, $a);
-        self::assertSame(DeliveryOutcome::DUPLICATE, $b);
+        self::assertSame(DeliveryOutcome::ACCEPTED, $a->outcome);
+        self::assertSame(DeliveryOutcome::DUPLICATE, $b->outcome);
+        // Worker B's duplicate result must surface the timestamp A persisted.
+        self::assertSame(gmdate('Y-m-d H:i:s', self::NOW), $b->receivedAt);
     }
 
     public function testIdenticalPayloadRetryStillReportsDuplicate(): void
@@ -94,17 +106,18 @@ final class WebhookDeliveryRepositoryTest extends TestCase
         $first = $repo->recordAccepted('d-retry', 'job.completed', $identicalPayload, self::NOW);
         $second = $repo->recordAccepted('d-retry', 'job.completed', $identicalPayload, self::NOW);
 
-        self::assertSame(DeliveryOutcome::ACCEPTED, $first);
-        self::assertSame(DeliveryOutcome::DUPLICATE, $second);
+        self::assertSame(DeliveryOutcome::ACCEPTED, $first->outcome);
+        self::assertSame(DeliveryOutcome::DUPLICATE, $second->outcome);
         self::assertCount(1, $db->rows);
     }
 
-    public function testRepositoryDoesNotSelectBeforeInsert(): void
+    public function testAcceptedPathDoesNotSelectBeforeInsert(): void
     {
-        // Efficiency contract: the repository should land on the DB with a
-        // single INSERT … ON DUPLICATE KEY UPDATE plus Affected_Rows(), NOT
-        // a SELECT-INSERT-SELECT triple. Catches accidental reintroduction
-        // of the pre-fix three-roundtrip pattern.
+        // Efficiency contract: the happy (accepted) path should land on
+        // the DB with a single INSERT … ON DUPLICATE KEY UPDATE plus
+        // Affected_Rows() — NO SELECT either before or after. The
+        // duplicate path is allowed one follow-up SELECT to surface the
+        // original `received_at` for the spec's warning log requirement.
         $db = new FakeDb();
         $repo = new WebhookDeliveryRepository($db, self::PREFIX);
         $repo->recordAccepted('d-single', 'job.completed', '{}', self::NOW);
@@ -113,6 +126,6 @@ final class WebhookDeliveryRepositoryTest extends TestCase
             $db->executed,
             static fn (string $sql): bool => str_starts_with(ltrim($sql), 'SELECT')
         );
-        self::assertSame([], array_values($selects), 'Repository must not SELECT around the INSERT');
+        self::assertSame([], array_values($selects), 'Accepted path must not SELECT around the INSERT');
     }
 }

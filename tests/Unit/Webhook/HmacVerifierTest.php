@@ -10,7 +10,12 @@ use QameraAi\Module\Webhook\ParsedSignature;
 
 final class HmacVerifierTest extends TestCase
 {
-    private const SECRET = 'whsec_test_a1b2c3d4e5f6';
+    /**
+     * Synthetic HMAC key — see {@see WebhookFixtures::SECRET} docblock.
+     * Not a credential; used only to compute/verify signatures inside
+     * this test class.
+     */
+    private const SECRET = 'qameraai-hmac-verifier-unit-test-key';
     private const BODY = '{"delivery_id":"abc","event_type":"job.completed"}';
     private const TS = 1716800000;
 

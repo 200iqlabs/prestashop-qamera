@@ -183,7 +183,7 @@ final class WebhookRequestHandler
         }
 
         try {
-            $outcome = $this->repository->recordAccepted(
+            $result = $this->repository->recordAccepted(
                 $deliveryId,
                 $eventType,
                 $rawBody,
@@ -201,10 +201,17 @@ final class WebhookRequestHandler
             return WebhookResponse::internalServerError();
         }
 
-        if ($outcome === DeliveryOutcome::DUPLICATE) {
+        if ($result->outcome === DeliveryOutcome::DUPLICATE) {
+            // Spec "Operator-visible logging → Duplicate" requires the
+            // warning log line to include the ORIGINAL received_at so an
+            // operator can correlate the retry against the first acceptance.
             $this->logger->warning(
                 'duplicate',
-                ['delivery_id' => $deliveryId, 'event_type' => $eventType]
+                [
+                    'delivery_id' => $deliveryId,
+                    'event_type' => $eventType,
+                    'received_at' => $result->receivedAt,
+                ]
             );
 
             return WebhookResponse::duplicate();

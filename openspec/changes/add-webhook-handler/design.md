@@ -92,7 +92,7 @@ Test fixtures construct request bodies, sign them with `hash_hmac('sha256', "{$t
 ## Migration Plan
 
 1. **Install path**: `Installer::install()` adds a new step `createWebhookDeliveryTable()` after the existing product/packshot link table creation. Idempotent — `CREATE TABLE IF NOT EXISTS` like the others.
-2. **Upgrade path** for existing Phase-3 installs: a new `upgrade-1.4.0.php` (or whatever the next semver bump is at merge time) runs the same `CREATE TABLE IF NOT EXISTS` so the migration is safe on an installed module without re-running `install`.
+2. **Upgrade path** for existing Phase-3 installs: `upgrade/upgrade-1.3.0.php` runs the same `CREATE TABLE IF NOT EXISTS` (module version bumped 1.2.0 → 1.3.0 in `composer.json` + `qameraai.php`), so the migration is safe on an installed module without re-running `install`. The script logs SQL errors to the `QameraAiModule` channel at severity 3 if `CREATE TABLE` fails (e.g. old MariaDB row-format constraints) so operators can diagnose silent upgrade-step regressions.
 3. **Uninstall path**: `Installer::uninstall()` adds `qamera_webhook_delivery` to its existing `DROP TABLE IF EXISTS` statement.
 4. **Rollback**: pre-merge, revert is a `git revert`. Post-merge with operator deployments: a downgrade plus running uninstall/install would drop deliveries. Recommended rollback is "keep the table, point `callback_url` upstream back to empty" — leaves data preserved for re-enable.
 5. **Operator activation**: after deploying, operator updates `callback_url` on the Qamera AI panel (`/home/pracownia-qamery-ai/settings/plugin-installations/<id>`) to `https://<shop>/module/qameraai/webhook`. No automated step here — this is upstream state owned by the operator.

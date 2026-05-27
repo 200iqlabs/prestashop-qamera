@@ -64,7 +64,12 @@ final class WebhookRequestHandlerTest extends TestCase
 
         self::assertSame(200, $resp->statusCode);
         self::assertSame('{"status":"duplicate"}', $resp->body);
-        self::assertNotEmpty($this->logger->entriesAtLevel('warning'));
+        $warnings = $this->logger->entriesAtLevel('warning');
+        self::assertNotEmpty($warnings);
+        // Spec "Operator-visible logging → Duplicate" requires the
+        // original received_at in the warning log context.
+        self::assertArrayHasKey('received_at', $warnings[0]['context']);
+        self::assertSame(gmdate('Y-m-d H:i:s', self::NOW), $warnings[0]['context']['received_at']);
     }
 
     public function testGetMethodReturns405(): void

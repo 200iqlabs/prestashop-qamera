@@ -11,7 +11,16 @@ namespace QameraAi\Module\Tests\Unit\Webhook;
  */
 final class WebhookFixtures
 {
-    public const SECRET = 'whsec_test_3f8d6e7c5b4a39281706050403020100ff';
+    /**
+     * Synthetic HMAC key used exclusively by unit tests to compute and
+     * verify deterministic signatures within the test process. NOT a
+     * credential — never authenticates against any live endpoint, never
+     * leaves the test runner. The value is intentionally a placeholder
+     * string that cannot be mistaken for a real secret (see CLAUDE.md
+     * "Credentials for smoke testing" — live secrets live in BO
+     * Configuration only).
+     */
+    public const SECRET = 'qameraai-unit-test-hmac-key-not-a-credential';
     public const DELIVERY_ID = 'd7a4ce99-2f3e-4b9a-b6c5-c39d4e1c0001';
 
     public static function sign(int $ts, string $body, string $secret = self::SECRET): string
