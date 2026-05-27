@@ -37,5 +37,8 @@ docker/.env
 # PHPStan: PrestaShop source clone used by CI for core resolution
 /.ps-src/
 
+# Claude Code worktrees (created by EnterWorktree native tool)
+/.claude/worktrees/
+
 # Logs
 *.log
