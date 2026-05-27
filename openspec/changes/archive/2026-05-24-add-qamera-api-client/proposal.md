@@ -7,7 +7,7 @@ The upstream API is now feature-complete (`/me`, the catalog endpoints, jobs, pr
 ## What Changes
 
 - **`QameraApiClient`** — Guzzle 7 wrapper with one method per endpoint we use, typed return DTOs, and an exception hierarchy. Reads `QAMERAAI_API_BASE_URL` + `QAMERAAI_API_KEY` from `Configuration` once per instance.
-- **Auth + headers** — every request carries `X-Api-Key: mk_live_…`, `Accept-Language` from PS context, an `Idempotency-Key` on POSTs that the server is supposed to deduplicate (`/jobs`, `/images`, `/packshots`), and a stable `User-Agent` (`QameraAi-PrestaShop-Module/<module-version> (<ps-version>)`) so server-side logs can attribute traffic.
+- **Auth + headers** — every request carries `X-Api-Key: <api_key>`, `Accept-Language` from PS context, an `Idempotency-Key` on POSTs that the server is supposed to deduplicate (`/jobs`, `/images`, `/packshots`), and a stable `User-Agent` (`QameraAi-PrestaShop-Module/<module-version> (<ps-version>)`) so server-side logs can attribute traffic.
 - **Retry** — exponential backoff (250 ms × 2^n, max 4 attempts) on transient classes only: connection errors, HTTP 502 / 503 / 504, HTTP 429 honouring `Retry-After`. No retry on 4xx other than 429.
 - **Error mapping** — every non-2xx response is parsed against the plugin error envelope (`{ error: { code, message_i18n, retryable, doc_url } }`) and surfaced as a typed exception:
   - `RateLimitException` (`429`, exposes `retryAfter` seconds)
@@ -55,5 +55,5 @@ The upstream API is now feature-complete (`/me`, the catalog endpoints, jobs, pr
   - English / Polish / Ukrainian XLIFF — new strings for Test Connection result states
 - **Compatibility:** no DB changes, no schema bumps. The Phase 1 install routine is unchanged.
 - **Dependencies:** Guzzle 7 already declared in Phase 1 `composer.json`. New dev dep `php-stubs/prestashop-stubs`.
-- **External services:** every test against `https://qamera.ai/api/v1/plugin` uses the `mk_live_…` credential bound to the `pracownia-qamery-ai` installation. Unit tests use Guzzle's `MockHandler` — no live HTTP in CI.
+- **External services:** every live-call test against `https://qamera.ai/api/v1/plugin` uses the operator-supplied credential bound to the `pracownia-qamery-ai` installation. Unit tests use Guzzle's `MockHandler` — no live HTTP in CI.
 - **Docs:** README "Phase plan" gets Phase 2 marked done after merge; a new `docs/api-client.md` snippet describes the exception hierarchy for downstream contributors.

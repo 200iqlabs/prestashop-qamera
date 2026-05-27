@@ -163,10 +163,21 @@ final class QameraApiContractTest extends TestCase
     {
         $files = glob(self::FIXTURE_DIR . '/*.fixture.json');
         self::assertNotFalse($files);
-        self::assertGreaterThanOrEqual(
-            14,
-            count($files),
-            'Expected >= 14 contract fixtures per spec §14'
+
+        // Exact match: 14 endpoints in scope + 1 dedicated multipart-response
+        // variant for /assets/upload. If you add or remove a fixture, update
+        // both this count AND the shapeFor() mapping so the runner stays
+        // exhaustive instead of silently regressing coverage.
+        $expected = 15;
+        self::assertCount(
+            $expected,
+            $files,
+            sprintf(
+                'Expected exactly %d contract fixtures (per spec.md §"Contract test fixtures"), found %d: %s',
+                $expected,
+                count($files),
+                implode(', ', array_map('basename', $files))
+            )
         );
     }
 

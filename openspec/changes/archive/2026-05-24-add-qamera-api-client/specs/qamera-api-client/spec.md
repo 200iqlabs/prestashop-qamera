@@ -4,7 +4,7 @@
 
 `QameraApiClient` SHALL attach the following request headers on every outbound call, with no per-call opt-out:
 
-- `X-Api-Key: <api_key>` — the `mk_live_…` value read from `Configuration::get('QAMERAAI_API_KEY')` at construction time
+- `X-Api-Key: <api_key>` — the value read from `Configuration::get('QAMERAAI_API_KEY')` at construction time
 - `User-Agent: QameraAi-PrestaShop-Module/<module-version> (<ps-version>)` — module version from the `QameraAi::$version` property, PS version from `_PS_VERSION_`
 - `Accept-Language: <iso>` — derived from the PS request context's current language, defaulting to `en`
 - `Accept: application/json`
