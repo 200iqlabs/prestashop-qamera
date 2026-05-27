@@ -13,7 +13,7 @@ Phase-3 smoke (`/opsx:apply add-product-image-sync`, PR #9) ujawnił że `Qamera
 
 **Net: 14 z 15 metod klienta wymaga przepisania.** Tylko `/me` (które smoke przeszedł w Phase-3 review) i `DELETE /products` (które nie ma body) są funkcjonalne. Phase-1 client został zbudowany przeciw zgadywanym shape-om — testy zmockowały to co autor wymyślił, nie to czego serwer żąda.
 
-Decyzja scope-u (uzgodniona z operatorem, opcja "jeden mega-change: regeneruj cały klient"): naprawiamy **wszystkie 15 metod naraz**, alignment do aktualnego `schemas.ts`. Jeden coherent breaking change, jeden round review, jeden smoke. Wszystkie kolejne fazy (3, 4, sesje, jobs, cron-resync) budują na solidnym kliencie zamiast łatać kolejne endpointy.
+Decyzja scope-u (uzgodniona z operatorem, opcja "jeden mega-change: regeneruj cały klient"): naprawiamy **14 zerwanych metod naraz** w jednym PR-ze (`me()` dostaje tylko `installation.scopes` add, `deleteProduct()` zostaje bez zmian — ale obie są częścią tego samego rewrite-pass na poziomie modułu), alignment do aktualnego `schemas.ts`. Jeden coherent breaking change, jeden round review, jeden smoke. Wszystkie kolejne fazy (3, 4, sesje, jobs, cron-resync) budują na solidnym kliencie zamiast łatać kolejne endpointy.
 
 ## What Changes
 
@@ -61,7 +61,7 @@ Response: `{order_id, status, subjects:[{product_ref, job_ids[]}]}`.
 
 `tests/Contract/Fixtures/<endpoint>.fixture.json` z header (`_source`, `_commit`, `_captured_at`) per endpoint który dotykamy. Fixtury obejmują request body (gdzie POST) + response body (przykład 2xx) + przykład 4xx envelope dla kluczowych endpointów. `tests/Contract/QameraApiContractTest.php` waliduje że klient produkuje requesty matchujące fixturom i parsuje response matchujące fixturom.
 
-### F. Out of scope (świadomie) — 9 endpointów upstream które klient w ogóle nie ma
+### F. Out of scope (świadomie) — 11 endpointów upstream które klient w ogóle nie ma
 
 `POST /jobs/batch`, `POST /jobs/{id}/accept`, `POST /jobs/{id}/reject`, `GET /jobs/{id}/refresh-url`, `GET /orders/{id}`, `POST /orders/{id}/clone`, `GET /packshots` (lista), `GET /packshots/{idOrRef}`, `GET /models` (osobny od `/ai-models`), `POST /installations/{id}/rotate-hmac`, `POST /webhooks/{delivery_id}/replay`.
 
@@ -80,7 +80,7 @@ Każdy dopiszemy gdy konkretna faza ich potrzebuje. `/installations/.../rotate-h
   - `src/Api/Dto/*.php` — wszystkie 16+ istniejących DTO regenerowane; struktura katalogu utrzymana
 - **Code (new)**:
   - `src/Api/Dto/SessionConfig.php`, `Subject.php`, `JobOutput.php`, `PricingEntry.php`, `ProductImageDto.php`, `ProductPackshotDto.php`, `OrderSubject.php` (dla submit response) — sub-DTO które pojawiają się tylko w upstream
-  - `tests/Contract/Fixtures/*.fixture.json` — pełen zestaw snapshotów (~13 fixturów)
+  - `tests/Contract/Fixtures/*.fixture.json` — pełen zestaw 15 snapshotów (po jednym per endpoint w scope-ie + osobny `assets-upload-multipart-response` dla nullable upload fields)
   - `tests/Contract/QameraApiContractTest.php` — runner walidujący kontrakt
 - **Tests (modified)**:
   - `tests/Unit/Api/QameraApiClientTest.php` — większość casey wymaga update pod nowe sygnatury

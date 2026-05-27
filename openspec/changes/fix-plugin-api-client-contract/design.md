@@ -15,7 +15,7 @@ Rozmiar zmiany jest duży (~1500 LOC), ale skoncentrowany na jednym capability (
 - Wszystkie istniejące unit testy (`QameraApiClientTest`, `JsonDecoderTest`) SHALL przejść po regenerze sygnatur i DTO. Casey które zakładają stare nazwy pól (`source_url`, `previewUrl`, `title`, `resultUrls`, …) SHALL być usunięte.
 
 **Non-Goals:**
-- Pokrycie 9 nieobsługiwanych endpointów upstream (lista w `proposal.md §F`). Każdy doda się gdy faza tego wymaga.
+- Pokrycie 11 nieobsługiwanych endpointów upstream (lista w `proposal.md §F`). Każdy doda się gdy faza tego wymaga.
 - Multipart upload mode dla `/assets/upload`. Plugin używa tylko presigned.
 - Generated client z OpenAPI / `zod → PHP`. Upstream nie publikuje OpenAPI; ten temat wraca przy Fazie 5.
 - Webhook handling (separate from `/webhooks/{delivery_id}/replay`).

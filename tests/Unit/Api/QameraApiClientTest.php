@@ -85,7 +85,7 @@ final class QameraApiClientTest extends TestCase
 
         return new QameraApiClient(
             self::BASE_URL,
-            new HeaderBuilder('mk_live_test', 'QameraAi-PrestaShop-Module/1.0.0 (9.0.0)', 'en'),
+            new HeaderBuilder('api_key_dummy', 'QameraAi-PrestaShop-Module/1.0.0 (9.0.0)', 'en'),
             $trackingDecider,
             new ErrorEnvelopeParser(),
             $keyGen ?? new IdempotencyKeyGenerator(),
@@ -158,7 +158,7 @@ final class QameraApiClientTest extends TestCase
         self::assertSame('prestashop', $me->installation->platform);
         self::assertSame(['plugin.assets:upload'], $me->installation->scopes);
         self::assertCount(1, $this->recorder->records);
-        self::assertSame('mk_live_test', $this->recorder->records[0]['request']->getHeaderLine('X-Api-Key'));
+        self::assertSame('api_key_dummy', $this->recorder->records[0]['request']->getHeaderLine('X-Api-Key'));
         self::assertSame('GET', $this->recorder->records[0]['request']->getMethod());
         self::assertSame(self::BASE_URL . '/me', (string) $this->recorder->records[0]['request']->getUri());
         self::assertSame('', $this->recorder->records[0]['request']->getHeaderLine('Idempotency-Key'));

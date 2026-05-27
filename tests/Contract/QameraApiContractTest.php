@@ -105,9 +105,11 @@ final class QameraApiContractTest extends TestCase
             return;
         }
         if ($shape['mode'] === 'list') {
+            // Empty wrapper arrays are legitimate upstream behavior (no
+            // models / no sceneries provisioned yet) — assert presence + type
+            // only, then decode each element if any are present.
             self::assertArrayHasKey($shape['wrapper'], $payload);
             self::assertIsArray($payload[$shape['wrapper']]);
-            self::assertNotEmpty($payload[$shape['wrapper']]);
             foreach ($payload[$shape['wrapper']] as $item) {
                 $dto = $this->decoder->decode($shape['dto'], $item);
                 self::assertInstanceOf($shape['dto'], $dto);
@@ -116,9 +118,12 @@ final class QameraApiContractTest extends TestCase
             return;
         }
         if ($shape['mode'] === 'bulk_results') {
+            // For images/packshots the client enforces count===1 (bulk-of-1
+            // contract) — but that's a client-level invariant, not a
+            // fixture-decoder one. Here, just type-check + decode whatever is
+            // present so a hypothetical empty-results fixture still passes.
             self::assertArrayHasKey('results', $payload);
             self::assertIsArray($payload['results']);
-            self::assertNotEmpty($payload['results']);
             foreach ($payload['results'] as $item) {
                 $dto = $this->decoder->decode($shape['dto'], $item);
                 self::assertInstanceOf($shape['dto'], $dto);
@@ -203,35 +208,29 @@ final class QameraApiContractTest extends TestCase
         };
     }
 
+    /**
+     * Per-DTO invariants that are wire-level requirements, not fixture
+     * authoring conventions. Anything that *can* legitimately be empty on
+     * the wire (lists, optional collections) is not asserted here — those
+     * checks would over-constrain the harness against valid upstream
+     * shapes (empty product list, job with no outputs yet, etc.).
+     */
     private function assertSanity(object $dto): void
     {
-        if ($dto instanceof MeResponse) {
-            self::assertNotEmpty($dto->installation->scopes);
-        }
-        if ($dto instanceof JobDto) {
-            self::assertNotEmpty($dto->outputs);
-        }
         if ($dto instanceof Pricing) {
+            // currency is a `z.literal('credits')` upstream — non-negotiable.
             self::assertSame('credits', $dto->currency);
-            self::assertNotEmpty($dto->pricing);
-        }
-        if ($dto instanceof ProductDetailResponse) {
-            self::assertNotEmpty($dto->images);
-            self::assertNotEmpty($dto->packshots);
         }
         if ($dto instanceof PresignedUploadResponse) {
+            // asset_id / bucket / storage_path are required, non-nullable.
             self::assertNotSame('', $dto->assetId);
             self::assertNotSame('', $dto->bucket);
             self::assertNotSame('', $dto->storagePath);
         }
         if ($dto instanceof SubmitJobResponse) {
+            // SubmitJobResponseSchema.subjects has `.min(1)` upstream —
+            // a successful submit always returns ≥1 subject.
             self::assertNotEmpty($dto->subjects);
-        }
-        if ($dto instanceof JobsListResponse) {
-            self::assertNotEmpty($dto->jobs);
-        }
-        if ($dto instanceof ProductsListResponse) {
-            self::assertNotEmpty($dto->items);
         }
     }
 

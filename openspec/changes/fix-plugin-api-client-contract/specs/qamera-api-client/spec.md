@@ -220,9 +220,9 @@ Response parses into `SubmitJobResponse { string $orderId, string $status, Submi
 
 The repository SHALL keep frozen JSON fixtures in `tests/Contract/Fixtures/` for every Plugin API endpoint the client actively calls in this change. Each fixture file SHALL include a header object with `_source` (path inside `qamera-ai/saas-platform`), `_commit` (short git ref of the upstream commit the snapshot reflects), and `_captured_at` (YYYY-MM-DD). The PHPUnit suite `tests/Contract/QameraApiContractTest.php` SHALL load the fixtures and assert that the client produces the captured request body and decodes the captured response body without loss.
 
-Fixtures required by this change: `me`, `assets-upload` (with both presigned and multipart-response variants), `images`, `packshots`, `ai-models`, `sceneries`, `presets`, `aspect-ratios`, `pricing`, `jobs-submit`, `jobs-get`, `jobs-list`, `products-list`, `products-detail`. ~14 fixtures total.
+Fixtures required by this change (15 files total — one per endpoint plus a dedicated `assets-upload-multipart-response` variant for the nullable upload fields): `me`, `assets-upload`, `assets-upload-multipart-response`, `images`, `packshots`, `ai-models`, `sceneries`, `presets`, `aspect-ratios`, `pricing`, `jobs-submit`, `jobs-get`, `jobs-list`, `products-list`, `products-detail`.
 
-Fixtures for the 9 currently-unimplemented upstream endpoints (`/jobs/batch`, `/jobs/{id}/accept`, `/jobs/{id}/reject`, `/jobs/{id}/refresh-url`, `/orders/{id}`, `/orders/{id}/clone`, `/packshots` list, `/packshots/{idOrRef}`, `/models`, `/installations/{id}/rotate-hmac`, `/webhooks/{delivery_id}/replay`) are NOT required by this change.
+Fixtures for the 11 currently-unimplemented upstream endpoints (`/jobs/batch`, `/jobs/{id}/accept`, `/jobs/{id}/reject`, `/jobs/{id}/refresh-url`, `/orders/{id}`, `/orders/{id}/clone`, `/packshots` list, `/packshots/{idOrRef}`, `/models`, `/installations/{id}/rotate-hmac`, `/webhooks/{delivery_id}/replay`) are NOT required by this change.
 
 #### Scenario: Fixture missing _source field fails the contract test
 
