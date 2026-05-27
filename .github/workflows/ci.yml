@@ -74,5 +74,79 @@ jobs:
           _PS_ROOT_DIR_: ${{ github.workspace }}/.ps-src
         run: vendor/bin/phpstan analyse --configuration=tests/phpstan/phpstan.neon --no-progress
 
-      - name: PHPUnit
-        run: vendor/bin/phpunit
+      - name: PHPUnit (unit + contract)
+        # Integration suite lives in `phpunit.integration.xml.dist` and
+        # is excluded here — it requires the parent docker compose stack
+        # (qameraai-prestashop/) and runs in the separate `integration`
+        # job below on a single PHP version.
+        run: vendor/bin/phpunit --testsuite=unit,contract
+
+  integration:
+    name: Integration (PS9 kernel)
+    runs-on: ubuntu-latest
+    # Fork PRs cannot access secrets and the dev-container compose has
+    # no secret needs — but to match the design Q3 decision we keep the
+    # integration job in-repo only. Same-repo pushes + same-repo PRs
+    # carry head.repo.full_name == base.repo.full_name.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - name: Checkout module
+        uses: actions/checkout@v4
+        with:
+          path: modules/qameraai
+
+      - name: Checkout parent dev-compose
+        uses: actions/checkout@v4
+        with:
+          repository: 200iqlabs/qameraai-prestashop
+          path: qameraai-prestashop
+          # The parent repo is private; the workflow token must have
+          # the right scope. If not yet available, this step will fail
+          # loudly and surface the gap — not silently skip.
+
+      - name: Wire module into parent compose layout
+        run: |
+          mkdir -p qameraai-prestashop/modules
+          rm -rf qameraai-prestashop/modules/qameraai
+          cp -a modules/qameraai qameraai-prestashop/modules/qameraai
+
+      - name: Setup PHP 8.3 (host-side, for composer install only)
+        uses: shivammathur/setup-php@2.37.1
+        with:
+          php-version: '8.3'
+          extensions: mbstring, json, openssl, intl
+          coverage: none
+          tools: composer:v2
+
+      - name: Composer install (module vendor — required before make up)
+        working-directory: qameraai-prestashop/modules/qameraai
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: Boot PrestaShop dev container
+        working-directory: qameraai-prestashop
+        run: docker compose up -d
+
+      - name: Wait for PrestaShop to become healthy
+        run: |
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/ || true)
+            if [ "$code" = "200" ] || [ "$code" = "302" ] || [ "$code" = "500" ]; then
+              echo "PrestaShop responded with HTTP $code after ${i}0s"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "PrestaShop did not become reachable within 10 minutes"
+          docker compose -f qameraai-prestashop/docker-compose.yml logs --tail=200 prestashop || true
+          exit 1
+
+      - name: Run integration suite
+        working-directory: qameraai-prestashop
+        run: docker compose exec -T prestashop bash -c 'cd /var/www/html/modules/qameraai && vendor/bin/phpunit -c phpunit.integration.xml.dist'
+
+      - name: Dump PS logs on failure
+        if: failure()
+        working-directory: qameraai-prestashop
+        run: |
+          docker compose logs --tail=300 prestashop || true
+          docker compose exec -T mysql mysql -uroot -proot prestashop -e "SELECT id_log, severity, error_code, message, date_add FROM ps_log ORDER BY id_log DESC LIMIT 20" || true
