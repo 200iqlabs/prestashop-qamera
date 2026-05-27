@@ -78,8 +78,8 @@
 
 ## 8. CI matrix verification
 
-- [ ] 8.1. Push branch, watch CI: `static-analysis` matrix on PHP 8.1/8.2/8.3 (unit+contract) MUST stay green; new `integration` job on 8.3 MUST run the integration suite to pass
-- [ ] 8.2. Deliberately introduce a regression for each of the 3 smoke bugs on a scratch commit (one at a time), push, verify the appropriate integration test fails — confirms the regression coverage is real, not theatrical. Revert before merge
+- [x] 8.1. Push branch, watch CI: `static-analysis` matrix on PHP 8.1/8.2/8.3 (unit+contract) MUST stay green; new `integration` job on 8.3 MUST run the integration suite to pass
+- [x] 8.2. Deliberately introduce a regression for each of the 3 smoke bugs on a scratch commit (one at a time), push, verify the appropriate integration test fails — confirms the regression coverage is real, not theatrical. Revert before merge
 
 ## 9. PR + merge
 
