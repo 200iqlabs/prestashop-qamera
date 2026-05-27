@@ -42,3 +42,7 @@ docker/.env
 
 # Logs
 *.log
+
+# Ad-hoc smoke-test request body scratch file written by the PowerShell
+# smoke runner (used for `curl --data-binary @<file>`); never tracked.
+/.smoke-body.json
