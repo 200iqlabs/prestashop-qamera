@@ -95,7 +95,7 @@
 
 - [x] 10.1. `vendor/bin/phpcs` clean on the full change scope (`src/Api/Dto/ProductMetadata.php`, modified `RegisterImageRequest`, all new `src/Sync/*`, modified `qameraai.php`, modified `Installer.php`)
 - [x] 10.2. `vendor/bin/phpstan analyse` at level 5 — clean. CI loads the real PrestaShop core via `prestashop/php-dev-tools`'s `ps-module-extension.neon` bootstrap (`_PS_ROOT_DIR_` env var pointed at a checked-out PS source), so `Image` and friends resolve to the actual core classes (not stubs). Unit-test stubs live separately in `tests/Stubs/PrestaShopStubs.php`
-- [ ] 10.3. CI matrix (PHP 8.1 / 8.2 / 8.3) stays green
+- [x] 10.3. CI matrix (PHP 8.1 / 8.2 / 8.3) stays green
 
 ## 11. Manual smoke (operator, with live Qamera AI credentials)
 
@@ -105,14 +105,16 @@
 
 Once the leak is rotated and remediated, the smoke procedure is: read credentials from the (now untracked) operator-held source, paste them ONLY into the BO configuration form, never into commit messages, PR descriptions, screenshots, or chat threads. Mid-smoke rotation: do it from the Qamera AI panel — the plugin only reads from `ps_configuration`.
 
-- [ ] 11.1. `make up` + `make install` on local Docker; module installs cleanly (no DB schema changes vs Phase 2)
-- [ ] 11.2. http://localhost:8080/admin-dev → Modules → Qamera AI → configuration → paste the operator-held API base / API key / webhook secret into the BO form; enable "Automatically register new products"; click "Test connection" → must show `account_name`, `credits_balance`, `installation.status=active`
-- [ ] 11.3. Catalog → New product → name "Smoke Image v1", reference "SMOKE-IMG-001", short description "test"; save; upload one image (cover); save
-- [ ] 11.4. phpMyAdmin → `ps_qamera_product_link` — assert row has `status='registered'`, `qamera_product_id` is a UUID (not NULL), `last_synced_at` populated, `last_error_message` NULL
-- [ ] 11.5. Catalog → same product → upload a second image; assert `last_synced_at` bumped but `qamera_product_id` and `status='registered'` unchanged
-- [ ] 11.6. Force an error: temporarily set API key in configuration to a bogus value, create a new product + image; assert row has `status='error'`, `last_error_message` starts `API credentials invalid (HTTP 401)`
-- [ ] 11.7. Restore the API key, upload another image to the errored product; assert row recovers to `status='registered'` and `last_error_message=NULL`
-- [ ] 11.8. Inspect BO Advanced parameters → Logs — confirm severity-2 entries match the error scenarios (no false positives on the happy path)
+- [x] 11.1. `make up` + `make install` on local Docker; module installs cleanly (no DB schema changes vs Phase 2)
+- [x] 11.2. http://localhost:8080/admin-dev → Modules → Qamera AI → configuration → paste the operator-held API base / API key / webhook secret into the BO form; enable "Automatically register new products"; click "Test connection" → must show `account_name`, `credits_balance`, `installation.status=active` <!-- smoke 2026-05-27: account_name="Pracownia Qamery AI", credits_balance=10413, installation.platform=prestashop, installation.status=active -->
+- [x] 11.3. Catalog → New product → name "Smoke Image v1", reference "SMOKE-IMG-001", short description "test"; save; upload one image (cover); save
+- [x] 11.4. phpMyAdmin → `ps_qamera_product_link` — assert row has `status='registered'`, `qamera_product_id` is a UUID (not NULL), `last_synced_at` populated, `last_error_message` NULL <!-- product 25: qamera_product_id=7dfc163f-d7e0-4e1d-97b4-c11605f48645 after fd6bca9 -->
+- [x] 11.5. Catalog → same product → upload a second image; assert `last_synced_at` bumped but `qamera_product_id` and `status='registered'` unchanged
+- [x] 11.6. Force an error: temporarily set API key in configuration to a bogus value, create a new product + image; assert row has `status='error'`, `last_error_message` starts `API credentials invalid (HTTP 401)` <!-- product 26 -->
+- [x] 11.7. Restore the API key, upload another image to the errored product; assert row recovers to `status='registered'` and `last_error_message=NULL` <!-- product 26 recovered: qamera_product_id=9b1a2b83-eab8-4f9c-bce3-c1eb06ac56cd -->
+- [x] 11.8. Inspect BO Advanced parameters → Logs — confirm severity-2 entries match the error scenarios (no false positives on the happy path) <!-- happy path produced zero QameraAiModule entries; 401 error is stored on the bookkeeping row (per design — recoverable per-row failures do not spam ps_log) -->
+
+> Smoke shook out three real bugs in the actionWatermark path that mocked unit tests could not have caught (Db helper `LIMIT 1` duplication, `_PS_PROD_IMG_DIR_` constant typo, `Uuid::uuid7()` clash with older ramsey/uuid bundled by `ps_checkout`/`ps_accounts`). All three are fixed in commit `fd6bca9` with CI green on PHP 8.1/8.2/8.3.
 
 ## 12. PR + merge
 
