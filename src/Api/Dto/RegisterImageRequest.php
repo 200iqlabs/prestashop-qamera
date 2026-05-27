@@ -32,7 +32,8 @@ final class RegisterImageRequest
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array<string, mixed> shape: `external_ref`, `product_ref`,
+     *                               `asset_id`, optional `product_metadata`.
      */
     public function toPayload(): array
     {

@@ -32,6 +32,11 @@ final class Installer
         'actionProductSave',
         'actionProductAdd',
         'actionProductUpdate',
+        // PS 8/9 fires `actionWatermark` after image upload for a product
+        // (PS 9 dropped `actionProductImage`). Phase 3 uses it as the
+        // trigger for upstream image-sync; the hook handler delegates to
+        // `ProductImageSyncService::syncOnImageAdded`.
+        'actionWatermark',
         'displayAdminProductsExtra',
         'displayBackOfficeHeader',
     ];

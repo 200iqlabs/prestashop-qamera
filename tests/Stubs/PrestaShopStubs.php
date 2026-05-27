@@ -35,6 +35,16 @@ if (!class_exists(\Db::class)) {
         /** @return bool|int */
         abstract public function execute(string $sql, bool $useCache = true);
 
+        /**
+         * @return array<int, array<string, mixed>>|false
+         */
+        abstract public function executeS(string $sql, bool $array = true, bool $useCache = true);
+
+        /**
+         * @return array<string, mixed>|false
+         */
+        abstract public function getRow(string $sql, bool $useCache = true);
+
         public function escape(string $string, bool $htmlOk = false, bool $boolReplace = false): string
         {
             // Same semantics as PS's quoted-string escape for tests:
@@ -101,6 +111,43 @@ if (!class_exists(\PrestaShopLogger::class)) {
         ): bool {
             self::$logs[] = compact('message', 'severity', 'errorCode', 'objectType', 'objectId', 'allowDuplicate');
             return true;
+        }
+    }
+}
+
+if (!class_exists(\Image::class)) {
+    class Image
+    {
+        /**
+         * Per-product cover row injected by tests. Keyed by id_product →
+         * either `false` (no cover) or an associative array shaped like
+         * PS core: `['id_image' => int, 'cover' => 1, ...]`.
+         *
+         * @var array<int, array{id_image:int, cover:int}|false>
+         */
+        public static array $covers = [];
+
+        /**
+         * Per-product image lists injected by tests. Keyed by
+         * id_product → ordered list of associative arrays each shaped
+         * `['id_image' => int, 'cover' => 0|1, 'position' => int]`.
+         *
+         * @var array<int, list<array{id_image:int, cover:int, position:int}>>
+         */
+        public static array $images = [];
+
+        /** @return array{id_image:int, cover:int}|false */
+        public static function getCover(int $idProduct)
+        {
+            return self::$covers[$idProduct] ?? false;
+        }
+
+        /**
+         * @return list<array{id_image:int, cover:int, position:int}>
+         */
+        public static function getImages(int $idLang, int $idProduct): array
+        {
+            return self::$images[$idProduct] ?? [];
         }
     }
 }

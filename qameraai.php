@@ -12,6 +12,7 @@ if (file_exists($autoload)) {
 }
 
 use QameraAi\Module\Install\Installer;
+use QameraAi\Module\Sync\ProductImageSyncService;
 use QameraAi\Module\Sync\ProductSnapshotWriter;
 
 class QameraAi extends Module
@@ -20,7 +21,7 @@ class QameraAi extends Module
     {
         $this->name = 'qameraai';
         $this->author = '200iq Labs';
-        $this->version = '1.1.0';
+        $this->version = '1.2.0';
         $this->ps_versions_compliancy = ['min' => '8.0.0', 'max' => '9.99.99'];
         $this->need_instance = 0;
         $this->bootstrap = true;
@@ -151,6 +152,52 @@ class QameraAi extends Module
                 null,
                 'QameraAiModule',
                 $idProduct > 0 ? $idProduct : null,
+                true
+            );
+        }
+    }
+
+    /**
+     * `actionWatermark` is fired by PS 8/9 after an image upload for a
+     * product (and during BO bulk regenerate flows). Phase 3 uses this
+     * as the trigger for upstream product registration via the Qamera
+     * AI Plugin API. The handler extracts `id_product` and `id_image`,
+     * delegates to `ProductImageSyncService::syncOnImageAdded`, and —
+     * matching the Phase-2 swallow-throw contract — catches any
+     * `\Throwable` so the BO image upload action always succeeds
+     * regardless of upstream state.
+     *
+     * @param array<string, mixed> $params
+     */
+    public function hookActionWatermark(array $params): void
+    {
+        if (!(bool) Configuration::get('QAMERAAI_AUTO_REGISTER_PRODUCTS')) {
+            return;
+        }
+
+        $idProduct = isset($params['id_product']) ? (int) $params['id_product'] : 0;
+        $idImage = isset($params['id_image']) ? (int) $params['id_image'] : 0;
+        if ($idProduct <= 0 || $idImage <= 0) {
+            return;
+        }
+
+        try {
+            /** @var ProductImageSyncService $service */
+            $service = $this->get(ProductImageSyncService::class);
+            $service->syncOnImageAdded($idProduct, $idImage);
+        } catch (\Throwable $e) {
+            PrestaShopLogger::addLog(
+                sprintf(
+                    '[QameraAi] image sync failed for id_product=%d, id_image=%d: %s: %s',
+                    $idProduct,
+                    $idImage,
+                    get_class($e),
+                    $e->getMessage()
+                ),
+                2,
+                null,
+                'QameraAiModule',
+                $idProduct,
                 true
             );
         }
