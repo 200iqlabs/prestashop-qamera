@@ -50,7 +50,13 @@ use QameraAi\Module\Api\Internal\RetryDecider;
  * and error-envelope decoding are baked in — callers never see a raw
  * Guzzle response or exception.
  */
-final class QameraApiClient
+/**
+ * NOTE: intentionally not `final`. Phase 3 (`add-product-image-sync`,
+ * PR #9) stubs this class in `ProductImageSyncServiceTest` and similar
+ * suites; keeping the class extendable preserves that pattern without
+ * forcing those tests onto a separate interface seam just for mocking.
+ */
+class QameraApiClient
 {
     /** Endpoints that MUST carry an `Idempotency-Key` header on write. */
     private const IDEMPOTENT_WRITE_PATHS = ['/jobs', '/images', '/packshots'];

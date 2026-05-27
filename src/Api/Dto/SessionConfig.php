@@ -14,6 +14,13 @@ namespace QameraAi\Module\Api\Dto;
  */
 final class SessionConfig
 {
+    /**
+     * Mirrors upstream `AspectRatioSchema` enum (schemas.ts) and the
+     * `cg_orders.aspect_ratio` CHECK constraint. Add new values in BOTH
+     * places when upstream extends the enum.
+     */
+    public const ALLOWED_ASPECT_RATIOS = ['1:1', '4:5', '9:16', '16:9', '3:4'];
+
     public function __construct(
         public readonly string $aspectRatio,
         public readonly ?string $modelId = null,
@@ -21,6 +28,13 @@ final class SessionConfig
         public readonly ?string $presetId = null,
         public readonly ?string $suggestions = null,
     ) {
+        if (!in_array($aspectRatio, self::ALLOWED_ASPECT_RATIOS, true)) {
+            throw new \InvalidArgumentException(sprintf(
+                'aspect_ratio must be one of: %s (got "%s")',
+                implode(', ', self::ALLOWED_ASPECT_RATIOS),
+                $aspectRatio,
+            ));
+        }
         if ($suggestions !== null && strlen($suggestions) > 2000) {
             throw new \InvalidArgumentException('suggestions must be ≤ 2000 characters');
         }

@@ -88,22 +88,23 @@ The method SHALL parse the response as `{"results": [<RegisterImageResult>]}` an
 - **WHEN** the caller passes `sourceImageRef: 'ext-img-1'`
 - **THEN** the single bulk item carries `source_image_ref: 'ext-img-1'`
 
-### Requirement: sendList accepts per-endpoint wrapper key
+### Requirement: List endpoints decode their per-endpoint wrapper key
 
-The internal helper `QameraApiClient::sendList(string $method, string $path, string $wrapperKey, string $elementClass): array` SHALL accept the upstream-defined wrapper key as an argument. Each list-method of the client SHALL pass its endpoint's wrapper key explicitly. When the upstream response does not contain a key matching `$wrapperKey`, the helper SHALL throw `ValidationException::malformedResponse($wrapperKey)`. Bare-list responses (root JSON is an array, not an object) are NOT supported — every upstream list endpoint wraps the array in an object.
+Every list endpoint the client consumes SHALL decode the response from the upstream-defined wrapper key (no shared `items` assumption). Whether this happens through a shared `sendList()` helper or a per-endpoint DTO with a matching ctor parameter is an implementation choice — what the spec constrains is the observable wire-to-DTO mapping. When the upstream response is missing the expected wrapper key, the client SHALL surface it as `ValidationException::malformedResponse(<expected_key>)`. Bare-list responses (root JSON is an array, not an object) are NOT supported — every upstream list endpoint wraps the array in an object.
 
 Endpoint → wrapper key mapping required by this change:
 
-| Method | Endpoint | Wrapper |
+| Method | Endpoint | Root keys |
 |---|---|---|
 | `listAiModels()` | `GET /ai-models` | `ai_models` |
 | `listSceneries()` | `GET /sceneries` | `sceneries` |
 | `listPresets()` | `GET /presets` | `presets` |
 | `listAspectRatios()` | `GET /aspect-ratios` | `aspect_ratios` |
-| `listJobs()` | `GET /jobs` | `jobs` (+ `next_cursor` at root) |
-| `listProducts()` | `GET /products` | `items` (+ `next_cursor` at root — kept from Phase 1) |
+| `listJobs()` | `GET /jobs` | `jobs` + `next_cursor` |
+| `listProducts()` | `GET /products` | `items` + `next_cursor` (kept from Phase 1) |
+| `getPricing()` | `GET /pricing` | `pricing` + `currency` (literal `"credits"`) |
 
-`getPricing()` does NOT use `sendList` because its response is a list-with-additional-fields (`{pricing: [...], currency: "credits"}`); a dedicated parsing path returns the `Pricing` DTO.
+Endpoints that return root keys beyond the element-list wrapper (`listJobs`, `listProducts`, `getPricing`) deserialise the full response into a dedicated DTO (`JobsListResponse`, `ProductsListResponse`, `Pricing`) so the sibling fields (`next_cursor`, `currency`) are preserved. The other four catalog endpoints return only the element list, so the helper-extracts-array path is appropriate.
 
 #### Scenario: Wrong wrapper key surfaces malformed-response error
 

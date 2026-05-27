@@ -82,7 +82,7 @@
 - [x] 10.2. `vendor/bin/phpstan analyse src/Api/{Dto,Exception,Internal} src/Api/QameraApiClient.php --level=5` clean locally; full `tests/phpstan/phpstan.neon` (incl. controllers + factory) runs only in CI with `_PS_ROOT_DIR_`
 - [x] 10.3. `vendor/bin/phpunit` — 41/41 green
 - [x] 10.4. CI matrix green on PHP 8.1 / 8.2 / 8.3 (merge run 26368360066, 34 s)
-- [ ] 10.5. Manual smoke: PrestaShop 9.x up, configuration page → paste `mk_live_…` API key (operator-supplied; rotated 2026-05-27, no longer in this document) → Test Connection → results panel shows `account_name=Pracownia Qamery AI`, `installation.platform=prestashop`
+- [ ] 10.5. Manual smoke: PrestaShop 9.x up, configuration page → paste operator-supplied API key (rotated 2026-05-27, no longer in this document) → Test Connection → results panel shows `account_name=Pracownia Qamery AI`, `installation.platform=prestashop`
 
 ## 11. PR + merge
 
