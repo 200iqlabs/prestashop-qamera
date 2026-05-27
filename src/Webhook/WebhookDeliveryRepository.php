@@ -9,11 +9,17 @@ use Db;
 /**
  * Persists accepted webhook deliveries to `{prefix}qamera_webhook_delivery`.
  *
- * Uses `INSERT … ON DUPLICATE KEY UPDATE delivery_id=delivery_id` against
- * the PK so concurrent inserts with the same `delivery_id` produce exactly
- * one row. The discriminated outcome (`accepted` vs `duplicate`) is derived
- * by reading the row back and comparing the persisted `received_at` to the
- * value this request attempted to insert.
+ * The PK on `delivery_id` does the actual serialisation: `INSERT … ON
+ * DUPLICATE KEY UPDATE delivery_id = delivery_id` is a no-op on collision,
+ * so concurrent inserts with the same id produce exactly one row. The
+ * outcome is read off `Db::Affected_Rows()` — MySQL reports `1` for a
+ * fresh insert and `0` for the no-op-update branch, which lets us
+ * distinguish `accepted` from `duplicate` without a follow-up SELECT.
+ *
+ * This is critical for the byte-identical-retry case: an earlier version
+ * disambiguated via re-reading `raw_payload`, which incorrectly returned
+ * `accepted` for both racers when the retry payload was identical to the
+ * original (the normal at-least-once delivery semantics).
  *
  * DB exceptions surface to the caller (the controller emits 500 per D10).
  */
@@ -31,19 +37,6 @@ class WebhookDeliveryRepository
         string $rawPayload,
         int $receivedAtEpoch
     ): string {
-        // PrestaShop's Db::getRow() appends `LIMIT 1` itself, so the
-        // SQL passed in MUST NOT include one (a double `LIMIT 1 LIMIT 1`
-        // is a syntax error). Same applies to the post-insert re-read.
-        $existing = $this->db->getRow(sprintf(
-            'SELECT `delivery_id` FROM `%sqamera_webhook_delivery` WHERE `delivery_id` = \'%s\'',
-            $this->tablePrefix,
-            $this->escape($deliveryId)
-        ));
-
-        if (is_array($existing) && isset($existing['delivery_id'])) {
-            return DeliveryOutcome::DUPLICATE;
-        }
-
         $receivedAt = gmdate('Y-m-d H:i:s', $receivedAtEpoch);
         $sql = sprintf(
             'INSERT INTO `%sqamera_webhook_delivery` '
@@ -61,22 +54,14 @@ class WebhookDeliveryRepository
             throw new RepositoryException('insert failed');
         }
 
-        // Re-read: if the SELECT-before-INSERT raced with another worker
-        // they both saw "no row" and both ran INSERT; ON DUPLICATE KEY
-        // UPDATE made one a no-op. The one whose payload didn't land is
-        // the duplicate. Compared by raw_payload because received_at can
-        // tie on the same epoch second.
-        $check = $this->db->getRow(sprintf(
-            'SELECT `raw_payload` FROM `%sqamera_webhook_delivery` WHERE `delivery_id` = \'%s\'',
-            $this->tablePrefix,
-            $this->escape($deliveryId)
-        ));
+        // Affected_Rows() after INSERT … ON DUPLICATE KEY UPDATE col=col:
+        // MySQL/MariaDB returns 1 for a fresh insert and 0 for the no-op
+        // update branch — the `col=col` self-assignment leaves the row
+        // unchanged so the update path reports zero affected rows. This
+        // distinguishes accepted-vs-duplicate without a follow-up SELECT.
+        $affected = (int) $this->db->Affected_Rows();
 
-        if (!is_array($check) || !isset($check['raw_payload'])) {
-            throw new RepositoryException('delivery row missing after insert');
-        }
-
-        return ((string) $check['raw_payload']) === $rawPayload
+        return $affected >= 1
             ? DeliveryOutcome::ACCEPTED
             : DeliveryOutcome::DUPLICATE;
     }

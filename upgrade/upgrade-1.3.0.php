@@ -29,5 +29,25 @@ function upgrade_module_1_3_0(/* @phpstan-ignore-line */ $module): bool
         KEY `qamera_webhook_event_type` (`event_type`, `received_at`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
 
-    return (bool) Db::getInstance()->execute($sql);
+    $db = Db::getInstance();
+    if ($db->execute($sql)) {
+        return true;
+    }
+
+    // Surface the failure: the module-manager UI will mark the upgrade
+    // as failed, but without this log line the operator has no clue
+    // WHY (e.g. utf8mb4 row-format limits on older MariaDB, or charset
+    // mismatch). Without the schema, every webhook POST hits a missing-
+    // table error after the version bump and 500s with no diagnostic.
+    $error = method_exists($db, 'getMsgError') ? (string) $db->getMsgError() : '';
+    PrestaShopLogger::addLog(
+        '[QameraAi] upgrade-1.3.0 CREATE TABLE qamera_webhook_delivery failed: ' . $error,
+        3,
+        null,
+        'QameraAiModule',
+        null,
+        true
+    );
+
+    return false;
 }

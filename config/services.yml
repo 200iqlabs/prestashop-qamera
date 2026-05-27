@@ -41,6 +41,14 @@ services:
   QameraAi\Module\Sync\PrimaryImageResolver:
     public: true
 
+  # Per-request in-memory dedup cache injected into ProductImageSyncService.
+  # Extracted from the service so integration tests can swap a fresh
+  # instance per test without reflection. Symfony shares this instance
+  # across all consumers in the request, which matches the previous
+  # behavior (the cache used to be a private property on the service).
+  QameraAi\Module\Sync\InMemoryDedupCache:
+    public: true
+
   # Vanilla Guzzle client used by `PresignedImageUploadStrategy` to PUT
   # image bytes to the presigned upload URL. Separate instance from the
   # one inside `QameraApiClient` so timeouts / headers can differ for
@@ -71,6 +79,7 @@ services:
       $uploadStrategy: '@QameraAi\Module\Sync\PresignedImageUploadStrategy'
       $resolver: '@QameraAi\Module\Sync\PrimaryImageResolver'
       $logger: '@QameraAi\Module\Sync\PrestaShopLoggerWrapper'
+      $dedupCache: '@QameraAi\Module\Sync\InMemoryDedupCache'
 
   # ---- Phase 4.1: webhook handler ----
   # The front controller (`controllers/front/webhook.php`) instantiates
@@ -104,6 +113,8 @@ services:
 
   QameraAi\Module\Webhook\Log\PrestaShopLoggerAdapter:
     public: true
+    arguments:
+      $logger: '@QameraAi\Module\Sync\PrestaShopLoggerWrapper'
 
   QameraAi\Module\Webhook\WebhookLogger:
     alias: QameraAi\Module\Webhook\Log\PrestaShopLoggerAdapter

@@ -4,16 +4,26 @@ declare(strict_types=1);
 
 namespace QameraAi\Module\Webhook\Log;
 
-use PrestaShopLogger;
+use QameraAi\Module\Sync\PrestaShopLoggerWrapper;
 use QameraAi\Module\Webhook\WebhookLogger;
 
 /**
- * Maps {@see WebhookLogger} levels onto PrestaShop's numeric severities
- * (1=info, 2=warning, 3=error) and the `QameraAiModule` log channel.
+ * Maps {@see WebhookLogger} levels (info/warning/error) onto PrestaShop's
+ * numeric severities (1/2/3) and routes them to the shared
+ * `QameraAiModule` log channel via the existing {@see PrestaShopLoggerWrapper}.
+ *
+ * Composing the wrapper (rather than calling `PrestaShopLogger::addLog`
+ * directly) keeps a single seam over PrestaShop's static logger — any
+ * future change (PSR-3 swap, channel rename, context redaction) lands in
+ * one place instead of two.
  */
 final class PrestaShopLoggerAdapter implements WebhookLogger
 {
-    private const CHANNEL = 'QameraAiModule';
+    public const CHANNEL = 'QameraAiModule';
+
+    public function __construct(private readonly PrestaShopLoggerWrapper $logger)
+    {
+    }
 
     public function info(string $message, array $context = []): void
     {
@@ -44,13 +54,6 @@ final class PrestaShopLoggerAdapter implements WebhookLogger
             $line .= ' ' . implode(' ', $pairs);
         }
 
-        PrestaShopLogger::addLog(
-            $line,
-            $severity,
-            null,
-            self::CHANNEL,
-            null,
-            true
-        );
+        $this->logger->addLog($line, $severity, null, self::CHANNEL, null, true);
     }
 }

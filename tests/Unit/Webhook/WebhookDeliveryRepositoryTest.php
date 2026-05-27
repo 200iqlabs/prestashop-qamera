@@ -78,4 +78,41 @@ final class WebhookDeliveryRepositoryTest extends TestCase
         self::assertSame(DeliveryOutcome::ACCEPTED, $a);
         self::assertSame(DeliveryOutcome::DUPLICATE, $b);
     }
+
+    public function testIdenticalPayloadRetryStillReportsDuplicate(): void
+    {
+        // Regression: an earlier implementation disambiguated accepted-vs-
+        // duplicate by string-comparing the persisted `raw_payload` against
+        // the request's payload, which incorrectly returned ACCEPTED for
+        // both racers when the retry payload was byte-identical (the normal
+        // at-least-once delivery semantics). Affected_Rows() is the right
+        // signal because it depends on whether MySQL actually inserted.
+        $db = new FakeDb();
+        $repo = new WebhookDeliveryRepository($db, self::PREFIX);
+
+        $identicalPayload = '{"delivery_id":"d-retry","event_type":"job.completed"}';
+        $first = $repo->recordAccepted('d-retry', 'job.completed', $identicalPayload, self::NOW);
+        $second = $repo->recordAccepted('d-retry', 'job.completed', $identicalPayload, self::NOW);
+
+        self::assertSame(DeliveryOutcome::ACCEPTED, $first);
+        self::assertSame(DeliveryOutcome::DUPLICATE, $second);
+        self::assertCount(1, $db->rows);
+    }
+
+    public function testRepositoryDoesNotSelectBeforeInsert(): void
+    {
+        // Efficiency contract: the repository should land on the DB with a
+        // single INSERT … ON DUPLICATE KEY UPDATE plus Affected_Rows(), NOT
+        // a SELECT-INSERT-SELECT triple. Catches accidental reintroduction
+        // of the pre-fix three-roundtrip pattern.
+        $db = new FakeDb();
+        $repo = new WebhookDeliveryRepository($db, self::PREFIX);
+        $repo->recordAccepted('d-single', 'job.completed', '{}', self::NOW);
+
+        $selects = array_filter(
+            $db->executed,
+            static fn (string $sql): bool => str_starts_with(ltrim($sql), 'SELECT')
+        );
+        self::assertSame([], array_values($selects), 'Repository must not SELECT around the INSERT');
+    }
 }

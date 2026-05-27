@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace QameraAi\Module\Tests\Support;
 
 use Db;
-use PrestaShopDatabaseException;
 
 /**
  * In-memory `Db` fake for repository tests. Records every executed SQL
- * statement and maintains a simple primary-key-indexed map for the
- * webhook delivery table so insert/duplicate semantics can be exercised
- * without MySQL.
+ * statement, maintains a primary-key-indexed map for the webhook
+ * delivery table, and tracks the affected-row count of the last
+ * `execute()` so callers can exercise the repository's
+ * `INSERT … ON DUPLICATE KEY UPDATE` semantics without MySQL.
  */
 final class FakeDb extends Db
 {
@@ -27,9 +27,18 @@ final class FakeDb extends Db
     /** @var \Throwable|null Set to throw on the next execute(). */
     public ?\Throwable $throwOnExecute = null;
 
+    /**
+     * Mirrors MySQL's mysql_affected_rows for the last `execute()`:
+     *   1 — fresh insert
+     *   0 — ON DUPLICATE KEY UPDATE no-op (delivery_id=delivery_id keeps
+     *       the row unchanged so MySQL reports zero affected)
+     */
+    private int $lastAffectedRows = 0;
+
     public function execute(string $sql, bool $useCache = true): bool
     {
         $this->executed[] = $sql;
+        $this->lastAffectedRows = 0;
 
         if ($this->throwOnExecute !== null) {
             $e = $this->throwOnExecute;
@@ -41,8 +50,6 @@ final class FakeDb extends Db
             return false;
         }
 
-        // Pattern-match the webhook INSERT … ON DUPLICATE KEY UPDATE so we
-        // can simulate PK collision semantics without parsing the SQL fully.
         $insertPattern = "/INSERT INTO `[^`]*qamera_webhook_delivery`.*?VALUES "
             . "\('([^']+)', '([^']+)', '([^']+)', 'accepted', NULL, '(.*)'\)"
             . " ON DUPLICATE KEY UPDATE/s";
@@ -57,8 +64,9 @@ final class FakeDb extends Db
                     'last_error_message' => '',
                     'raw_payload' => $m[4],
                 ];
+                $this->lastAffectedRows = 1;
             }
-            // On duplicate: do nothing (mirrors ON DUPLICATE KEY UPDATE id=id).
+            // Duplicate: row stays unchanged, affected_rows = 0.
         }
 
         return true;
@@ -89,6 +97,13 @@ final class FakeDb extends Db
 
         return false;
     }
+
+    // phpcs:disable PSR1.Methods.CamelCapsMethodName
+    public function Affected_Rows(): int
+    {
+        return $this->lastAffectedRows;
+    }
+    // phpcs:enable PSR1.Methods.CamelCapsMethodName
 
     public function seedRow(string $deliveryId, string $receivedAt, string $eventType, string $rawPayload): void
     {

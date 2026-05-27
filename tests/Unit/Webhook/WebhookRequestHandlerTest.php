@@ -277,4 +277,80 @@ final class WebhookRequestHandlerTest extends TestCase
         // No 64-hex HMAC digest in logs.
         self::assertSame(0, preg_match('/[0-9a-f]{64}/i', $dump), 'logs must not contain hex HMAC');
     }
+
+    public function testEmptyServerSecretIsRejectedBeforeVerification(): void
+    {
+        // Regression: a fresh install seeds QAMERAAI_WEBHOOK_SECRET=''. The
+        // handler must refuse to authenticate ANY delivery against the empty
+        // key, otherwise an attacker can forge `v1 = hash_hmac('sha256',
+        // "t.body", '')` and the verifier would accept it.
+        $body = WebhookFixtures::body();
+        $headers = WebhookFixtures::headers(self::NOW, $body, '');
+
+        $resp = $this->handler->handle('POST', $body, $headers, '');
+
+        self::assertSame(500, $resp->statusCode);
+        $errors = $this->logger->entriesAtLevel('error');
+        self::assertNotEmpty($errors);
+        self::assertSame('secret_not_configured', $errors[0]['context']['reason']);
+        self::assertCount(0, $this->db->rows);
+    }
+
+    public function testEmptySignatureHeaderIsRoutedTo401NotMalformed(): void
+    {
+        // Regression: an X-Qamera-Signature header sent with an empty value
+        // is semantically "missing" (e.g. proxy stripped it). It must hit the
+        // 401 MISSING_SIGNATURE branch, not the 400 MALFORMED_SIGNATURE path.
+        $body = WebhookFixtures::body();
+        $headers = [
+            'x-qamera-signature' => '',
+            'x-qamera-delivery-id' => WebhookFixtures::DELIVERY_ID,
+        ];
+
+        $resp = $this->handler->handle('POST', $body, $headers, WebhookFixtures::SECRET);
+
+        self::assertSame(401, $resp->statusCode);
+        $errors = $this->logger->entriesAtLevel('error');
+        self::assertSame('missing_signature', $errors[0]['context']['reason']);
+    }
+
+    public function testBodyOverSizeCapIsRejectedBeforeDecode(): void
+    {
+        // Regression: an unbounded body could OOM PHP-FPM via json_decode.
+        // The handler caps at WebhookRequestHandler::MAX_BODY_BYTES and emits
+        // a BODY_TOO_LARGE reason BEFORE attempting to parse JSON.
+        $deliveryId = 'd-oversize';
+        $oversized = str_repeat('A', \QameraAi\Module\Webhook\WebhookRequestHandler::MAX_BODY_BYTES + 1);
+        $headers = [
+            'x-qamera-signature' => WebhookFixtures::signatureHeader(self::NOW, $oversized),
+            'x-qamera-delivery-id' => $deliveryId,
+        ];
+
+        $resp = $this->handler->handle('POST', $oversized, $headers, WebhookFixtures::SECRET);
+
+        self::assertSame(400, $resp->statusCode);
+        $errors = $this->logger->entriesAtLevel('error');
+        $reasons = array_column(array_column($errors, 'context'), 'reason');
+        self::assertContains('body_too_large', $reasons);
+        self::assertCount(0, $this->db->rows);
+    }
+
+    public function testIdenticalPayloadRetryReportsDuplicate(): void
+    {
+        // Regression: identical payload retries (the normal at-least-once
+        // delivery case) must report DUPLICATE on the second call, not two
+        // ACCEPTEDs. Fixed by switching the repository to Affected_Rows().
+        $body = WebhookFixtures::body();
+        $headers = WebhookFixtures::headers(self::NOW, $body);
+
+        $first = $this->handler->handle('POST', $body, $headers, WebhookFixtures::SECRET);
+        $second = $this->handler->handle('POST', $body, $headers, WebhookFixtures::SECRET);
+
+        self::assertSame(200, $first->statusCode);
+        self::assertSame('{"status":"ok"}', $first->body);
+        self::assertSame(200, $second->statusCode);
+        self::assertSame('{"status":"duplicate"}', $second->body);
+        self::assertCount(1, $this->db->rows);
+        self::assertNotEmpty($this->logger->entriesAtLevel('warning'));
+    }
 }

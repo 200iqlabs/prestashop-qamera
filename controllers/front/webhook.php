@@ -42,7 +42,12 @@ class QameraaiWebhookModuleFrontController extends ModuleFrontController
     /** @var bool */
     public $ssl = true;
 
-    public function initContent(): void
+    /**
+     * Return type intentionally omitted to match ModuleFrontController's
+     * untyped parent signature; adding `: void` here would risk an LSP
+     * violation if a future PS minor declares a return type on the parent.
+     */
+    public function initContent()
     {
         // Intentionally do NOT call parent::initContent() — that would load
         // theme templates and write headers we control ourselves.
@@ -62,11 +67,18 @@ class QameraaiWebhookModuleFrontController extends ModuleFrontController
      * initContent() + exit, but override defensively in case the parent
      * dispatcher invokes us through a different code path.
      */
-    public function display(): void
+    public function display()
     {
         // No-op — body already written by emit().
     }
 
+    /**
+     * Manual service-graph construction is intentional: PrestaShop's
+     * legacy ModuleFrontController does NOT expose the Symfony container
+     * (`$this->get()` only works for ModuleAdminController / module hook
+     * callbacks). The graph is six trivial value-holders with no I/O in
+     * their constructors, so the per-request allocation cost is sub-ms.
+     */
     private function buildHandler(): WebhookRequestHandler
     {
         $clock = new SystemClock();
@@ -77,7 +89,7 @@ class QameraaiWebhookModuleFrontController extends ModuleFrontController
             new ReplayGuard($clock),
             new WebhookDeliveryRepository(Db::getInstance(), _DB_PREFIX_),
             $clock,
-            new PrestaShopLoggerAdapter()
+            new PrestaShopLoggerAdapter(new \QameraAi\Module\Sync\PrestaShopLoggerWrapper())
         );
     }
 
@@ -116,24 +128,16 @@ class QameraaiWebhookModuleFrontController extends ModuleFrontController
     private function emit(WebhookResponse $response): void
     {
         if (!headers_sent()) {
-            header('HTTP/1.1 ' . $response->statusCode . ' ' . $this->statusText($response->statusCode));
+            // http_response_code() sets the correct reason phrase for ANY
+            // status (including ones added later), works under HTTP/1.1 +
+            // HTTP/2, and removes the fragile statusText() lookup with its
+            // `default => 'OK'` fallback that would mislabel new codes.
+            http_response_code($response->statusCode);
             header('Content-Type: ' . $response->contentType);
             header('Content-Length: ' . strlen($response->body));
             header('Cache-Control: no-store');
         }
         echo $response->body;
         exit;
-    }
-
-    private function statusText(int $code): string
-    {
-        return match ($code) {
-            200 => 'OK',
-            400 => 'Bad Request',
-            401 => 'Unauthorized',
-            405 => 'Method Not Allowed',
-            500 => 'Internal Server Error',
-            default => 'OK',
-        };
     }
 }

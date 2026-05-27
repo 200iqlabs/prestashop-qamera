@@ -16,6 +16,8 @@ final class RejectionReason
     public const MALFORMED_EVENT_TYPE = 'malformed_event_type';
     public const EMPTY_BODY = 'empty_body';
     public const METHOD_NOT_ALLOWED = 'method_not_allowed';
+    public const SECRET_NOT_CONFIGURED = 'secret_not_configured';
+    public const BODY_TOO_LARGE = 'body_too_large';
 
     private function __construct()
     {

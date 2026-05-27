@@ -134,6 +134,14 @@
         <source>Webhook endpoint accepts only POST.</source>
         <target>Webhook endpoint accepts only POST.</target>
       </trans-unit>
+      <trans-unit id="webhook.reason.secret_not_configured">
+        <source>QAMERAAI_WEBHOOK_SECRET is not configured. Paste the secret from the Qamera AI panel into the module Configuration page.</source>
+        <target>QAMERAAI_WEBHOOK_SECRET is not configured. Paste the secret from the Qamera AI panel into the module Configuration page.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.body_too_large">
+        <source>Webhook body exceeds the maximum accepted size.</source>
+        <target>Webhook body exceeds the maximum accepted size.</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>
