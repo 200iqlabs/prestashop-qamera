@@ -20,14 +20,13 @@ PrestaShop module that talks to the Qamera AI Plugin API (`https://qamera.ai/api
 
 ## Credentials for smoke testing
 
-Production Qamera AI install bound to the `pracownia-qamery-ai` account. Use these for any Test Connection / live integration smoke:
+Production Qamera AI install bound to the `pracownia-qamery-ai` account.
 
 - **API base:** `https://qamera.ai/api/v1/plugin`
-- **API key:** `mk_live_5d21e5b26d221297.AbGQs3qIHgg8IEEetZHMWwX17AR6xpEmeRnjtdkd+ds=`
 - **Installation id:** `e55c20ec-7e70-41a1-8b2f-aced02d82a7f` (platform=prestashop, status=active)
-- **Webhook HMAC secret:** rotate from the Qamera panel before first webhook test (was lost in bootstrap session).
+- **API key + webhook HMAC secret:** rotate from the Qamera AI panel (`/home/pracownia-qamery-ai/settings/api-keys` and `/home/pracownia-qamery-ai/settings/plugin-installations/<id>`), then paste into the module's Back Office Configuration page (`QAMERAAI_API_KEY`, `QAMERAAI_WEBHOOK_SECRET`). These values must never live in source files, fixtures, or this document — the BO Configuration store is the only legitimate home.
 
-Never commit these into source files. Configuration page is the only place they live; rotate via the Qamera AI side, not from PS.
+Historical note: prior versions of this file embedded live `mk_live_…` values. Those credentials were rotated on 2026-05-27; the literal strings remain in git history (commits `56fbd80`, `976ff12`) but are dead and have no upstream effect.
 
 <important if="touching configuration controller">
 Secrets MUST be masked on render and skip-persisted on submit when the field still starts with the masking prefix. The Phase 1 spec (`prestashop-module-bootstrap`, Requirement "Secrets never leave the server in cleartext on render") is load-bearing — breaking it is a security regression, not a refactor.
