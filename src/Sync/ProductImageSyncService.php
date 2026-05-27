@@ -173,7 +173,7 @@ class ProductImageSyncService
             'SELECT `status`, `qamera_product_id`, `display_name_snapshot`, '
             . '`sku_snapshot`, `description_snapshot` '
             . 'FROM `%sqamera_product_link` '
-            . 'WHERE `id_product` = %d AND `id_shop` = %d LIMIT 1',
+            . 'WHERE `id_product` = %d AND `id_shop` = %d',
             $this->tablePrefix,
             $idProduct,
             $idShop
@@ -289,13 +289,13 @@ class ProductImageSyncService
     /**
      * Resolves the absolute filesystem path of the image bytes that the
      * upload strategy will PUT to upstream. Uses PrestaShop's
-     * `_PS_PROD_IMG_DIR_` plus the standard `Image::getImgFolder` layout
+     * `_PS_PRODUCT_IMG_DIR_` plus the standard `Image::getImgFolder` layout
      * (`p/4/2/42.jpg`). Tests subclass this service to inject a stub
      * path so they do not depend on the PS image-folder layout.
      */
     protected function resolveImagePath(int $idImage): string
     {
-        $base = defined('_PS_PROD_IMG_DIR_') ? (string) constant('_PS_PROD_IMG_DIR_') : '';
+        $base = defined('_PS_PRODUCT_IMG_DIR_') ? (string) constant('_PS_PRODUCT_IMG_DIR_') : '';
         $folder = self::buildImageFolder($idImage);
         return $base . $folder . $idImage . '.jpg';
     }
