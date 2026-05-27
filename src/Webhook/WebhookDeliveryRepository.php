@@ -31,8 +31,11 @@ class WebhookDeliveryRepository
         string $rawPayload,
         int $receivedAtEpoch
     ): string {
+        // PrestaShop's Db::getRow() appends `LIMIT 1` itself, so the
+        // SQL passed in MUST NOT include one (a double `LIMIT 1 LIMIT 1`
+        // is a syntax error). Same applies to the post-insert re-read.
         $existing = $this->db->getRow(sprintf(
-            'SELECT `delivery_id` FROM `%sqamera_webhook_delivery` WHERE `delivery_id` = \'%s\' LIMIT 1;',
+            'SELECT `delivery_id` FROM `%sqamera_webhook_delivery` WHERE `delivery_id` = \'%s\'',
             $this->tablePrefix,
             $this->escape($deliveryId)
         ));
@@ -64,7 +67,7 @@ class WebhookDeliveryRepository
         // the duplicate. Compared by raw_payload because received_at can
         // tie on the same epoch second.
         $check = $this->db->getRow(sprintf(
-            'SELECT `raw_payload` FROM `%sqamera_webhook_delivery` WHERE `delivery_id` = \'%s\' LIMIT 1;',
+            'SELECT `raw_payload` FROM `%sqamera_webhook_delivery` WHERE `delivery_id` = \'%s\'',
             $this->tablePrefix,
             $this->escape($deliveryId)
         ));
