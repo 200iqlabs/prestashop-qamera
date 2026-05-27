@@ -46,3 +46,7 @@ docker/.env
 # Ad-hoc smoke-test request body scratch file written by the PowerShell
 # smoke runner (used for `curl --data-binary @<file>`); never tracked.
 /.smoke-body.json
+
+# Transient fetch artifact written by the /review-fix skill while it
+# triages PR review comments; never tracked.
+/pr-comments.json
