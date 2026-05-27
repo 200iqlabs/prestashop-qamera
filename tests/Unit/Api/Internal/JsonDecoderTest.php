@@ -30,7 +30,7 @@ final class JsonDecoderTest extends TestCase
             'subscription_plan' => 'pro',
             'rate_limit_per_min' => 60,
             'installation' => [
-                'id' => 'e55c20ec-7e70-41a1-8b2f-aced02d82a7f',
+                'id' => '00000000-0000-0000-0000-000000000099',
                 'platform' => 'prestashop',
                 'status' => 'active',
                 'scopes' => ['plugin.assets:upload', 'plugin.catalog:write'],

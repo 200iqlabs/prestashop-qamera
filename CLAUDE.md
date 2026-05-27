@@ -23,7 +23,7 @@ PrestaShop module that talks to the Qamera AI Plugin API (`https://qamera.ai/api
 Production Qamera AI install bound to the `pracownia-qamery-ai` account.
 
 - **API base:** `https://qamera.ai/api/v1/plugin`
-- **Installation id:** `e55c20ec-7e70-41a1-8b2f-aced02d82a7f` (platform=prestashop, status=active)
+- **Installation id:** look it up at runtime from the Qamera panel (`/home/pracownia-qamery-ai/settings/plugin-installations`) or read it back from the live `/me` response after the module is configured. The UUID is per-install state, not a constant — do NOT hardcode it here, in tests, or in fixtures.
 - **API key + webhook HMAC secret:** rotate from the Qamera AI panel (`/home/pracownia-qamery-ai/settings/api-keys` and `/home/pracownia-qamery-ai/settings/plugin-installations/<id>`), then paste into the module's Back Office Configuration page (`QAMERAAI_API_KEY`, `QAMERAAI_WEBHOOK_SECRET`). These values must never live in source files, fixtures, or this document — the BO Configuration store is the only legitimate home.
 
 Historical note: prior versions of this file embedded live `mk_live_…` values. Those credentials were rotated on 2026-05-27; the literal strings remain in git history (commits `56fbd80`, `976ff12`) but are dead and have no upstream effect.
