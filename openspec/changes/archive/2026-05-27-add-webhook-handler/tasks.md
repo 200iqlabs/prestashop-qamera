@@ -60,8 +60,8 @@
 - [x] 9.3 Wire the response: emit JSON via `header()` + `echo` + `exit` (NOT the PS template engine) so the body is byte-exact to what the handler returned
 - [x] 9.4 If Symfony-route path is chosen, add the entry to `config/routes.yml` with explicit CSRF-exempt and no-admin-auth annotations; otherwise no route change needed
   - Legacy path chosen — no `config/routes.yml` change required.
-- [ ] 9.5 Smoke locally with `curl -X POST http://localhost:8080/module/qameraai/webhook -H 'X-Qamera-Signature: …' -H 'X-Qamera-Delivery-Id: …' -d '{…}'` against a manually-signed body and confirm the row appears in `ps_qamera_webhook_delivery`
-  - @todo Operator smoke against the parent `qameraai-prestashop/` docker shell on the main checkout (worktrees are not bind-mounted into the PS container per CLAUDE.md "Git worktrees" section). Tracked as the pre-merge handoff item.
+- [x] 9.5 Smoke locally with `curl -X POST http://localhost:8080/module/qameraai/webhook -H 'X-Qamera-Signature: …' -H 'X-Qamera-Delivery-Id: …' -d '{…}'` against a manually-signed body and confirm the row appears in `ps_qamera_webhook_delivery`
+  - Performed against the live `qameraai-ps` container after switching the main checkout to this branch and running `prestashop:module upgrade qameraai` (1.2.0 → 1.3.0). Six scenarios covered end-to-end (PowerShell HMAC + curl): 200 ok, 200 duplicate, 400 signature mismatch, 400 replay window, 401 missing signature, 405 GET. Rows confirmed in `ps_qamera_webhook_delivery`; log entries confirmed in `QameraAiModule` channel at the spec-mandated severities. End-to-end against the real Qamera AI panel (needs an ngrok tunnel) deferred as a Phase 4.2 follow-up — curl smoke already covers the full authentication + persistence contract.
 
 ## 10. Wiring + i18n
 
@@ -76,8 +76,8 @@
   - `src/Webhook/` is NOT excluded. Local PHPStan requires the cached PS core checkout (`.ps-src`); validated by CI matrix on push.
 - [x] 11.3 `vendor/bin/phpunit` green; no test is skipped without a `@todo` comment pointing to a Phase 4.2 follow-up
   - 179 tests / 375 assertions green; the only `markTestIncomplete` is the pre-existing `SchemaUpgradeTest` (carries the @todo to the bootstrap fixture).
-- [ ] 11.4 CI passes on PHP 8.1, 8.2, 8.3 in GitHub Actions
-  - @todo Verify after push — runs `vendor/bin/phpcs`, `vendor/bin/phpstan` (with real PS source), and `vendor/bin/phpunit` per matrix entry.
+- [x] 11.4 CI passes on PHP 8.1, 8.2, 8.3 in GitHub Actions
+  - Verified green across all 11 commits on `add-webhook-handler` — PHPCS, PHPStan level 5 (with real PS 9.0.0 core), and PHPUnit all pass on the 8.1/8.2/8.3 matrix.
 
 ## 12. Operator documentation
 
@@ -90,7 +90,6 @@
 - [x] 13.1 Re-run `openspec validate add-webhook-handler --strict` and confirm clean
   - Validated clean — `openspec validate add-webhook-handler --strict` → "Change 'add-webhook-handler' is valid".
 - [x] 13.2 Confirm scenarios from `specs/webhook-handler/spec.md` map 1:1 to test cases (no scenario without at least one assertion)
-- [ ] 13.3 Squash-merge-ready commit history on branch `add-webhook-handler`; PR description references the OpenSpec change name and the OQ-PS markers it deliberately does not address
-  - @todo Compose the commit + PR after operator review.
-- [ ] 13.4 After merge, archive via `/opsx:archive add-webhook-handler` and sync delta into main `openspec/specs/`
-  - @todo Post-merge step.
+- [x] 13.3 Squash-merge-ready commit history on branch `add-webhook-handler`; PR description references the OpenSpec change name and the OQ-PS markers it deliberately does not address
+  - Squash-merged to `main` as commit `ad0be90` via PR #13. Branch deleted post-merge. PR body referenced the `add-webhook-handler` OpenSpec change and the OQ-PS non-goals deliberately not addressed (previous-secret store, BO replay UI, configurable HMAC algorithm, rejected-row persistence).
+- [x] 13.4 After merge, archive via `/opsx:archive add-webhook-handler` and sync delta into main `openspec/specs/`
