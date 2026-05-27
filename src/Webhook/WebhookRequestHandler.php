@@ -61,14 +61,17 @@ final class WebhookRequestHandler
         }
 
         // Server-side authentication is not possible without a secret.
-        // Treat this as a permanent server-config error: 500 (so upstream
-        // backs off + retries — when the operator pastes the secret the
-        // next retry succeeds), logged at error severity so it surfaces
-        // in BO Logs.
+        // Map this to 401 (not 500): the spec's ACK contract reserves 500
+        // for transient repository failures that upstream SHOULD retry.
+        // An empty `QAMERAAI_WEBHOOK_SECRET` is a permanent operator-action
+        // gap — upstream burning its retry budget against it just floods
+        // BO Logs with `error` lines. 401 lets upstream's circuit breaker
+        // park the endpoint until the operator pastes the secret; the
+        // very next delivery after that succeeds.
         if ($secret === '') {
             $this->logger->error('rejected', ['reason' => RejectionReason::SECRET_NOT_CONFIGURED]);
 
-            return WebhookResponse::internalServerError();
+            return WebhookResponse::unauthorized();
         }
 
         // Capture the delivery-id header before the signature check so

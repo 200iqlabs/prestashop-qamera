@@ -16,6 +16,14 @@ use Db;
  * fresh insert and `0` for the no-op-update branch, which distinguishes
  * `accepted` from `duplicate` without a probe-before-insert SELECT.
  *
+ * Caveat: this distinction depends on the connection NOT being opened
+ * with `MYSQLI_CLIENT_FOUND_ROWS` / `PDO::MYSQL_ATTR_FOUND_ROWS`. Under
+ * those flags MySQL reports matched rows instead of changed rows, so a
+ * no-op UPDATE would surface as `1` and silently break duplicate
+ * detection. PrestaShop core opens its connections without those flags,
+ * so we're safe — but a future operator-set PDO option would regress
+ * this. If you change the DB driver options, re-run this test suite.
+ *
  * On the duplicate path the repository runs ONE follow-up SELECT to
  * fetch the original row's `received_at` so the handler can satisfy the
  * spec's "Operator-visible logging → Duplicate" requirement (warning
@@ -25,7 +33,7 @@ use Db;
  *
  * DB exceptions surface to the caller (the controller emits 500 per D10).
  */
-class WebhookDeliveryRepository
+final class WebhookDeliveryRepository
 {
     public function __construct(
         private readonly Db $db,

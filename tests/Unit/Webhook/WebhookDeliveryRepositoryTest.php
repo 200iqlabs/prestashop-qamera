@@ -111,6 +111,42 @@ final class WebhookDeliveryRepositoryTest extends TestCase
         self::assertCount(1, $db->rows);
     }
 
+    public function testRawPayloadBytesSurviveEscapeRoundTrip(): void
+    {
+        // Phase 4.2 will re-verify HMAC against the persisted `raw_payload`,
+        // so byte fidelity through `Db::escape($value, htmlOk=true, …)` is
+        // load-bearing. The risk is that `htmlOk=false` semantics would
+        // HTML-entity-transform `<`, `>`, `&`, `"` — corrupting the bytes
+        // before MySQL ever sees them, with no MySQL-side decode to undo
+        // it. This test pins `htmlOk=true` against that regression.
+        //
+        // Single quote and backslash bytes are deliberately NOT exercised
+        // here: they ARE SQL-escaped in the literal (`\\` and `\'`) and
+        // MySQL decodes them back verbatim on read; the FakeDb stub does
+        // not model that decode, so testing those bytes would assert
+        // against the stub rather than the real DB. An integration test
+        // is the right venue for that — tracked as a Phase 4.2 follow-up.
+        $tricky = '{"event":"job.completed","html":"<a>&copy; — bytes</a>"}';
+        $db = new FakeDb();
+        $repo = new WebhookDeliveryRepository($db, self::PREFIX);
+
+        $repo->recordAccepted('d-roundtrip', 'job.completed', $tricky, self::NOW);
+
+        self::assertSame($tricky, $db->rows['d-roundtrip']['raw_payload']);
+
+        $insert = implode("\n", array_filter(
+            $db->executed,
+            static fn (string $s): bool => str_contains($s, 'INSERT INTO')
+        ));
+        foreach (['<', '>', '&', '"'] as $byte) {
+            self::assertStringContainsString(
+                $byte,
+                $insert,
+                sprintf('Byte %s was transformed by escape() — Phase 4.2 re-verify will fail', $byte)
+            );
+        }
+    }
+
     public function testAcceptedPathDoesNotSelectBeforeInsert(): void
     {
         // Efficiency contract: the happy (accepted) path should land on

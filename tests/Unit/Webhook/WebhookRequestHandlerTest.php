@@ -289,12 +289,18 @@ final class WebhookRequestHandlerTest extends TestCase
         // handler must refuse to authenticate ANY delivery against the empty
         // key, otherwise an attacker can forge `v1 = hash_hmac('sha256',
         // "t.body", '')` and the verifier would accept it.
+        //
+        // 401 (not 500): an empty server-side secret is a permanent operator
+        // gap, not a transient repository failure. 500 would burn upstream's
+        // retry budget against an endpoint that cannot recover until human
+        // action; 401 lets upstream park it until the operator pastes the
+        // secret, at which point the next delivery succeeds normally.
         $body = WebhookFixtures::body();
         $headers = WebhookFixtures::headers(self::NOW, $body, '');
 
         $resp = $this->handler->handle('POST', $body, $headers, '');
 
-        self::assertSame(500, $resp->statusCode);
+        self::assertSame(401, $resp->statusCode);
         $errors = $this->logger->entriesAtLevel('error');
         self::assertNotEmpty($errors);
         self::assertSame('secret_not_configured', $errors[0]['context']['reason']);
