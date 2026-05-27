@@ -94,6 +94,46 @@
         <source>Qamera AI API key is not configured. Save your credentials first.</source>
         <target>Klucz API Qamera AI nie został skonfigurowany. Zapisz najpierw dane logowania.</target>
       </trans-unit>
+      <trans-unit id="webhook.reason.missing_signature">
+        <source>Missing X-Qamera-Signature header.</source>
+        <target>Brak nagłówka X-Qamera-Signature.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.malformed_signature">
+        <source>Malformed X-Qamera-Signature header.</source>
+        <target>Nieprawidłowy nagłówek X-Qamera-Signature.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.signature_mismatch">
+        <source>Signature does not match the configured webhook secret.</source>
+        <target>Podpis nie zgadza się ze skonfigurowanym sekretem webhooka.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.replay_window">
+        <source>Delivery timestamp is outside the replay window.</source>
+        <target>Znacznik czasu dostawy jest poza dopuszczalnym oknem replay.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.missing_delivery_id">
+        <source>Missing X-Qamera-Delivery-Id header.</source>
+        <target>Brak nagłówka X-Qamera-Delivery-Id.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.delivery_id_mismatch">
+        <source>Body delivery_id does not match the X-Qamera-Delivery-Id header.</source>
+        <target>Pole delivery_id w treści nie zgadza się z nagłówkiem X-Qamera-Delivery-Id.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.malformed_body">
+        <source>Webhook body is not a valid JSON object.</source>
+        <target>Treść webhooka nie jest prawidłowym obiektem JSON.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.malformed_event_type">
+        <source>Webhook event_type is missing or has an unsupported format.</source>
+        <target>Pole event_type webhooka jest puste lub ma niedozwolony format.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.empty_body">
+        <source>Webhook body is empty.</source>
+        <target>Treść webhooka jest pusta.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.method_not_allowed">
+        <source>Webhook endpoint accepts only POST.</source>
+        <target>Endpoint webhooka akceptuje wyłącznie metodę POST.</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

@@ -94,6 +94,46 @@
         <source>Qamera AI API key is not configured. Save your credentials first.</source>
         <target>API-ключ Qamera AI не налаштовано. Спочатку збережіть облікові дані.</target>
       </trans-unit>
+      <trans-unit id="webhook.reason.missing_signature">
+        <source>Missing X-Qamera-Signature header.</source>
+        <target>Відсутній заголовок X-Qamera-Signature.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.malformed_signature">
+        <source>Malformed X-Qamera-Signature header.</source>
+        <target>Некоректний заголовок X-Qamera-Signature.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.signature_mismatch">
+        <source>Signature does not match the configured webhook secret.</source>
+        <target>Підпис не збігається з налаштованим секретом вебхука.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.replay_window">
+        <source>Delivery timestamp is outside the replay window.</source>
+        <target>Часова мітка доставки поза дозволеним вікном повтору.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.missing_delivery_id">
+        <source>Missing X-Qamera-Delivery-Id header.</source>
+        <target>Відсутній заголовок X-Qamera-Delivery-Id.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.delivery_id_mismatch">
+        <source>Body delivery_id does not match the X-Qamera-Delivery-Id header.</source>
+        <target>Поле delivery_id у тілі не збігається із заголовком X-Qamera-Delivery-Id.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.malformed_body">
+        <source>Webhook body is not a valid JSON object.</source>
+        <target>Тіло вебхука не є коректним JSON-обʼєктом.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.malformed_event_type">
+        <source>Webhook event_type is missing or has an unsupported format.</source>
+        <target>Поле event_type вебхука відсутнє або має непідтримуваний формат.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.empty_body">
+        <source>Webhook body is empty.</source>
+        <target>Тіло вебхука порожнє.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.method_not_allowed">
+        <source>Webhook endpoint accepts only POST.</source>
+        <target>Ендпоїнт вебхука приймає лише метод POST.</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

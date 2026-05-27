@@ -2,7 +2,7 @@
 
 AI-powered product photography for PrestaShop stores. Generate packshots, scenes, and full content sessions from your store products using the [Qamera AI](https://qamera.ai) platform.
 
-**Status:** Phase 3 (done — first upstream sync). Product image upload in the back office now registers the product upstream via the Qamera AI Plugin API. See the [Phase plan](#phase-plan) below.
+**Status:** Phase 4.1 (done — webhook receive-and-verify). Inbound deliveries from `qamera.ai` are authenticated (HMAC-SHA256), deduplicated, and persisted to the local delivery log. Phase 4.2 will translate verified deliveries into product/image state. See the [Phase plan](#phase-plan) below.
 
 ## Compatibility
 
@@ -56,11 +56,49 @@ Point the module's configuration page at your local Qamera AI:
 | 1 | Repo bootstrap (module class, install hooks, configuration page skeleton, CI, Docker) | Done |
 | 2 | Local product-sync bookkeeping (`actionProductSave` snapshot writer, `qamera_product_link` state columns) | Done |
 | 3 | First upstream sync (`actionWatermark` image hook → presigned upload → `POST /images` with `product_metadata` → state transitions) | Done — first upstream sync |
-| 4 | Product-tab UI in BO (Qamera AI tab on the product card, packshot generation, manual retry, webhook handler) | Pending |
+| 4.1 | Inbound webhook handler (HMAC-SHA256 verification, replay guard, delivery-id idempotency, persisted delivery log) | Done |
+| 4.2 | Product-tab UI in BO (Qamera AI tab on the product card, packshot generation, manual retry, dispatch of persisted deliveries) | Pending |
 | 5 | CLI + bulk (`bin/console qamera:sync-products`, cron-friendly batches) | Pending |
 | 6 | Marketplace prep (PS marketplace compliance validator, submission package) | Optional |
 
 The architecture decisions live in the upstream `qamera-ai/saas-platform` repository under `docs/decisions/prestashop-plugin-design.md` and `docs/decisions/prestashop-plugin-repo-bootstrap.md`.
+
+## Phase 4.1 — Webhook handler
+
+The module exposes an unauthenticated storefront endpoint that accepts inbound webhook deliveries from `qamera.ai`. HMAC-SHA256 verification of the request body IS the authentication; the endpoint is intentionally CSRF-exempt and ignores admin sessions.
+
+**Callback URL** — set this in the Qamera AI panel at `Settings → Plugin installations → <your install> → callback_url`:
+
+```
+https://<your-shop>/module/qameraai/webhook
+```
+
+(Without URL rewriting enabled, fall back to `https://<your-shop>/index.php?fc=module&module=qameraai&controller=webhook`.)
+
+The shared **webhook secret** must be pasted into Back Office → **Modules → Qamera AI → Configuration → Webhook secret**, matching the value Qamera AI displays when you generate or rotate it. The plugin never logs into the Qamera AI panel directly.
+
+**Where deliveries are logged** — every decision lands in the `QameraAiModule` log channel (`Advanced parameters → Logs`):
+
+- `info` — delivery accepted
+- `warning` — duplicate `delivery_id` re-acknowledged (200 returned, no re-processing)
+- `error` — rejection with a structured reason code (`missing_signature`, `signature_mismatch`, `replay_window`, …)
+
+Accepted deliveries are persisted to `ps_qamera_webhook_delivery` (PK = `delivery_id`). Rejected deliveries are NOT persisted — the endpoint is unauthenticated, so persisting every invalid request would let an attacker fill the table.
+
+**Troubleshooting** — if you see rejection spikes:
+
+- `replay_window` → server clock is drifting. Check NTP (`timedatectl status` on Linux hosts).
+- `missing_signature` / `malformed_signature` → some Apache + PHP-FPM stacks strip custom headers. Add the following to your vhost so the `X-Qamera-*` headers reach PHP:
+
+  ```apache
+  SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+  SetEnvIfNoCase ^X-Qamera-Signature$ "(.*)" HTTP_X_QAMERA_SIGNATURE=$1
+  SetEnvIfNoCase ^X-Qamera-Delivery-Id$ "(.*)" HTTP_X_QAMERA_DELIVERY_ID=$1
+  ```
+
+- `signature_mismatch` → the secret in BO Configuration no longer matches Qamera AI. During the upstream 48 h dual-sign rotation grace window the plugin accepts the delivery if **either** signed value verifies against your local secret; once the window closes you must paste the new secret into Configuration.
+
+The handler does NOT yet dispatch verified deliveries to product/image state — that lands in Phase 4.2 (`add-webhook-event-dispatch`), which consumes the persisted rows as its input queue.
 
 ## License
 

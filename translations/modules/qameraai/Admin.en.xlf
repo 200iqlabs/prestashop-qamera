@@ -94,6 +94,46 @@
         <source>Qamera AI API key is not configured. Save your credentials first.</source>
         <target>Qamera AI API key is not configured. Save your credentials first.</target>
       </trans-unit>
+      <trans-unit id="webhook.reason.missing_signature">
+        <source>Missing X-Qamera-Signature header.</source>
+        <target>Missing X-Qamera-Signature header.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.malformed_signature">
+        <source>Malformed X-Qamera-Signature header.</source>
+        <target>Malformed X-Qamera-Signature header.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.signature_mismatch">
+        <source>Signature does not match the configured webhook secret.</source>
+        <target>Signature does not match the configured webhook secret.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.replay_window">
+        <source>Delivery timestamp is outside the replay window.</source>
+        <target>Delivery timestamp is outside the replay window.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.missing_delivery_id">
+        <source>Missing X-Qamera-Delivery-Id header.</source>
+        <target>Missing X-Qamera-Delivery-Id header.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.delivery_id_mismatch">
+        <source>Body delivery_id does not match the X-Qamera-Delivery-Id header.</source>
+        <target>Body delivery_id does not match the X-Qamera-Delivery-Id header.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.malformed_body">
+        <source>Webhook body is not a valid JSON object.</source>
+        <target>Webhook body is not a valid JSON object.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.malformed_event_type">
+        <source>Webhook event_type is missing or has an unsupported format.</source>
+        <target>Webhook event_type is missing or has an unsupported format.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.empty_body">
+        <source>Webhook body is empty.</source>
+        <target>Webhook body is empty.</target>
+      </trans-unit>
+      <trans-unit id="webhook.reason.method_not_allowed">
+        <source>Webhook endpoint accepts only POST.</source>
+        <target>Webhook endpoint accepts only POST.</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

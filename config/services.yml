@@ -71,3 +71,50 @@ services:
       $uploadStrategy: '@QameraAi\Module\Sync\PresignedImageUploadStrategy'
       $resolver: '@QameraAi\Module\Sync\PrimaryImageResolver'
       $logger: '@QameraAi\Module\Sync\PrestaShopLoggerWrapper'
+
+  # ---- Phase 4.1: webhook handler ----
+  # The front controller (`controllers/front/webhook.php`) instantiates
+  # the handler graph directly to keep storefront-request bootstrap cheap
+  # and the legacy-dispatcher path framework-free. These service defs
+  # exist so BO/admin code (Phase 4.2) can pull the same wiring via DI.
+
+  QameraAi\Module\Webhook\SignatureHeaderParser:
+    public: true
+
+  QameraAi\Module\Webhook\HmacVerifier:
+    public: true
+
+  QameraAi\Module\Webhook\SystemClock:
+    public: true
+
+  QameraAi\Module\Webhook\Clock:
+    alias: QameraAi\Module\Webhook\SystemClock
+    public: true
+
+  QameraAi\Module\Webhook\ReplayGuard:
+    public: true
+    arguments:
+      $clock: '@QameraAi\Module\Webhook\SystemClock'
+
+  QameraAi\Module\Webhook\WebhookDeliveryRepository:
+    public: true
+    arguments:
+      $db: '@qameraai.db'
+      $tablePrefix: !php/const _DB_PREFIX_
+
+  QameraAi\Module\Webhook\Log\PrestaShopLoggerAdapter:
+    public: true
+
+  QameraAi\Module\Webhook\WebhookLogger:
+    alias: QameraAi\Module\Webhook\Log\PrestaShopLoggerAdapter
+    public: true
+
+  QameraAi\Module\Webhook\WebhookRequestHandler:
+    public: true
+    arguments:
+      $parser: '@QameraAi\Module\Webhook\SignatureHeaderParser'
+      $verifier: '@QameraAi\Module\Webhook\HmacVerifier'
+      $replayGuard: '@QameraAi\Module\Webhook\ReplayGuard'
+      $repository: '@QameraAi\Module\Webhook\WebhookDeliveryRepository'
+      $clock: '@QameraAi\Module\Webhook\SystemClock'
+      $logger: '@QameraAi\Module\Webhook\Log\PrestaShopLoggerAdapter'

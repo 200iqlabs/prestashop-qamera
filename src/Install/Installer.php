@@ -105,6 +105,20 @@ final class Installer
                 PRIMARY KEY (`id_link`),
                 UNIQUE KEY `qamera_packshot_link_ref` (`qamera_packshot_ref`)
             ) ENGINE=InnoDB DEFAULT CHARSET={$charset};",
+
+            // Phase 4.1 — inbound webhook delivery log. PK is the upstream
+            // `X-Qamera-Delivery-Id` so concurrent duplicate inserts serialise
+            // on the index instead of needing application-level locking.
+            "CREATE TABLE IF NOT EXISTS `{$prefix}qamera_webhook_delivery` (
+                `delivery_id` VARCHAR(64) NOT NULL,
+                `received_at` DATETIME NOT NULL,
+                `event_type` VARCHAR(64) NOT NULL,
+                `status` ENUM('accepted','duplicate','rejected') NOT NULL,
+                `last_error_message` TEXT NULL,
+                `raw_payload` MEDIUMTEXT NOT NULL,
+                PRIMARY KEY (`delivery_id`),
+                KEY `qamera_webhook_event_type` (`event_type`, `received_at`)
+            ) ENGINE=InnoDB DEFAULT CHARSET={$charset};",
         ];
 
         foreach ($statements as $sql) {
@@ -188,7 +202,7 @@ final class Installer
         $prefix = _DB_PREFIX_;
 
         return Db::getInstance()->execute(
-            "DROP TABLE IF EXISTS `{$prefix}qamera_packshot_link`, `{$prefix}qamera_product_link`;"
+            "DROP TABLE IF EXISTS `{$prefix}qamera_webhook_delivery`, `{$prefix}qamera_packshot_link`, `{$prefix}qamera_product_link`;"
         );
     }
 
