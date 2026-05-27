@@ -71,9 +71,20 @@ final class WebhookRequestHandler
             return WebhookResponse::internalServerError();
         }
 
+        // Capture the delivery-id header before the signature check so
+        // the spec's "log delivery_id where available" requirement applies
+        // even to MISSING_SIGNATURE / MALFORMED_SIGNATURE rejections. A
+        // bad-actor-supplied id here is never persisted (rejection path);
+        // it just helps operator correlation if the upstream id happens
+        // to be present.
+        $deliveryId = $this->header($headers, 'x-qamera-delivery-id');
+
         $signatureHeader = $this->header($headers, 'x-qamera-signature');
         if ($signatureHeader === null) {
-            $this->logger->error('rejected', ['reason' => RejectionReason::MISSING_SIGNATURE]);
+            $this->logger->error('rejected', [
+                'reason' => RejectionReason::MISSING_SIGNATURE,
+                'delivery_id' => $deliveryId,
+            ]);
 
             return WebhookResponse::unauthorized();
         }
@@ -81,12 +92,14 @@ final class WebhookRequestHandler
         try {
             $parsed = $this->parser->parse($signatureHeader);
         } catch (MalformedSignatureException $e) {
-            $this->logger->error('rejected', ['reason' => RejectionReason::MALFORMED_SIGNATURE]);
+            $this->logger->error('rejected', [
+                'reason' => RejectionReason::MALFORMED_SIGNATURE,
+                'delivery_id' => $deliveryId,
+            ]);
 
             return WebhookResponse::badRequest();
         }
 
-        $deliveryId = $this->header($headers, 'x-qamera-delivery-id');
         if ($deliveryId === null) {
             $this->logger->error('rejected', ['reason' => RejectionReason::MISSING_DELIVERY_ID]);
 
