@@ -1,0 +1,30 @@
+{
+  "_source": "qamera-ai/saas-platform:apps/web/app/api/v1/plugin/_lib/server/schemas.ts",
+  "_commit": "abee4e7f",
+  "_captured_at": "2026-05-27",
+  "_note": "GET /sceneries — wrapper key sceneries. thumbnail/voting/status are nullable per upstream zod.",
+  "endpoint": "GET /sceneries",
+  "request": null,
+  "response_2xx": {
+    "sceneries": [
+      {
+        "id": "scenery-marble-table",
+        "name": "Marble table",
+        "thumbnail": "https://cdn.qamera.ai/sceneries/marble-table.jpg",
+        "voting": null,
+        "status": "active",
+        "source": "marketplace",
+        "created_at": "2026-04-01T10:00:00Z"
+      },
+      {
+        "id": "scenery-custom-1",
+        "name": "Custom scene 1",
+        "thumbnail": null,
+        "voting": null,
+        "status": null,
+        "source": "account",
+        "created_at": "2026-05-20T08:30:00Z"
+      }
+    ]
+  }
+}

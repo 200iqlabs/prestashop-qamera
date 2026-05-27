@@ -1,0 +1,16 @@
+{
+  "_source": "qamera-ai/saas-platform:apps/web/app/api/v1/plugin/_lib/server/schemas.ts",
+  "_commit": "abee4e7f",
+  "_captured_at": "2026-05-27",
+  "_note": "Multipart-mode response variant — upload_url/upload_token/expires_at null because the body was streamed inline. Plugin does NOT send multipart but the DTO must parse it.",
+  "endpoint": "POST /assets/upload (multipart-response)",
+  "request": null,
+  "response_2xx": {
+    "asset_id": "22222222-2222-2222-2222-222222222222",
+    "bucket": "plugin_assets",
+    "storage_path": "acct/inst/asset/multipart.jpg",
+    "upload_url": null,
+    "upload_token": null,
+    "expires_at": null
+  }
+}

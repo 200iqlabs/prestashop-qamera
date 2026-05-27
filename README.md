@@ -16,7 +16,7 @@ AI-powered product photography for PrestaShop stores. Generate packshots, scenes
 
 1. Download the latest release ZIP from the [Releases page](https://github.com/200iqlabs/prestashop-qamera/releases) (or build from source — see "Build from source" below).
 2. In PrestaShop back office, go to **Modules → Module Manager → Upload a module**, drop the ZIP, install.
-3. Open the module configuration. Paste the **API key** (`mk_live_…`) and **webhook secret** provided by your Qamera AI operator.
+3. Open the module configuration. Paste the **API key** and **webhook secret** provided by your Qamera AI operator (rotate them in the Qamera panel — never store them in source).
 4. Click "Test Connection" — a green check means you are wired up.
 
 The plugin never logs into Qamera AI directly. Your operator at Qamera AI issues credentials bound to a specific plugin installation and hands them to you; rotation goes through the Qamera AI panel.

@@ -1,0 +1,15 @@
+{
+  "_source": "qamera-ai/saas-platform:apps/web/app/api/v1/plugin/_lib/server/schemas.ts",
+  "_commit": "abee4e7f",
+  "_captured_at": "2026-05-27",
+  "_note": "GET /pricing — list-with-additional-fields. Wrapper key pricing[] + sibling currency literal 'credits'.",
+  "endpoint": "GET /pricing",
+  "request": null,
+  "response_2xx": {
+    "pricing": [
+      {"job_type": "packshot", "provider": "openai", "model": "gpt-image-1", "credit_cost": 5},
+      {"job_type": "image", "provider": "openai", "model": "gpt-image-1", "credit_cost": 3}
+    ],
+    "currency": "credits"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "_source": "qamera-ai/saas-platform:apps/web/app/api/v1/plugin/_lib/server/schemas.ts",
+  "_commit": "abee4e7f",
+  "_captured_at": "2026-05-27",
+  "_note": "GET /aspect-ratios — wrapper key aspect_ratios. value matches cg_orders.aspect_ratio CHECK constraint.",
+  "endpoint": "GET /aspect-ratios",
+  "request": null,
+  "response_2xx": {
+    "aspect_ratios": [
+      {"value": "1:1", "label": "Square", "default": false},
+      {"value": "4:5", "label": "Portrait", "default": true},
+      {"value": "9:16", "label": "Vertical", "default": false},
+      {"value": "16:9", "label": "Landscape", "default": false},
+      {"value": "3:4", "label": "Tall", "default": false}
+    ]
+  }
+}

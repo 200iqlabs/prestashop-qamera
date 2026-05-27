@@ -1,0 +1,31 @@
+{
+  "_source": "qamera-ai/saas-platform:apps/web/app/api/v1/plugin/_lib/server/schemas.ts",
+  "_commit": "abee4e7f",
+  "_captured_at": "2026-05-27",
+  "_note": "POST /images — bulk-only wrapper {images:[...]}. Client always sends bulk-of-1; response always returns {results:[<single>]}.",
+  "endpoint": "POST /images",
+  "request": {
+    "images": [
+      {
+        "external_ref": "ps:1:42",
+        "product_ref": "ps:1:42",
+        "asset_id": "11111111-1111-1111-1111-111111111111",
+        "product_metadata": {
+          "display_name": "Widget",
+          "sku": "WDG-001",
+          "description": "A sample widget"
+        }
+      }
+    ]
+  },
+  "response_2xx": {
+    "results": [
+      {
+        "external_ref": "ps:1:42",
+        "product_id": "33333333-3333-3333-3333-333333333333",
+        "image_id": "44444444-4444-4444-4444-444444444444",
+        "status": "created"
+      }
+    ]
+  }
+}

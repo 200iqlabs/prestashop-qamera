@@ -7,9 +7,9 @@ namespace QameraAi\Module\Api\Dto;
 final class AspectRatio
 {
     public function __construct(
-        public readonly string $id,
+        public readonly string $value,
         public readonly string $label,
-        public readonly string $ratio,
+        public readonly bool $default,
     ) {
     }
 }

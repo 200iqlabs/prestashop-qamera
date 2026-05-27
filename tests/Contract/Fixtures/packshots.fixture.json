@@ -1,0 +1,27 @@
+{
+  "_source": "qamera-ai/saas-platform:apps/web/app/api/v1/plugin/_lib/server/schemas.ts",
+  "_commit": "abee4e7f",
+  "_captured_at": "2026-05-27",
+  "_note": "POST /packshots — symmetric to /images. Optional source_image_ref references an earlier image registration.",
+  "endpoint": "POST /packshots",
+  "request": {
+    "packshots": [
+      {
+        "external_ref": "ps:1:42:pk-1",
+        "product_ref": "ps:1:42",
+        "asset_id": "55555555-5555-5555-5555-555555555555",
+        "source_image_ref": "ps:1:42"
+      }
+    ]
+  },
+  "response_2xx": {
+    "results": [
+      {
+        "external_ref": "ps:1:42:pk-1",
+        "product_id": "33333333-3333-3333-3333-333333333333",
+        "packshot_id": "66666666-6666-6666-6666-666666666666",
+        "status": "created"
+      }
+    ]
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "_source": "qamera-ai/saas-platform:apps/web/app/api/v1/plugin/_lib/server/schemas.ts",
+  "_commit": "abee4e7f",
+  "_captured_at": "2026-05-27",
+  "_note": "GET /presets — wrapper key presets. slug and output_type are nullable; description_i18n currently EN-only.",
+  "endpoint": "GET /presets",
+  "request": null,
+  "response_2xx": {
+    "presets": [
+      {
+        "id": "preset-cosmetics-clean",
+        "slug": "cosmetics-clean",
+        "name": "Cosmetics — clean white",
+        "description_i18n": {"en": "Clean white background, soft shadow"},
+        "credit_cost": 5,
+        "output_type": "image",
+        "is_free": false,
+        "cover_url": "https://cdn.qamera.ai/presets/cosmetics-clean.jpg",
+        "quantity_guidelines": "1 hero + 3 variants",
+        "quality_guidelines": "Sharp focus, accurate color",
+        "gallery": [
+          "https://cdn.qamera.ai/presets/cosmetics-clean/g1.jpg",
+          "https://cdn.qamera.ai/presets/cosmetics-clean/g2.jpg"
+        ]
+      }
+    ]
+  }
+}

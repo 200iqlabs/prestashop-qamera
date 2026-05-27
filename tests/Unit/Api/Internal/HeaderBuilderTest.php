@@ -11,10 +11,10 @@ final class HeaderBuilderTest extends TestCase
 {
     public function testBaseHeadersCarryRequiredKeys(): void
     {
-        $builder = new HeaderBuilder('mk_live_test', 'QameraAi-PrestaShop-Module/1.0.0 (9.0.0)', 'pl');
+        $builder = new HeaderBuilder('api_key_dummy', 'QameraAi-PrestaShop-Module/1.0.0 (9.0.0)', 'pl');
         $headers = $builder->baseHeaders();
 
-        self::assertSame('mk_live_test', $headers['X-Api-Key']);
+        self::assertSame('api_key_dummy', $headers['X-Api-Key']);
         self::assertSame('QameraAi-PrestaShop-Module/1.0.0 (9.0.0)', $headers['User-Agent']);
         self::assertSame('pl', $headers['Accept-Language']);
         self::assertSame('application/json', $headers['Accept']);
@@ -22,7 +22,7 @@ final class HeaderBuilderTest extends TestCase
 
     public function testUserAgentMatchesSpecRegex(): void
     {
-        $builder = new HeaderBuilder('mk_live_test', 'QameraAi-PrestaShop-Module/2.3.4 (9.0.0)', 'en');
+        $builder = new HeaderBuilder('api_key_dummy', 'QameraAi-PrestaShop-Module/2.3.4 (9.0.0)', 'en');
         $headers = $builder->baseHeaders();
 
         self::assertMatchesRegularExpression(

@@ -123,7 +123,7 @@ We adopt this approach: configuration moves to `tests/phpstan/phpstan.neon` (can
 
 - **Deploy:** new files only, no DB changes, no schema migrations. PHPStan reintroduces `src/Controller/Admin` to analysis — surfaced issues fail CI, which is the desired behaviour.
 - **Rollback:** revert the PR. Phase 1 install lifecycle remains intact (the new code is purely additive).
-- **Smoke after merge:** click "Test connection" on the PS9 dev environment pointing at `https://qamera.ai/api/v1/plugin` with the stored `mk_live_…` key; expect the `/me` panel to render `account_name=Pracownia Qamery AI`, `credits_balance=N`, `subscription_plan=active`, `installation.platform=prestashop`.
+- **Smoke after merge:** click "Test connection" on the PS9 dev environment pointing at `https://qamera.ai/api/v1/plugin` with the operator-supplied stored API key; expect the `/me` panel to render `account_name=Pracownia Qamery AI`, `credits_balance=N`, `subscription_plan=active`, `installation.platform=prestashop`.
 
 ## Open Questions
 

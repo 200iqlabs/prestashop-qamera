@@ -1,0 +1,41 @@
+{
+  "_source": "qamera-ai/saas-platform:apps/web/app/api/v1/plugin/_lib/server/schemas.ts",
+  "_commit": "abee4e7f",
+  "_captured_at": "2026-05-27",
+  "_note": "POST /jobs — session-lifecycle BREAKING (2026-05-22). session_config + subjects[] order envelope.",
+  "endpoint": "POST /jobs",
+  "request": {
+    "session_config": {
+      "aspect_ratio": "4:5",
+      "model_id": "77777777-7777-7777-7777-777777777777",
+      "scenery_id": "88888888-8888-8888-8888-888888888888",
+      "preset_id": "preset-cosmetics-clean",
+      "suggestions": "Use soft shadow and clean white background"
+    },
+    "subjects": [
+      {
+        "packshot_asset_id": "55555555-5555-5555-5555-555555555555",
+        "product_label": "Widget Hero",
+        "product_ref": "ps:1:42",
+        "images_count": 5,
+        "ai_model": "openai/gpt-image-1",
+        "product_name": "Widget"
+      }
+    ],
+    "callback_url": "https://shop.example.com/webhooks/qamera",
+    "priority": 0
+  },
+  "response_2xx": {
+    "order_id": "99999999-9999-9999-9999-999999999999",
+    "status": "in_progress",
+    "subjects": [
+      {
+        "product_ref": "ps:1:42",
+        "job_ids": [
+          "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+          "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+        ]
+      }
+    ]
+  }
+}

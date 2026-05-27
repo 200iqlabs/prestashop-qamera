@@ -4,12 +4,25 @@ declare(strict_types=1);
 
 namespace QameraAi\Module\Api\Dto;
 
+use QameraAi\Module\Api\Internal\ArrayOf;
+
 final class Pricing
 {
+    /**
+     * @param PricingEntry[] $pricing
+     */
     public function __construct(
-        public readonly int $creditsPerImage,
-        public readonly int $creditsPerPackshot,
-        public readonly ?int $monthlyQuota = null,
+        #[ArrayOf(PricingEntry::class)]
+        public readonly array $pricing,
+        public readonly string $currency,
     ) {
+    }
+
+    /**
+     * @return PricingEntry[]
+     */
+    public function getEntries(): array
+    {
+        return $this->pricing;
     }
 }
