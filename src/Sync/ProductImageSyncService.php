@@ -163,7 +163,7 @@ class ProductImageSyncService
             'SELECT `status`, `qamera_product_id`, `display_name_snapshot`, '
             . '`sku_snapshot`, `description_snapshot` '
             . 'FROM `%sqamera_product_link` '
-            . 'WHERE `id_product` = %d AND `id_shop` = %d',
+            . 'WHERE `id_product` = %d AND `id_shop` = %d LIMIT 1',
             $this->tablePrefix,
             $idProduct,
             $idShop
