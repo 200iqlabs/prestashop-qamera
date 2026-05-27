@@ -226,6 +226,21 @@ The method SHALL parse the response as `{"results": [<RegisterImageResult>]}` an
 - **THEN** `registerImage` throws `ValidationException` whose message identifies the unexpected `results` size (2, expected 1)
 - **AND** the client does NOT silently return the first element
 
+#### Scenario: ProductMetadata rejects oversize display_name
+
+- **WHEN** `new ProductMetadata(str_repeat('a', 501))` is called
+- **THEN** the constructor throws `InvalidArgumentException` with a message identifying the field and the max length (display_name max 500 chars per upstream `ProductMetadataSchema`)
+
+#### Scenario: ProductMetadata rejects oversize sku
+
+- **WHEN** `new ProductMetadata('Widget', str_repeat('a', 101))` is called
+- **THEN** the constructor throws `InvalidArgumentException` (sku max 100 chars per upstream `ProductMetadataSchema`)
+
+#### Scenario: ProductMetadata rejects oversize description
+
+- **WHEN** `new ProductMetadata('Widget', 'WDG', str_repeat('a', 5001))` is called
+- **THEN** the constructor throws `InvalidArgumentException` (description max 5000 chars per upstream `ProductMetadataSchema`)
+
 ### Requirement: registerPackshot mirrors registerImage shape
 
 `QameraApiClient::registerPackshot(RegisterPackshotRequest $request): PackshotResponse` SHALL behave symmetrically to `registerImage`: wraps the single request as `{"packshots": [<RegisterPackshotRequest->toPayload()>]}` and unwraps the response from `{"results": [<RegisterPackshotResult>]}`.

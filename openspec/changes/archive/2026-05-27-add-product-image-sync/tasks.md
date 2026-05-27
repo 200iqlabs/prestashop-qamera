@@ -118,16 +118,16 @@ Once the leak is rotated and remediated, the smoke procedure is: read credential
 
 ## 12. PR + merge
 
-- [ ] 12.1. PR against `main` referencing this OpenSpec change
-- [ ] 12.2. Address Copilot + manual review comments
-- [ ] 12.3. Merge after green CI + smoke checklist signed off
+- [x] 12.1. PR against `main` referencing this OpenSpec change <!-- PR #9 -->
+- [x] 12.2. Address Copilot + manual review comments <!-- pre-rebase Copilot rounds 1–5 commits b17f4ac/43a326b/b4007b4; post-rebase smoke surfaced + fixed 3 real bugs in fd6bca9 -->
+- [x] 12.3. Merge after green CI + smoke checklist signed off <!-- squash-merged as 444bd86 -->
 
 ## 13. Archive
 
-- [ ] 13.1. `/opsx:archive add-product-image-sync` rolling deltas into:
+- [x] 13.1. `/opsx:archive add-product-image-sync` rolling deltas into:
   - `openspec/specs/product-image-sync/spec.md` (new)
   - `openspec/specs/product-sync-bookkeeping/spec.md` (state-transition additions)
   - `openspec/specs/qamera-api-client/spec.md` (`registerImage` `product_metadata` addition)
 - [x] 13.2. README Phase plan — Phase 2 row: "Done"; Phase 3 row: "Done — first upstream sync"
 - [x] 13.3. CHANGELOG (en/pl/uk) `[1.2.0]` entry — actionWatermark hook, ProductImageSyncService, state transitions, RegisterImageRequest product_metadata extension
-- [ ] 13.4. Bump `composer.json` + `config.xml` + `config_pl.xml` to `1.2.0`; tag `v1.2.0` after merge <!-- composer.json + config.xml + config_pl.xml + qameraai.php all bumped to 1.2.0; tag v1.2.0 is post-merge operator action -->
+- [x] 13.4. Bump `composer.json` + `config.xml` + `config_pl.xml` to `1.2.0`; tag `v1.2.0` after merge <!-- composer.json + config.xml + config_pl.xml + qameraai.php all bumped to 1.2.0; tag v1.2.0 pushed at archive time -->
