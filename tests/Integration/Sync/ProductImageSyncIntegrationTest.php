@@ -54,19 +54,12 @@ final class ProductImageSyncIntegrationTest extends IntegrationTestCase
         BookkeepingFactory::seedRow($product, self::ID_SHOP, 'pending', null);
 
         $svc = $this->buildSyncService(new MockHandler([
-            new Response(201, ['Content-Type' => 'application/json'], (string) json_encode([
-                'external_ref' => 'ps:1:' . $product->id . ':image:' . $image->id,
-                'product_id' => 'prod-' . $this->marker,
-                'image_id' => 'img-' . $this->marker,
-                'status' => 'created',
-                'upload' => [
-                    'method' => 'PUT',
-                    'url' => 'http://qamera-test.invalid/upload/' . $this->marker,
-                    'headers' => [],
-                    'expires_in' => 600,
-                ],
-            ])),
+            // 1. POST /assets/upload (PresignedImageUploadStrategy step 1)
+            $this->presignedResponse('asset-' . $this->marker),
+            // 2. PUT to upload URL (PresignedImageUploadStrategy step 2)
             new Response(200, [], ''),
+            // 3. POST /images (ProductImageSyncService::registerImage)
+            $this->registerImageResponse('prod-' . $this->marker, 'img-' . $this->marker),
         ]));
 
         $svc->syncOnImageAdded((int) $product->id, (int) $image->id);
@@ -91,19 +84,9 @@ final class ProductImageSyncIntegrationTest extends IntegrationTestCase
 
         $capturedBody = null;
         $handler = new MockHandler([
-            new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
-                'external_ref' => 'ps:1:' . $product->id . ':image:' . $image->id,
-                'product_id' => 'prod-existing-' . $this->marker,
-                'image_id' => 'img-' . $this->marker,
-                'status' => 'existing',
-                'upload' => [
-                    'method' => 'PUT',
-                    'url' => 'http://qamera-test.invalid/upload/' . $this->marker,
-                    'headers' => [],
-                    'expires_in' => 600,
-                ],
-            ])),
+            $this->presignedResponse('asset-' . $this->marker),
             new Response(200, [], ''),
+            $this->registerImageResponse('prod-existing-' . $this->marker, 'img-' . $this->marker, 'existing'),
         ]);
         $stack = HandlerStack::create($handler);
         $stack->push(Middleware::tap(
@@ -196,5 +179,32 @@ final class ProductImageSyncIntegrationTest extends IntegrationTestCase
             'connect_timeout' => 5.0,
             'timeout' => 30.0,
         ]);
+    }
+
+    private function presignedResponse(string $assetId): Response
+    {
+        return new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
+            'asset_id' => $assetId,
+            'bucket' => 'qamera-test',
+            'storage_path' => 'TEST/' . $this->marker . '/' . $assetId . '.jpg',
+            'upload_url' => 'http://qamera-test.invalid/upload/' . $this->marker,
+            'upload_token' => 'token-' . $this->marker,
+            'expires_at' => '2099-01-01T00:00:00Z',
+        ]));
+    }
+
+    private function registerImageResponse(
+        string $productId,
+        string $imageId,
+        string $status = 'created'
+    ): Response {
+        return new Response(200, ['Content-Type' => 'application/json'], (string) json_encode([
+            'results' => [[
+                'external_ref' => 'integration-test-' . $this->marker,
+                'product_id' => $productId,
+                'image_id' => $imageId,
+                'status' => $status,
+            ]],
+        ]));
     }
 }
