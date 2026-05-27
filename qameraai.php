@@ -21,7 +21,7 @@ class QameraAi extends Module
     {
         $this->name = 'qameraai';
         $this->author = '200iq Labs';
-        $this->version = '1.2.0';
+        $this->version = '1.3.0';
         $this->ps_versions_compliancy = ['min' => '8.0.0', 'max' => '9.99.99'];
         $this->need_instance = 0;
         $this->bootstrap = true;

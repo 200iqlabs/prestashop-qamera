@@ -6,6 +6,42 @@
 
 Переклади: [english](CHANGELOG.md) · [polski](CHANGELOG.pl.md)
 
+## [1.3.0] — 2026-05-27
+
+Фаза 4.1 — приймання та верифікація вхідних вебхуків. Модуль тепер відкриває storefront-ендпоїнт, який автентифікує доставки з `qamera.ai` через HMAC-SHA256 (з підтримкою 48-годинного вікна dual-sign під час ротації секрету апстрімом — кілька `v1=` у заголовку), застосовує вікно replay ±300 с у минуле / 60 с у майбутнє, дедуплікує за `X-Qamera-Delivery-Id` через нову таблицю `qamera_webhook_delivery` і зберігає кожну прийняту доставку як субстрат для Фази 4.2. PrestaShop 8.0–9.x, PHP 8.1+.
+
+### Додано
+
+- **Маршрут storefront** `POST /module/qameraai/webhook` (`controllers/front/webhook.php`, клас `QameraaiWebhookModuleFrontController`). Без автентифікації за дизайном — верифікація HMAC Є автентифікацією. Звільнено від CSRF. Читає сирий вхід з `php://input` один раз, делегує framework-free ядру оркестрації, видає JSON через `http_response_code()` + `echo` + `exit`. Обходить Smarty та шаблонний рушій PS, тож тіло відповіді — байт-точне.
+- **`QameraAi\Module\Webhook\WebhookRequestHandler`** — framework-free оркестрація: метод → налаштований секрет → парсинг заголовка підпису → delivery-id присутній → розмір body + декодування JSON → збіг delivery_id body/заголовка → формат event_type → верифікація HMAC → вікно replay → запис у репозиторій.
+- **`HmacVerifier`** обчислює `hash_hmac('sha256', "{$timestamp}.{$rawBody}", $secret)` і порівнює через `hash_equals()` (без `===` / `strcmp` / `strncmp` для байтів підпису). Ітерує всі кандидати `v1=` без раннього виходу — час залежить лише від їхньої кількості.
+- **`SignatureHeaderParser`** парсить `t=<unix>,v1=<hex>[,v1=<hex>…]` у типізований об'єкт значення `ParsedSignature`; кидає `MalformedSignatureException` для кожного зіпсованого варіанту.
+- **`ReplayGuard`** відхиляє доставки з підписаним часом поза `[now-300s, now+60s]`. Асиметрія вікна навмисна (годинники на спільних хостингах PS частіше "відстають", ніж "поспішають").
+- **`WebhookDeliveryRepository`** зберігає прийняті доставки одним `INSERT … ON DUPLICATE KEY UPDATE delivery_id=delivery_id`; результат (accepted vs duplicate) читає з `Db::Affected_Rows()` (1 = новий рядок, 0 = no-op update). На дублюючій гілці один додатковий `SELECT` дістає оригінальний `received_at`, щоб обробник міг залогувати його у warning згідно зі специфікацією.
+- **Нова таблиця `{prefix}qamera_webhook_delivery`** — PK на `delivery_id VARCHAR(64)`, вторинний індекс на `(event_type, received_at)`. Створюється в `Installer::createSchema()` та `upgrade/upgrade-1.3.0.php` (логує помилки SQL з severity 3, якщо `CREATE TABLE` падає на старших MariaDB з Antelope row-format).
+- **`PrestaShopLoggerAdapter`** маршрутизує структуровані лог-рядки (`info` / `warning` / `error`) у наявний канал `QameraAiModule` через спільний `PrestaShopLoggerWrapper`. Коди відмов (`missing_signature`, `signature_mismatch`, `replay_window`, `body_too_large`, `secret_not_configured`, …) — перекладні XLIFF-етикетки в en/pl/uk для Фази 4.2.
+
+### Поведінка
+
+- **Контракт ACK.** `200 {"status":"ok"}` для accept, `200 {"status":"duplicate"}` для дублювання, `400` для зіпсованого підпису / вікна replay / body / event_type / неузгодженості delivery-id / занадто великого body, `401` для відсутнього підпису, `405` для методу, відмінного від `POST`, `500` для відмови репозиторію АБО відсутнього серверного секрету. Дублікати та відхилення обходять диспетч — гілки відхилень НІКОЛИ не зберігають рядок (anti-DoS).
+- **Толерантність multi-`v1=`.** Доставка автентична, якщо БУДЬ-ЯКЕ `v1=` у заголовку збігається з локально обчисленим HMAC — підтримує 48-годинне вікно dual-sign ротації апстріму без локального "попереднього секрету".
+- **Обмеження розміру body.** `WebhookRequestHandler::MAX_BODY_BYTES = 65536`. Payload-и > 64 KiB відхиляються до `json_decode`, щоб запобігти OOM-DoS воркерів PHP-FPM через необмежене body, підписане витеклим секретом.
+- **Логи.** Прийняті доставки логуються на `info` з `delivery_id` і `event_type`; дублікати на `warning` з оригінальним `received_at`; відхилення на `error` зі структурованим кодом причини. Лог-рядки ніколи не містять значення секрету, обчисленого HMAC чи повного body (параметризовані тести покривають усі гілки відхилень).
+- **Активація оператором.** Після деплою оператор встановлює `callback_url` у панелі Qamera AI на `https://<shop>/module/qameraai/webhook` (або legacy `index.php?fc=module&module=qameraai&controller=webhook`). Webhook-секрет вставляє в БО → Модулі → Qamera AI → Конфігурація → Webhook secret.
+
+### Свідомі відстрочки (Фаза 4.2 або пізніше)
+
+- **Без диспетчу.** Перевірені доставки лише зберігаються; Фаза 4.2 (`add-webhook-event-dispatch`) споживає рядки як свою вхідну чергу.
+- **Без локального "попереднього секрету".** Вікно dual-sign в апстрімі Є хендоффом ротації; коротка усвідомлена недоступність для доставок зі старим секретом після вставлення нового — навмисна.
+- **Без UI replay у БО.** Оператор використовує апстрімовий `/installations/{id}/replay/{delivery_id}`.
+- **Без налаштовуваного алгоритму HMAC.** SHA-256 — єдиний у контракті апстріму.
+- **Без персистенції `status='rejected'`.** Неавтентифікований ендпоїнт, що зберігає кожен невалідний запит, був би вектором fill-the-table DoS.
+
+### Операційні нотатки
+
+- **Apache `setEnvIf`** може знадобитися на стеках, які зрізають кастомні заголовки (`HTTP_X_QAMERA_SIGNATURE` / `HTTP_X_QAMERA_DELIVERY_ID`). Секція README "Phase 4.1 — Webhook handler" містить готовий сніппет.
+- **NTP.** Сплеск відхилень `replay_window` зазвичай означає дрейф годинника — `timedatectl status` на Linux-хостах — перше місце для перевірки.
+
 ## [1.2.0] — 2026-05-26
 
 Фаза 3 — перша синхронізація з upstream: завантаження зображення товару в бек-офісі тепер реєструє цей товар у Qamera AI Plugin API. Рядки `qamera_product_link` із Фази 2 нарешті починають заповнювати колонку `qamera_product_id`. PrestaShop 8.0–9.x, PHP 8.1+.

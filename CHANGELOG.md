@@ -6,6 +6,42 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 Translations: [polski](CHANGELOG.pl.md) · [українська](CHANGELOG.uk.md)
 
+## [1.3.0] — 2026-05-27
+
+Phase 4.1 — inbound webhook receive-and-verify. The module now exposes a storefront endpoint that authenticates incoming deliveries from `qamera.ai` with HMAC-SHA256 (supporting the upstream 48 h dual-sign rotation grace window via multi-`v1=` headers), enforces a ±300 s past / 60 s future replay window, deduplicates on `X-Qamera-Delivery-Id` via a new `qamera_webhook_delivery` table, and persists every accepted delivery as the substrate for Phase 4.2 to dispatch against. PrestaShop 8.0–9.x, PHP 8.1+.
+
+### Added
+
+- **Storefront route** `POST /module/qameraai/webhook` (`controllers/front/webhook.php`, class `QameraaiWebhookModuleFrontController`). Unauthenticated by design — HMAC verification IS the authentication. CSRF-exempt. Reads raw input via `php://input` once, hands off to a framework-free orchestration core, emits JSON via `http_response_code()` + `echo` + `exit`. Bypasses Smarty and the PS template engine so the response body is byte-exact.
+- **`QameraAi\Module\Webhook\WebhookRequestHandler`** — framework-free orchestration: method → secret-configured → signature header parse → delivery-id present → body size + JSON decode → body/header delivery-id match → event_type format → HMAC verify → replay window → repository persist.
+- **`HmacVerifier`** computes `hash_hmac('sha256', "{$timestamp}.{$rawBody}", $secret)` and uses `hash_equals()` (no `===` / `strcmp` / `strncmp` against signature bytes). Iterates every `v1=` candidate without early break so timing depends only on candidate count.
+- **`SignatureHeaderParser`** parses `t=<unix>,v1=<hex>[,v1=<hex>…]` into a typed `ParsedSignature` value object; raises `MalformedSignatureException` on every malformed-header sad path.
+- **`ReplayGuard`** rejects deliveries whose signed timestamp lies outside `[now-300s, now+60s]`. Asymmetric tolerance is intentional (shared PS hosts skew "behind" more often than "ahead").
+- **`WebhookDeliveryRepository`** persists accepted deliveries via a single `INSERT … ON DUPLICATE KEY UPDATE delivery_id=delivery_id`; the accepted-vs-duplicate outcome is read off `Db::Affected_Rows()` (1 = inserted, 0 = no-op-update branch). On the duplicate path one follow-up `SELECT` fetches the original `received_at` so the handler can include it in the warning log per spec.
+- **New table `{prefix}qamera_webhook_delivery`** — PK on `delivery_id VARCHAR(64)`, secondary index on `(event_type, received_at)`. Wired through `Installer::createSchema()` and `upgrade/upgrade-1.3.0.php` (logs SQL errors at severity 3 if `CREATE TABLE` fails on older MariaDB row-format constraints).
+- **`PrestaShopLoggerAdapter`** routes structured log lines (`info` / `warning` / `error`) to the existing `QameraAiModule` channel via the shared `PrestaShopLoggerWrapper`. Rejection reasons (`missing_signature`, `signature_mismatch`, `replay_window`, `body_too_large`, `secret_not_configured`, …) are surfaced as translatable XLIFF labels in en/pl/uk so Phase 4.2 BO can display them.
+
+### Behaviour
+
+- **ACK contract.** `200 {"status":"ok"}` for accepted, `200 {"status":"duplicate"}` for duplicate-acknowledged, `400` for malformed signature / replay window / body / event_type / delivery-id mismatch / body too large, `401` for missing signature, `405` for non-`POST`, `500` for repository failure OR a missing server-side secret. Duplicates and rejections both bypass dispatch — rejection paths NEVER persist a row (anti-DoS).
+- **Multi-`v1=` rotation tolerance.** A delivery is authentic if ANY `v1=` value in the parsed header matches the locally-computed HMAC, supporting the upstream 48 h dual-sign rotation window without local "previous-secret" storage.
+- **Body size cap.** `WebhookRequestHandler::MAX_BODY_BYTES = 65536`. Payloads larger than 64 KiB are rejected before `json_decode` to prevent PHP-FPM OOM-DoS via an unbounded body signed under a leaked secret.
+- **Logs.** Accepted deliveries log at `info` with `delivery_id` and `event_type`; duplicates log at `warning` with the additional original `received_at`; rejections log at `error` with the structured reason code. Log lines never contain the secret value, the computed HMAC hex, or the full raw body (parameterised across all rejection paths in the unit suite).
+- **Operator activation.** After installing the upgrade, the operator sets `callback_url` on the Qamera AI panel to `https://<shop>/module/qameraai/webhook` (or the legacy `index.php?fc=module&module=qameraai&controller=webhook`). Webhook secret is pasted into BO → Modules → Qamera AI → Configuration → Webhook secret.
+
+### Deliberate non-goals (deferred to Phase 4.2 or later)
+
+- **No dispatch.** Verified deliveries are persisted only; Phase 4.2 (`add-webhook-event-dispatch`) consumes the rows as its input queue.
+- **No "previous secret" local store.** The upstream dual-sign window IS the rotation handoff; brief acknowledged downtime for old-secret deliveries after the operator pastes the new secret is intentional.
+- **No BO replay UI.** Operators use the upstream `/installations/{id}/replay/{delivery_id}` endpoint.
+- **No configurable HMAC algorithm.** SHA-256 is the only one in the upstream contract.
+- **No `status='rejected'` persistence.** An unauthenticated endpoint that persisted every invalid request would be a fill-the-table DoS vector.
+
+### Operator notes
+
+- **Apache `setEnvIf`** may be required on stacks that strip custom request headers (`HTTP_X_QAMERA_SIGNATURE` / `HTTP_X_QAMERA_DELIVERY_ID`). README "Phase 4.1 — Webhook handler" lists the canonical snippet.
+- **NTP.** A `replay_window` rejection spike usually means the server clock has drifted; `timedatectl status` on Linux hosts is the first place to look.
+
 ## [1.2.0] — 2026-05-26
 
 Phase 3 first upstream sync: uploading an image for a product in the back office now registers that product upstream via the Qamera AI Plugin API. The Phase-2 `qamera_product_link` rows finally start filling their `qamera_product_id` column. PrestaShop 8.0–9.x, PHP 8.1+.

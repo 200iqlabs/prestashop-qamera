@@ -51,6 +51,11 @@ if (!class_exists(\Db::class)) {
             // backslash + single-quote so the generated SQL stays valid.
             return str_replace(["\\", "'"], ["\\\\", "\\'"], $string);
         }
+
+        public function Affected_Rows(): int
+        {
+            return 0;
+        }
     }
 }
 
