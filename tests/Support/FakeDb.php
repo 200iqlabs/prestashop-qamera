@@ -43,11 +43,10 @@ final class FakeDb extends Db
 
         // Pattern-match the webhook INSERT … ON DUPLICATE KEY UPDATE so we
         // can simulate PK collision semantics without parsing the SQL fully.
-        if (preg_match(
-            "/INSERT INTO `[^`]*qamera_webhook_delivery`.*?VALUES \('([^']+)', '([^']+)', '([^']+)', 'accepted', NULL, '(.*)'\) ON DUPLICATE KEY UPDATE/s",
-            $sql,
-            $m
-        )) {
+        $insertPattern = "/INSERT INTO `[^`]*qamera_webhook_delivery`.*?VALUES "
+            . "\('([^']+)', '([^']+)', '([^']+)', 'accepted', NULL, '(.*)'\)"
+            . " ON DUPLICATE KEY UPDATE/s";
+        if (preg_match($insertPattern, $sql, $m)) {
             $deliveryId = $m[1];
             if (!isset($this->rows[$deliveryId])) {
                 $this->rows[$deliveryId] = [
@@ -80,11 +79,10 @@ final class FakeDb extends Db
             return false;
         }
 
-        if (preg_match(
-            "/SELECT `(?:received_at|raw_payload|delivery_id)` FROM `[^`]*qamera_webhook_delivery` WHERE `delivery_id` = '([^']+)'/",
-            $sql,
-            $m
-        )) {
+        $selectPattern = "/SELECT `(?:received_at|raw_payload|delivery_id)`"
+            . " FROM `[^`]*qamera_webhook_delivery`"
+            . " WHERE `delivery_id` = '([^']+)'/";
+        if (preg_match($selectPattern, $sql, $m)) {
             $deliveryId = $m[1];
             return $this->rows[$deliveryId] ?? false;
         }
