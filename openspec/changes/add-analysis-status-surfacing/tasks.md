@@ -1,0 +1,91 @@
+## 1. Schema migration
+
+- [ ] 1.1 Extend `Installer::createTables()` to include the four analysis columns in the `CREATE TABLE ps_qamera_product_link` statement (`analysis_status` ENUM, `analysis_described_count` INT UNSIGNED NULL, `analysis_total_count` INT UNSIGNED NULL, `analysis_refreshed_at` DATETIME NULL)
+- [ ] 1.2 Add `Installer::migrateProductLinkAnalysisColumns()` with idempotent `INFORMATION_SCHEMA.COLUMNS` check + `ALTER TABLE ADD COLUMN` for each of the four columns, mirroring `migratePackshotLinkSchema()` pattern
+- [ ] 1.3 Wire `migrateProductLinkAnalysisColumns()` into the module's `upgrade` hook sequence
+- [ ] 1.4 Bump `QameraAi::$version` in `qameraai.php` so PS triggers the upgrade
+- [ ] 1.5 Add PHPUnit test under `tests/Unit/Install/` (or extend an existing one) asserting both fresh-install and migrate-existing paths produce the same final shape
+
+## 2. API client DTO extension
+
+- [ ] 2.1 Add `$analysisStatus: string` and `$analyzedAt: ?string` to `src/Api/Dto/ProductImageDto.php` constructor (required, after `$sha256`, before `$createdAt` to match upstream schema order)
+- [ ] 2.2 Update `QameraApiClient::getProduct()` / its `JsonDecoder` path to populate the new fields; ensure missing field raises `ValidationException::malformedResponse('analysis_status')` and unknown enum value raises `ValidationException` with diagnostic message
+- [ ] 2.3 Update `tests/Contract/Fixtures/products-detail.json` `response_2xx` to include `analysis_status` + `analyzed_at` on every `images[]` entry; bump `_commit` header to the PR #204 merge SHA
+- [ ] 2.4 Add unit test cases in `tests/Unit/Api/` (or wherever `getProduct` decode is tested) covering: described+analyzed_at present, pending+analyzed_at=null, missing analysis_status throws, unknown enum value throws
+
+## 3. AnalysisStatusRefresher service
+
+- [ ] 3.1 Create `src/Sync/AnalysisStatusRefresher.php` exposing `refresh(SyncedProductLink $link, bool $force = false): RefreshResult`
+- [ ] 3.2 Create `src/Sync/RefreshResult.php` value object carrying `analysisStatus, describedCount, totalCount, refreshedAt, ?refreshError`
+- [ ] 3.3 Implement TTL gate in `shouldRefresh()` helper: 60s for `{pending, processing, NULL}`, 3600s for `{described, error, partial}`; `force=true` always bypasses
+- [ ] 3.4 Implement aggregate reduction `aggregate(ProductImageDto[]): array{status, described, total}` per the algorithm in `product-image-sync` spec ("Aggregate reduction" requirement)
+- [ ] 3.5 Wire `QameraApiClient::getProduct($link->qameraProductRef)` call + UPDATE on `ps_qamera_product_link` writing the four columns
+- [ ] 3.6 Wrap upstream `ApiException` subclasses → sanitised `refreshError` string (reuse the mapping conventions from `ProductImageSyncService` error mapping); log at severity 2 via `PrestaShopLoggerWrapper`; return cached row values
+- [ ] 3.7 Add unit test `tests/Unit/Sync/AnalysisStatusRefresherTest.php` covering: TTL-fresh skip, TTL-stale pull, force bypass, NULL refreshed_at always pulls, upstream exception preserves cache + sets refreshError, aggregate algorithm matrix (all 7 scenarios from spec)
+
+## 4. SyncedProductLink + Lookup extensions
+
+- [ ] 4.1 Extend `src/Packshot/SyncedProductLink.php` constructor with `?string $analysisStatus, ?int $analysisDescribedCount, ?int $analysisTotalCount, ?string $analysisRefreshedAt` (all nullable for legacy rows)
+- [ ] 4.2 Update `SyncedProductLink::canGenerate()` to require `qameraImageId !== null AND analysisStatus === 'described'`
+- [ ] 4.3 Add `SyncedProductLink::getDisabledHint(): ?string` returning the operator-facing hint per the mapping in `product-image-sync` spec
+- [ ] 4.4 Extend `SyncedProductLinkLookup::listForGrid()` SELECT to include the four new columns; pass them into the constructor
+- [ ] 4.5 Extend `SyncedProductLinkLookup::loadByProductIds()` SELECT identically so bulk-select uses the same data
+- [ ] 4.6 Update `tests/Support/FakeSyncedProductLinkLookup.php` (if present) to mirror the new constructor shape
+- [ ] 4.7 Add unit tests for the `canGenerate()` matrix (described/processing/pending/error/NULL × image present/absent) and `getDisabledHint()` mapping
+
+## 5. BO status JSON endpoint
+
+- [ ] 5.1 Create `src/Controller/Admin/ProductStatusController.php` extending `FrameworkBundleAdminController`
+- [ ] 5.2 Route `GET /modules/qameraai/products/{idLink}/status` with `force` query param; register in module routing config alongside the existing `_qameraai_admin_products` route
+- [ ] 5.3 Implement: shop scoping, 404 JSON on unknown idLink, `AnalysisStatusRefresher::refresh($link, force: $force)` call, JSON response with `id_link, analysis_status, analysis_described_count, analysis_total_count, analysis_refreshed_at, analyzed_at, generate_enabled, badge_class, badge_label, badge_icon, hint, refresh_error?`
+- [ ] 5.4 Add `Cache-Control: private, max-age=5` header
+- [ ] 5.5 Integration test: 200 happy path, 200 with refresh_error on upstream failure, 404 unknown idLink, force=1 bypasses TTL
+
+## 6. Products grid controller + template update
+
+- [ ] 6.1 Extend `ProductsGridController::indexAction()` row dict mapping to include `analysis_status`, `analysis_described_count`, `analysis_total_count`, `analysis_refreshed_at`, `analyzed_at` (last one read from API on demand? — actually `analyzed_at` is per-image not aggregate, decide: pull through OR drop from row dict and let only the status endpoint surface it; sub-task: confirm in implementation)
+- [ ] 6.2 Extend `ProductsGridController::indexAction()` to compute and pass `disabled_hint` per row from `SyncedProductLink::getDisabledHint()`
+- [ ] 6.3 Update bulk-select handler (lives in `GenerateFormController` per current Phase-4.3 wiring) to partition selected ids into `[generatable, unsynced, awaiting_analysis]` and emit the combined flash-info per the qamera-bo-ui spec scenario
+- [ ] 6.4 Update `views/templates/admin/products_grid.html.twig` to add the "Analysis" column header + badge cell with `data-analysis-status` and `data-id-link` attributes per the badge mapping table
+- [ ] 6.5 Update the Generate button in the template to honor `disabled_hint` (set `disabled` + `title` attribute)
+- [ ] 6.6 Add a per-row "Refresh analysis" icon button next to Generate; class `js-qamera-refresh-analysis`; carries `data-id-link`
+- [ ] 6.7 Add translations to `translations/Modules.Qameraai.Admin.pl-PL.xlf` and `.en-US.xlf` for: badge labels (Pending/Processing/Ready/Error/Partial), hints (Waiting for image analysis…, Image is being analysed…, Image analysis failed — re-sync product, Awaiting analysis status — refresh), bulk-flash sentences, Refresh button label
+
+## 7. Grid JS poll
+
+- [ ] 7.1 Create `views/js/products_grid.js` (no NPM, no build — vanilla ES5/ES6 + jQuery if needed)
+- [ ] 7.2 Implement on `DOMContentLoaded`: enumerate `[data-analysis-status="pending"], [data-analysis-status="processing"], [data-analysis-status="null"]` → build FIFO queue of id_link integers
+- [ ] 7.3 Implement `setInterval` 5000ms tick: dequeue up to 10 ids → `fetch('/modules/qameraai/products/<id>/status')` concurrently per id
+- [ ] 7.4 On each response: update badge classes/label/icon, toggle Generate button enabled/disabled per `generate_enabled`, update `data-analysis-status` attribute, update Generate button `title` from response `hint`
+- [ ] 7.5 If response status still in-flight → push id back to tail of queue; if settled → drop
+- [ ] 7.6 Clear `setInterval` when queue empties
+- [ ] 7.7 Implement per-row Refresh button click handler: disable button + spinner → `fetch('?force=1')` → same response handling → re-enable
+- [ ] 7.8 If `refresh_error` is present in response, surface a non-blocking Bootstrap toast (or `PrestaShop.module.displayWarningMessage` equivalent — confirm available in PS 8.x BO)
+- [ ] 7.9 Load the JS asset from `ProductsGridController::indexAction()` via the existing `addJS()` pattern used by the generate form
+- [ ] 7.10 Manual smoke test (browser): grid with mix of pending + described rows → confirm pending rows tick to described within 5s of upstream flip; confirm Refresh button bypasses TTL on a described row
+
+## 8. Contract + integration regression
+
+- [ ] 8.1 Run full PHPUnit suite (`docker run --rm -v "$PWD:/app" -w /app php:8.1-cli vendor/bin/phpunit`) — green on PHP 8.1
+- [ ] 8.2 Re-run on PHP 8.2 + 8.3 to mirror CI matrix
+- [ ] 8.3 Run PHPStan level 5 (`vendor/bin/phpstan analyse`) — green
+- [ ] 8.4 Run PHPCS (`vendor/bin/phpcs`) — green
+- [ ] 8.5 Re-run `tests/Contract/QameraApiContractTest.php` against updated `products-detail` fixture — green
+- [ ] 8.6 Confirm existing webhook flow tests still pass (no regression in `job.*` handlers from the canGenerate change)
+
+## 9. Smoke (operator-driven, against live `qamera.ai` install)
+
+- [ ] 9.1 Bring up local dev container (`make up` from parent shell after `composer install` in this dir)
+- [ ] 9.2 Install/upgrade module → verify migration ran (check `SHOW COLUMNS FROM ps_qamera_product_link`)
+- [ ] 9.3 Sync a fresh product via the BO product save hook → confirm new row has `analysis_status=NULL`
+- [ ] 9.4 Open Products grid → confirm row shows Pending badge with Refresh button; click Refresh → confirm badge flips to processing/described per upstream's actual state
+- [ ] 9.5 Wait until backend completes Gemini analysis → confirm JS poll auto-flips badge to Ready without page reload; Generate button enables
+- [ ] 9.6 Click Generate → form opens → submit → confirm packshot job kicks off without `PREPARE_PHOTOS_TIMEOUT` failure (regression target of this whole change)
+- [ ] 9.7 Bulk-select 3 rows: 1 described + 1 pending + 1 unsynced → click Generate → confirm form opens with 1 subject and flash-info `"2 products excluded (1 unsynced, 1 awaiting analysis)"`
+
+## 10. Branch wrap-up
+
+- [ ] 10.1 Verify `openspec validate add-analysis-status-surfacing` is clean
+- [ ] 10.2 Commit on `add-analysis-status-surfacing` branch with conventional-commits message `feat(analysis-status-surfacing): ...`
+- [ ] 10.3 Open PR against `main`; CI must be green on PHP 8.1/8.2/8.3 matrix
+- [ ] 10.4 Archive the change with `/opsx:archive add-analysis-status-surfacing` after merge
