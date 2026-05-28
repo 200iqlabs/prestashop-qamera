@@ -1,0 +1,200 @@
+{% extends '@PrestaShop/Admin/layout.html.twig' %}
+
+{# `previous_input` is set on the validation-failure re-render path and
+   is the operator's raw POST. On the GET path it is absent — `default()`
+   keeps the empty-state behaviour intact. #}
+{% set prev = previous_input|default({}) %}
+
+{% block content %}
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-header-title">
+        <i class="material-icons">auto_fix_high</i>
+        {{ 'Generate packshots'|trans({}, 'Modules.Qameraai.Admin') }}
+      </h3>
+      <div class="card-header-actions">
+        <a href="{{ products_url }}" class="btn btn-outline-secondary">
+          <i class="material-icons">arrow_back</i>
+          {{ 'Back to products'|trans({}, 'Modules.Qameraai.Admin') }}
+        </a>
+      </div>
+    </div>
+
+    <div class="card-body">
+      {% if errors.general is defined %}
+        <div class="alert alert-danger" role="alert">{{ errors.general }}</div>
+      {% endif %}
+      {% if errors.products is defined %}
+        <div class="alert alert-danger" role="alert">{{ errors.products }}</div>
+      {% endif %}
+
+      <form method="post" action="{{ submit_url }}" id="qameraai-generate-form">
+        <input type="hidden" name="_token" value="{{ csrf_token('qamera_generate_submit') }}">
+        <input type="hidden" name="product_ids" value="{{ product_ids|join(',') }}">
+
+        <div class="form-group row">
+          <label class="form-control-label col-sm-3">
+            {{ 'Selected products'|trans({}, 'Modules.Qameraai.Admin') }}
+          </label>
+          <div class="col-sm-9">
+            <div class="alert alert-info" role="alert">
+              {{ '%count% product(s) selected.'|trans({'%count%': product_ids|length}, 'Modules.Qameraai.Admin') }}
+              <small class="d-block text-muted">#{{ product_ids|join(', #') }}</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group row">
+          <label class="form-control-label col-sm-3" for="qameraai-ai-model">
+            {{ 'AI model'|trans({}, 'Modules.Qameraai.Admin') }} *
+          </label>
+          <div class="col-sm-9">
+            <select id="qameraai-ai-model" name="ai_model"
+                    class="form-control {% if errors.ai_model is defined %}is-invalid{% endif %}" required>
+              <option value="">{{ '— Select —'|trans({}, 'Modules.Qameraai.Admin') }}</option>
+              {% for m in ai_models %}
+                {% set _val = m.provider ~ '/' ~ m.model %}
+                <option value="{{ _val }}"
+                        data-cost="{{ m.baseCreditCost }}"
+                        {% if prev.ai_model is defined and prev.ai_model == _val %}selected{% endif %}>
+                  {{ m.provider }}/{{ m.model }}
+                </option>
+              {% endfor %}
+            </select>
+            {% if errors.ai_model is defined %}
+              <div class="invalid-feedback">{{ errors.ai_model }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="form-group row">
+          <label class="form-control-label col-sm-3" for="qameraai-aspect-ratio">
+            {{ 'Aspect ratio'|trans({}, 'Modules.Qameraai.Admin') }} *
+          </label>
+          <div class="col-sm-9">
+            <select id="qameraai-aspect-ratio" name="aspect_ratio"
+                    class="form-control {% if errors.aspect_ratio is defined %}is-invalid{% endif %}" required>
+              {% for ar in aspect_ratios %}
+                <option value="{{ ar.value }}"
+                        {% if prev.aspect_ratio is defined
+                              ? prev.aspect_ratio == ar.value
+                              : ar.value == default_aspect_ratio %}selected{% endif %}>
+                  {{ ar.label }}
+                </option>
+              {% endfor %}
+            </select>
+            {% if errors.aspect_ratio is defined %}
+              <div class="invalid-feedback">{{ errors.aspect_ratio }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="form-group row">
+          <label class="form-control-label col-sm-3" for="qameraai-images-count">
+            {{ 'Images per subject'|trans({}, 'Modules.Qameraai.Admin') }} *
+          </label>
+          <div class="col-sm-9">
+            <input type="number" id="qameraai-images-count" name="images_count"
+                   class="form-control {% if errors.images_count is defined %}is-invalid{% endif %}"
+                   min="1" max="50" value="{{ default_images_count }}" required>
+            {% if errors.images_count is defined %}
+              <div class="invalid-feedback">{{ errors.images_count }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="form-group row">
+          <label class="form-control-label col-sm-3" for="qameraai-scenery">
+            {{ 'Scenery'|trans({}, 'Modules.Qameraai.Admin') }}
+          </label>
+          <div class="col-sm-9">
+            <select id="qameraai-scenery" name="scenery_id" class="form-control">
+              <option value="">{{ '— None —'|trans({}, 'Modules.Qameraai.Admin') }}</option>
+              {% for s in sceneries %}
+                <option value="{{ s.id }}"
+                        {% if prev.scenery_id is defined and prev.scenery_id == s.id %}selected{% endif %}>
+                  {{ s.name }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group row">
+          <label class="form-control-label col-sm-3" for="qameraai-mannequin">
+            {{ 'Mannequin model'|trans({}, 'Modules.Qameraai.Admin') }}
+          </label>
+          <div class="col-sm-9">
+            <select id="qameraai-mannequin" name="mannequin_model_id" class="form-control">
+              <option value="">{{ '— None —'|trans({}, 'Modules.Qameraai.Admin') }}</option>
+              {% for m in mannequins %}
+                <option value="{{ m.id }}"
+                        {% if prev.mannequin_model_id is defined and prev.mannequin_model_id == m.id %}selected{% endif %}>
+                  {{ m.name }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group row">
+          <label class="form-control-label col-sm-3" for="qameraai-preset">
+            {{ 'Preset'|trans({}, 'Modules.Qameraai.Admin') }}
+          </label>
+          <div class="col-sm-9">
+            <select id="qameraai-preset" name="preset_id" class="form-control">
+              <option value="">{{ '— None —'|trans({}, 'Modules.Qameraai.Admin') }}</option>
+              {% for p in presets %}
+                <option value="{{ p.id }}"
+                        {% if prev.preset_id is defined and prev.preset_id == p.id %}selected{% endif %}>
+                  {{ p.name }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group row">
+          <label class="form-control-label col-sm-3" for="qameraai-suggestions">
+            {{ 'Suggestions'|trans({}, 'Modules.Qameraai.Admin') }}
+          </label>
+          <div class="col-sm-9">
+            <textarea id="qameraai-suggestions" name="suggestions" class="form-control"
+                      rows="3" maxlength="2000"
+                      placeholder="{{ 'Free-form notes for the AI (optional)'|trans({}, 'Modules.Qameraai.Admin') }}">{{ prev.suggestions|default('') }}</textarea>
+          </div>
+        </div>
+
+        <div class="form-group row">
+          <div class="col-sm-9 offset-sm-3">
+            <div class="alert alert-secondary" id="qameraai-cost-display">
+              {{ 'Estimated cost'|trans({}, 'Modules.Qameraai.Admin') }}:
+              <strong id="qameraai-cost-value">—</strong>
+              <small class="text-muted d-block">
+                {{ 'Live preview from %pricing% endpoint'|trans({'%pricing%': '/pricing'}, 'Modules.Qameraai.Admin') }}
+              </small>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-footer">
+          <button type="submit" class="btn btn-primary">
+            <i class="material-icons">send</i>
+            {{ 'Submit'|trans({}, 'Modules.Qameraai.Admin') }}
+          </button>
+          <a href="{{ products_url }}" class="btn btn-outline-secondary">
+            {{ 'Cancel'|trans({}, 'Admin.Actions') }}
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script
+    src="{{ asset('modules/qameraai/views/js/generate_form.js') }}"
+    data-cost-url="{{ path('_qameraai_admin_generate_cost') }}"
+    data-subject-count="{{ product_ids|length }}"
+    data-unavailable-label="{{ 'unavailable'|trans({}, 'Modules.Qameraai.Admin') }}"
+    data-credits-label="{{ 'credits'|trans({}, 'Modules.Qameraai.Admin') }}"
+  ></script>
+{% endblock %}

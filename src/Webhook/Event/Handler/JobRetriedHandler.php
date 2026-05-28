@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace QameraAi\Module\Webhook\Event\Handler;
 
 use Db;
+use QameraAi\Module\Packshot\PackshotJobUpdater;
 use QameraAi\Module\Webhook\Event\EventHandlerInterface;
 use QameraAi\Module\Webhook\Event\ExternalRefParser;
 use QameraAi\Module\Webhook\Event\InvalidExternalRefException;
@@ -28,7 +29,8 @@ final class JobRetriedHandler implements EventHandlerInterface
         private readonly Db $db,
         private readonly string $tablePrefix,
         private readonly ProductLinkHeartbeat $productHeartbeat,
-        private readonly WebhookLogger $logger
+        private readonly WebhookLogger $logger,
+        private readonly PackshotJobUpdater $packshotJobUpdater
     ) {
     }
 
@@ -86,6 +88,25 @@ final class JobRetriedHandler implements EventHandlerInterface
 
         if (!$this->db->execute($sql)) {
             throw new QameraDbException('packshot_link retry-touch failed');
+        }
+
+        // Phase 4.3 — mirror into ps_qamera_packshot_job (per-job grid).
+        // Retried means upstream resumed the job: status flips to
+        // in_progress per the PackshotJobUpdater status map. No
+        // output_url / error_message yet — those land on the terminal
+        // event.
+        $jobId = PayloadExtractor::string($event->payload, 'job_id');
+        if ($jobId !== null) {
+            $this->packshotJobUpdater->upsert(
+                eventType: $event->eventType,
+                deliveryId: $event->deliveryId,
+                qameraJobId: $jobId,
+                outputUrl: null,
+                outputUrlExpiresAt: null,
+                lastErrorMessage: null,
+                payloadExternalRef: PayloadExtractor::nullableString($event->payload, 'packshot_external_ref'),
+                payloadOrderId: PayloadExtractor::nullableString($event->payload, 'order_id'),
+            );
         }
     }
 

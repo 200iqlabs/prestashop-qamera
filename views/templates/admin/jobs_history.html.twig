@@ -1,0 +1,100 @@
+{% extends '@PrestaShop/Admin/layout.html.twig' %}
+
+{% block content %}
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-header-title">
+        <i class="material-icons">history</i>
+        {{ 'Qamera AI — Jobs history'|trans({}, 'Modules.Qameraai.Admin') }}
+      </h3>
+      <div class="card-header-actions">
+        <a href="{{ products_url }}" class="btn btn-outline-secondary">
+          <i class="material-icons">arrow_back</i>
+          {{ 'Back to products'|trans({}, 'Modules.Qameraai.Admin') }}
+        </a>
+      </div>
+    </div>
+
+    <div class="card-body">
+      <form method="get" class="form-inline mb-3">
+        <label for="qameraai-status-filter" class="mr-2">
+          {{ 'Filter by status'|trans({}, 'Modules.Qameraai.Admin') }}
+        </label>
+        <select id="qameraai-status-filter" name="status" class="form-control mr-2"
+                onchange="this.form.submit()">
+          {% for s in statuses %}
+            <option value="{{ s }}" {% if s == status_filter %}selected{% endif %}>
+              {{ s|trans({}, 'Modules.Qameraai.Admin') }}
+            </option>
+          {% endfor %}
+        </select>
+      </form>
+
+      {% if rows is empty %}
+        <div class="alert alert-info" role="alert">
+          {{ 'No jobs yet. Submit one from the Products tab.'|trans({}, 'Modules.Qameraai.Admin') }}
+        </div>
+      {% else %}
+        <table class="table table-bordered">
+          <thead>
+            <tr>
+              <th>{{ 'Submitted'|trans({}, 'Modules.Qameraai.Admin') }}</th>
+              <th>{{ 'Product'|trans({}, 'Modules.Qameraai.Admin') }}</th>
+              <th>{{ 'Status'|trans({}, 'Modules.Qameraai.Admin') }}</th>
+              <th>{{ 'AI model'|trans({}, 'Modules.Qameraai.Admin') }}</th>
+              <th>{{ 'Aspect'|trans({}, 'Modules.Qameraai.Admin') }}</th>
+              <th>{{ 'Output'|trans({}, 'Modules.Qameraai.Admin') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              <tr>
+                <td>{{ row.submitted_at }}</td>
+                <td>
+                  {{ row.product_name|default('—') }}
+                  <br>
+                  <small class="text-muted">#{{ row.id_product }} · job <code>{{ row.qamera_job_id }}</code></small>
+                </td>
+                <td>
+                  <span class="qameraai-badge qameraai-badge-{{ row.status }}">
+                    {{ row.status|trans({}, 'Modules.Qameraai.Admin') }}
+                  </span>
+                  {% if row.last_error_message %}
+                    <br>
+                    <small class="text-danger">{{ row.last_error_message|slice(0, 120) }}</small>
+                  {% endif %}
+                </td>
+                <td>{{ row.ai_model }}</td>
+                <td>{{ row.aspect_ratio }}</td>
+                <td>
+                  {% if row.output_url %}
+                    <a href="{{ row.output_url }}" target="_blank" rel="noopener">
+                      <img src="{{ row.output_url }}" alt="" style="max-width:64px; max-height:64px;">
+                    </a>
+                  {% else %}
+                    <span class="text-muted">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        {% if total_pages > 1 %}
+          <nav>
+            <ul class="pagination mb-0">
+              {% for p in 1..total_pages %}
+                <li class="page-item {% if p == page %}active{% endif %}">
+                  <a class="page-link"
+                     href="?page={{ p }}{% if status_filter != 'all' %}&amp;status={{ status_filter }}{% endif %}">
+                    {{ p }}
+                  </a>
+                </li>
+              {% endfor %}
+            </ul>
+          </nav>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

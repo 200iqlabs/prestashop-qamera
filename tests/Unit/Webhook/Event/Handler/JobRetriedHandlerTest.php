@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace QameraAi\Module\Tests\Unit\Webhook\Event\Handler;
 
 use PHPUnit\Framework\TestCase;
+use QameraAi\Module\Tests\Support\FakePackshotJobUpdater;
 use QameraAi\Module\Tests\Support\FakeProductLinkHeartbeat;
 use QameraAi\Module\Tests\Support\RecordingDb;
 use QameraAi\Module\Tests\Support\SpyLogger;
@@ -17,6 +18,7 @@ final class JobRetriedHandlerTest extends TestCase
     private RecordingDb $db;
     private FakeProductLinkHeartbeat $heartbeat;
     private SpyLogger $logger;
+    private FakePackshotJobUpdater $packshotJob;
     private JobRetriedHandler $handler;
 
     protected function setUp(): void
@@ -25,7 +27,14 @@ final class JobRetriedHandlerTest extends TestCase
         $this->db = new RecordingDb();
         $this->heartbeat = new FakeProductLinkHeartbeat();
         $this->logger = new SpyLogger();
-        $this->handler = new JobRetriedHandler($this->db, 'ps_', $this->heartbeat, $this->logger);
+        $this->packshotJob = new FakePackshotJobUpdater();
+        $this->handler = new JobRetriedHandler(
+            $this->db,
+            'ps_',
+            $this->heartbeat,
+            $this->logger,
+            $this->packshotJob
+        );
     }
 
     public function testRetriedEventBumpsLastSyncedAtWithoutChangingStatus(): void

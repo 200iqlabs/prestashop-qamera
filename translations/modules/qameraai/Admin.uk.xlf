@@ -142,6 +142,214 @@
         <source>Webhook body exceeds the maximum accepted size.</source>
         <target>Тіло вебхука перевищує максимальний допустимий розмір.</target>
       </trans-unit>
+
+      <!-- Phase 4.3: packshot generation BO -->
+      <trans-unit id="packshots.products.title">
+        <source>Qamera AI — Products</source>
+        <target>Qamera AI — Товари</target>
+      </trans-unit>
+      <trans-unit id="packshots.jobs.title">
+        <source>Qamera AI — Jobs history</source>
+        <target>Qamera AI — Історія завдань</target>
+      </trans-unit>
+      <trans-unit id="packshots.jobs.link">
+        <source>Jobs history</source>
+        <target>Історія завдань</target>
+      </trans-unit>
+      <trans-unit id="packshots.products.back">
+        <source>Back to products</source>
+        <target>Назад до товарів</target>
+      </trans-unit>
+      <trans-unit id="packshots.products.empty">
+        <source>No synced products yet. Save a product or enable auto-register in Configuration.</source>
+        <target>Немає синхронізованих товарів. Збережіть товар або увімкніть авто-реєстрацію в Налаштуваннях.</target>
+      </trans-unit>
+      <trans-unit id="packshots.jobs.empty">
+        <source>No jobs yet. Submit one from the Products tab.</source>
+        <target>Немає завдань. Створіть завдання у вкладці Товари.</target>
+      </trans-unit>
+      <trans-unit id="packshots.col.product">
+        <source>Product</source>
+        <target>Товар</target>
+      </trans-unit>
+      <trans-unit id="packshots.col.status">
+        <source>Status</source>
+        <target>Статус</target>
+      </trans-unit>
+      <trans-unit id="packshots.col.last_synced">
+        <source>Last synced</source>
+        <target>Остання синхронізація</target>
+      </trans-unit>
+      <trans-unit id="packshots.col.action">
+        <source>Action</source>
+        <target>Дія</target>
+      </trans-unit>
+      <trans-unit id="packshots.col.submitted">
+        <source>Submitted</source>
+        <target>Надіслано</target>
+      </trans-unit>
+      <trans-unit id="packshots.col.ai_model">
+        <source>AI model</source>
+        <target>AI модель</target>
+      </trans-unit>
+      <trans-unit id="packshots.col.aspect">
+        <source>Aspect</source>
+        <target>Пропорції</target>
+      </trans-unit>
+      <trans-unit id="packshots.col.output">
+        <source>Output</source>
+        <target>Результат</target>
+      </trans-unit>
+      <trans-unit id="packshots.action.generate">
+        <source>Generate</source>
+        <target>Згенерувати</target>
+      </trans-unit>
+      <trans-unit id="packshots.action.generate_selected">
+        <source>Generate selected</source>
+        <target>Згенерувати обрані</target>
+      </trans-unit>
+      <trans-unit id="packshots.action.sync_first">
+        <source>Sync this product first</source>
+        <target>Спочатку синхронізуйте цей товар</target>
+      </trans-unit>
+      <trans-unit id="packshots.action.submit">
+        <source>Submit</source>
+        <target>Надіслати</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.title">
+        <source>Generate packshots</source>
+        <target>Згенерувати пакшоти</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.selected">
+        <source>Selected products</source>
+        <target>Обрані товари</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.count_selected">
+        <source>%count% product(s) selected.</source>
+        <target>Обрано %count% товар(ів).</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.aspect_ratio">
+        <source>Aspect ratio</source>
+        <target>Пропорції зображення</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.images_count">
+        <source>Images per subject</source>
+        <target>Зображень на товар</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.scenery">
+        <source>Scenery</source>
+        <target>Сценарій</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.mannequin">
+        <source>Mannequin model</source>
+        <target>Модель манекена</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.preset">
+        <source>Preset</source>
+        <target>Пресет</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.suggestions">
+        <source>Suggestions</source>
+        <target>Підказки</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.suggestions_placeholder">
+        <source>Free-form notes for the AI (optional)</source>
+        <target>Додаткові вказівки для AI (необов'язково)</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.cost_label">
+        <source>Estimated cost</source>
+        <target>Орієнтовна вартість</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.cost_unit">
+        <source>credits</source>
+        <target>кредитів</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.cost_unavailable">
+        <source>unavailable</source>
+        <target>недоступно</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.cost_hint">
+        <source>Live preview from %pricing% endpoint</source>
+        <target>Попередній перегляд з ендпойнту %pricing%</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.select_placeholder">
+        <source>— Select —</source>
+        <target>— Виберіть —</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.none">
+        <source>— None —</source>
+        <target>— Немає —</target>
+      </trans-unit>
+      <trans-unit id="packshots.jobs.filter_label">
+        <source>Filter by status</source>
+        <target>Фільтр за статусом</target>
+      </trans-unit>
+      <trans-unit id="packshots.status.all">
+        <source>all</source>
+        <target>всі</target>
+      </trans-unit>
+      <trans-unit id="packshots.status.pending">
+        <source>pending</source>
+        <target>очікує</target>
+      </trans-unit>
+      <trans-unit id="packshots.status.in_progress">
+        <source>in_progress</source>
+        <target>в процесі</target>
+      </trans-unit>
+      <trans-unit id="packshots.status.completed">
+        <source>completed</source>
+        <target>завершено</target>
+      </trans-unit>
+      <trans-unit id="packshots.status.failed">
+        <source>failed</source>
+        <target>невдало</target>
+      </trans-unit>
+      <trans-unit id="packshots.status.cancelled">
+        <source>cancelled</source>
+        <target>скасовано</target>
+      </trans-unit>
+      <trans-unit id="packshots.status.registered">
+        <source>registered</source>
+        <target>зареєстровано</target>
+      </trans-unit>
+      <trans-unit id="packshots.status.error">
+        <source>error</source>
+        <target>помилка</target>
+      </trans-unit>
+
+      <!-- Flash + validation messages -->
+      <trans-unit id="packshots.error.ai_model_required">
+        <source>AI model is required.</source>
+        <target>AI модель є обов'язковою.</target>
+      </trans-unit>
+      <trans-unit id="packshots.error.images_count_range">
+        <source>Images per subject must be between 1 and 50.</source>
+        <target>Кількість зображень має бути в діапазоні 1–50.</target>
+      </trans-unit>
+      <trans-unit id="packshots.error.products_required">
+        <source>Select at least one product.</source>
+        <target>Виберіть хоча б один товар.</target>
+      </trans-unit>
+      <trans-unit id="packshots.error.aspect_ratio_invalid">
+        <source>Aspect ratio is not in the upstream catalog.</source>
+        <target>Обрані пропорції зображення відсутні в каталозі Qamera AI.</target>
+      </trans-unit>
+      <trans-unit id="packshots.error.reference_failed">
+        <source>Could not load Qamera AI reference data: %message%</source>
+        <target>Не вдалося завантажити довідкові дані Qamera AI: %message%</target>
+      </trans-unit>
+      <trans-unit id="packshots.flash.full_success">
+        <source>Submitted %sessions% session(s); %jobs% job(s) queued. Order(s): %orders%.</source>
+        <target>Надіслано %sessions% сесій; у черзі %jobs% завдань. Замовлення: %orders%.</target>
+      </trans-unit>
+      <trans-unit id="packshots.flash.full_failure">
+        <source>All sessions failed: %message%</source>
+        <target>Усі сесії завершилися помилкою: %message%</target>
+      </trans-unit>
+      <trans-unit id="packshots.flash.partial">
+        <source>Partial success: %ok% session(s) queued (%jobs% jobs), %failed% failed. Details in logs.</source>
+        <target>Частковий успіх: у черзі %ok% сесій (%jobs% завдань), %failed% невдало. Деталі в логах.</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

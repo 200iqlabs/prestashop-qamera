@@ -1,0 +1,30 @@
+/* Qamera AI — BO admin styles. Bootstrap 4 friendly. */
+
+.qameraai-badge {
+  display: inline-block;
+  padding: 0.25em 0.6em;
+  font-size: 0.75em;
+  font-weight: 600;
+  line-height: 1;
+  text-transform: uppercase;
+  border-radius: 0.25rem;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.qameraai-badge-pending     { background-color: #6c757d; }
+.qameraai-badge-in_progress { background-color: #17a2b8; }
+.qameraai-badge-completed   { background-color: #28a745; }
+.qameraai-badge-failed      { background-color: #dc3545; }
+.qameraai-badge-cancelled   { background-color: #6610f2; }
+
+.qameraai-badge-registered  { background-color: #28a745; }
+.qameraai-badge-error       { background-color: #dc3545; }
+
+#qameraai-cost-display {
+  font-size: 1.1em;
+}
+
+#qameraai-cost-value {
+  font-family: monospace;
+}

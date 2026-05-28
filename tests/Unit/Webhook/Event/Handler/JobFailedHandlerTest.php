@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace QameraAi\Module\Tests\Unit\Webhook\Event\Handler;
 
 use PHPUnit\Framework\TestCase;
+use QameraAi\Module\Tests\Support\FakePackshotJobUpdater;
 use QameraAi\Module\Tests\Support\FakePackshotLinkUpdater;
 use QameraAi\Module\Tests\Support\FakeProductLinkHeartbeat;
 use QameraAi\Module\Tests\Support\SpyLogger;
@@ -16,6 +17,7 @@ final class JobFailedHandlerTest extends TestCase
     private FakePackshotLinkUpdater $packshot;
     private FakeProductLinkHeartbeat $heartbeat;
     private SpyLogger $logger;
+    private FakePackshotJobUpdater $packshotJob;
     private JobFailedHandler $handler;
 
     protected function setUp(): void
@@ -24,7 +26,13 @@ final class JobFailedHandlerTest extends TestCase
         $this->packshot = new FakePackshotLinkUpdater();
         $this->heartbeat = new FakeProductLinkHeartbeat();
         $this->logger = new SpyLogger();
-        $this->handler = new JobFailedHandler($this->packshot, $this->heartbeat, $this->logger);
+        $this->packshotJob = new FakePackshotJobUpdater();
+        $this->handler = new JobFailedHandler(
+            $this->packshot,
+            $this->heartbeat,
+            $this->logger,
+            $this->packshotJob
+        );
     }
 
     public function testFailedEventPopulatesLastErrorMessageAndFlipsStatus(): void

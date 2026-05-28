@@ -13,3 +13,45 @@ _qameraai_admin_test_connection:
     _controller: 'QameraAi\Module\Controller\Admin\TestConnectionController::indexAction'
     _legacy_controller: AdminQameraAiConfiguration
     _legacy_link: AdminQameraAiConfiguration
+
+# --- Phase 4.3: packshot generation BO ---
+
+_qameraai_admin_products_grid:
+  path: /qameraai/products
+  methods: [GET]
+  defaults:
+    _controller: 'QameraAi\Module\Controller\Admin\ProductsGridController::indexAction'
+    _legacy_controller: AdminQameraAiProducts
+    _legacy_link: AdminQameraAiProducts
+
+_qameraai_admin_generate_form:
+  path: /qameraai/generate
+  methods: [GET]
+  defaults:
+    _controller: 'QameraAi\Module\Controller\Admin\GenerateFormController::showAction'
+    _legacy_controller: AdminQameraAiProducts
+    _legacy_link: AdminQameraAiProducts
+
+_qameraai_admin_generate_submit:
+  path: /qameraai/generate/submit
+  methods: [POST]
+  defaults:
+    _controller: 'QameraAi\Module\Controller\Admin\GenerateFormController::submitAction'
+    _legacy_controller: AdminQameraAiProducts
+    _legacy_link: AdminQameraAiProducts
+
+_qameraai_admin_generate_cost:
+  path: /qameraai/generate/cost
+  methods: [GET]
+  defaults:
+    _controller: 'QameraAi\Module\Controller\Admin\GenerateFormController::costAction'
+    _legacy_controller: AdminQameraAiProducts
+    _legacy_link: AdminQameraAiProducts
+
+_qameraai_admin_jobs_history:
+  path: /qameraai/jobs
+  methods: [GET]
+  defaults:
+    _controller: 'QameraAi\Module\Controller\Admin\JobsHistoryController::indexAction'
+    _legacy_controller: AdminQameraAiJobs
+    _legacy_link: AdminQameraAiJobs

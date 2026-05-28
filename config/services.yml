@@ -14,6 +14,13 @@ services:
       # Symfony scan them produces "Cannot autowire service" failures at
       # container-compilation time, which kills module install.
       - '../src/Webhook/Event/*'
+      # Phase 4.3: CachedReferenceClient takes a runtime $apiKey, and
+      # CostCalculator takes a CachedReferenceClient — neither can be
+      # autowired. The factory (CachedReferenceClientFactory) + bridge
+      # (CalculatorBridge) wrap them with autowire-friendly indirection;
+      # consumers depend on those instead.
+      - '../src/Api/Cache/CachedReferenceClient.php'
+      - '../src/Packshot/CostCalculator.php'
 
   QameraAi\Module\Api\QameraApiClient:
     factory: ['@QameraAi\Module\Api\Factory\QameraApiClientFactory', 'create']
@@ -130,3 +137,58 @@ services:
       $repository: '@QameraAi\Module\Webhook\WebhookDeliveryRepository'
       $clock: '@QameraAi\Module\Webhook\SystemClock'
       $logger: '@QameraAi\Module\Webhook\Log\PrestaShopLoggerAdapter'
+
+  # ---- Phase 4.3: packshot-jobs + reference cache ----
+  # Every class below carries a string-typed constructor arg (table prefix,
+  # cache dir, or API key) that Symfony's autowire cannot resolve on its
+  # own. Explicit wiring is required even though they sit inside the
+  # auto-discovered ../src/* glob — without these blocks the container
+  # compilation fails the moment any consumer asks for one.
+
+  QameraAi\Module\Packshot\PackshotJobRepository:
+    public: true
+    arguments:
+      $db: '@qameraai.db'
+      $tablePrefix: !php/const _DB_PREFIX_
+
+  QameraAi\Module\Packshot\SyncedProductLinkLookup:
+    public: true
+    arguments:
+      $db: '@qameraai.db'
+      $tablePrefix: !php/const _DB_PREFIX_
+
+  QameraAi\Module\Packshot\PackshotJobUpdater:
+    public: true
+    arguments:
+      $repository: '@QameraAi\Module\Packshot\PackshotJobRepository'
+      $linkLookup: '@QameraAi\Module\Packshot\SyncedProductLinkLookup'
+      $logger: '@QameraAi\Module\Webhook\WebhookLogger'
+
+  QameraAi\Module\Packshot\PackshotJobSubmitter:
+    public: true
+    arguments:
+      $apiClient: '@QameraAi\Module\Api\QameraApiClient'
+      $repository: '@QameraAi\Module\Packshot\PackshotJobRepository'
+      $linkLookup: '@QameraAi\Module\Packshot\SyncedProductLinkLookup'
+      $logger: '@QameraAi\Module\Sync\PrestaShopLoggerWrapper'
+
+  # ReferenceCache needs an explicit cache directory; the rest of the
+  # Phase-4.3 reference-cache graph is autowire-friendly via the factory.
+  QameraAi\Module\Api\Cache\ReferenceCache:
+    public: true
+    arguments:
+      # !php/const works for constants known at container-compile time.
+      # _PS_CACHE_DIR_ is defined by PS bootstrap before the container
+      # is built (config/defines.inc.php) — safe to reference here.
+      $cacheDir: !php/const _PS_CACHE_DIR_
+
+  QameraAi\Module\Api\Cache\CachedReferenceClientFactory:
+    public: true
+    arguments:
+      $client: '@QameraAi\Module\Api\QameraApiClient'
+      $cache: '@QameraAi\Module\Api\Cache\ReferenceCache'
+
+  QameraAi\Module\Packshot\CalculatorBridge:
+    public: true
+    arguments:
+      $factory: '@QameraAi\Module\Api\Cache\CachedReferenceClientFactory'
