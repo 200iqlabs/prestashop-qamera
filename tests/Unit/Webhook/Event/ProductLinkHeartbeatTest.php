@@ -106,6 +106,9 @@ final class ProductLinkHeartbeatTest extends TestCase
 
         $probeSql = $this->db->executed[0];
         self::assertStringContainsString('SELECT 1 FROM `ps_qamera_product_link`', $probeSql);
-        self::assertStringNotContainsString('LIMIT', $probeSql);
+        // Case-insensitive: SQL keywords are case-insensitive, so a
+        // future reintroduction as `limit 1` would still collide with
+        // PS's appended LIMIT and break the same way.
+        self::assertDoesNotMatchRegularExpression('/\bLIMIT\b/i', $probeSql);
     }
 }
