@@ -46,9 +46,12 @@ class ProductLinkHeartbeat
         // A dedicated SELECT is one extra round-trip per dispatch (typical
         // dispatch is <5ms; +0.5ms is in the noise) but removes the
         // false-negative entirely.
+        // No explicit `LIMIT 1`: PrestaShop's Db::getRow() auto-appends
+        // `LIMIT 1` to the query, and a double-LIMIT triggers `syntax
+        // error near 'LIMIT 1'`. The PS contract guarantees a single row.
         $probeSql = sprintf(
             'SELECT 1 FROM `%sqamera_product_link` '
-            . 'WHERE `id_shop` = %d AND `id_product` = %d LIMIT 1;',
+            . 'WHERE `id_shop` = %d AND `id_product` = %d',
             $this->tablePrefix,
             $idShop,
             $idProduct

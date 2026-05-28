@@ -89,4 +89,26 @@ final class ProductLinkHeartbeatTest extends TestCase
         $sql = $this->db->executed[1];
         self::assertMatchesRegularExpression('/WHERE `id_shop` = 7 AND `id_product` = 13/', $sql);
     }
+
+    public function testProbeQueryDoesNotCarryExplicitLimit(): void
+    {
+        // Regression: PrestaShop's Db::getRow() auto-appends `LIMIT 1` to
+        // every query. A SELECT that already carries `LIMIT 1` produces a
+        // `LIMIT 1 LIMIT 1` syntax error at MySQL. The dispatcher then
+        // catches the PrestaShopException, logs `dispatch_handler_failed`
+        // with class name only, and the handler silently skips the
+        // packshot write — observable only via a live integration smoke.
+        // Source-grep this assertion to prevent the regression because
+        // the Db test double doesn't simulate PS's getRow contract.
+        $this->db->getRowScript = [['1' => '1']];
+        $this->db->affectedRowsScript = [1];
+        $this->heartbeat->touch(1, 42);
+
+        $probeSql = $this->db->executed[0];
+        self::assertStringContainsString('SELECT 1 FROM `ps_qamera_product_link`', $probeSql);
+        // Case-insensitive: SQL keywords are case-insensitive, so a
+        // future reintroduction as `limit 1` would still collide with
+        // PS's appended LIMIT and break the same way.
+        self::assertDoesNotMatchRegularExpression('/\bLIMIT\b/i', $probeSql);
+    }
 }
