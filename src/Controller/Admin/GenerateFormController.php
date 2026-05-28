@@ -107,7 +107,13 @@ final class GenerateFormController extends FrameworkBundleAdminController
             return $this->redirectToRoute('_qameraai_admin_products_grid');
         }
 
-        $errors = $this->validate($aiModel, $aspectRatio, $imagesCount, $productIds, $referenceContext['aspect_ratios']);
+        $errors = $this->validate(
+            $aiModel,
+            $aspectRatio,
+            $imagesCount,
+            $productIds,
+            $referenceContext['aspect_ratios']
+        );
         if ($errors !== []) {
             return $this->renderWithErrors($referenceFactory, $request, $errors);
         }
@@ -227,7 +233,7 @@ final class GenerateFormController extends FrameworkBundleAdminController
         $allowed = array_map(static fn (AspectRatio $ar): string => $ar->value, $aspectRatios);
         if ($aspectRatio === '' || !in_array($aspectRatio, $allowed, true)) {
             $errors['aspect_ratio'] = $this->trans(
-                'Invalid aspect ratio. Pick one from the list.',
+                'Aspect ratio is not in the upstream catalog.',
                 'Modules.Qameraai.Admin'
             );
         }

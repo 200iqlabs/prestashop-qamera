@@ -41,6 +41,8 @@ final class JobsHistoryController extends FrameworkBundleAdminController
         );
 
         $rows = $repository->listForGrid($filters);
+        $total = $repository->countForGrid($statusFilter);
+        $totalPages = (int) ceil(max(1, $total) / self::PAGE_SIZE);
 
         return $this->render(
             '@Modules/qameraai/views/templates/admin/jobs_history.html.twig',
@@ -49,6 +51,8 @@ final class JobsHistoryController extends FrameworkBundleAdminController
                 'status_filter' => $statusFilter ?? 'all',
                 'statuses' => array_merge(['all'], PackshotJobRow::STATUSES),
                 'page' => $page,
+                'total' => $total,
+                'total_pages' => $totalPages,
                 'page_size' => self::PAGE_SIZE,
                 'products_url' => $this->generateUrl('_qameraai_admin_products_grid'),
             ]

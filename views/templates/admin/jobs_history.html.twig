@@ -79,6 +79,21 @@
             {% endfor %}
           </tbody>
         </table>
+
+        {% if total_pages > 1 %}
+          <nav>
+            <ul class="pagination mb-0">
+              {% for p in 1..total_pages %}
+                <li class="page-item {% if p == page %}active{% endif %}">
+                  <a class="page-link"
+                     href="?page={{ p }}{% if status_filter != 'all' %}&amp;status={{ status_filter }}{% endif %}">
+                    {{ p }}
+                  </a>
+                </li>
+              {% endfor %}
+            </ul>
+          </nav>
+        {% endif %}
       {% endif %}
     </div>
   </div>

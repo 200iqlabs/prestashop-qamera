@@ -228,6 +228,32 @@ class PackshotJobRepository
     }
 
     /**
+     * Row count for the BO jobs-history grid, scoped by the same status
+     * filter as {@see listForGrid}. Used to compute `total_pages` so the
+     * template can render pagination controls.
+     *
+     * @throws QameraDbException on DB error
+     */
+    public function countForGrid(?string $statusFilter): int
+    {
+        $statusClause = $statusFilter !== null
+            ? sprintf("WHERE `status` = '%s'", $this->escape($statusFilter))
+            : '';
+
+        $sql = sprintf(
+            'SELECT COUNT(*) AS `n` FROM `%sqamera_packshot_job` %s',
+            $this->tablePrefix,
+            $statusClause
+        );
+
+        $row = $this->db->getRow($sql);
+        if (!is_array($row) || !isset($row['n'])) {
+            return 0;
+        }
+        return (int) $row['n'];
+    }
+
+    /**
      * Paginated list for the BO jobs-history grid. Joins
      * `ps_product_lang` so the operator's locale wins.
      *
