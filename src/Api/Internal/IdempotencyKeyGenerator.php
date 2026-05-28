@@ -18,9 +18,20 @@ class IdempotencyKeyGenerator
 {
     public function generate(): string
     {
-        if (method_exists(Uuid::class, 'uuid7')) {
+        if ($this->hasUuid7()) {
             return Uuid::uuid7()->toString();
         }
         return Uuid::uuid4()->toString();
+    }
+
+    /**
+     * Indirection over `method_exists` so the integration suite can
+     * subclass and force the uuid4 fallback path — otherwise that
+     * branch is invisible to tests in any environment that ships
+     * ramsey/uuid 4.7+ (where uuid7 always exists).
+     */
+    protected function hasUuid7(): bool
+    {
+        return method_exists(Uuid::class, 'uuid7');
     }
 }

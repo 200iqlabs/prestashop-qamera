@@ -1,0 +1,56 @@
+# Self-contained docker-compose layout for the CI `integration` job.
+#
+# Spins up PrestaShop 9.0 + MySQL 8 using public Docker Hub images and
+# bind-mounts the module under test into modules/qameraai. PS_INSTALL_AUTO
+# = 1 makes the prestashop/prestashop image run the unattended installer
+# on first boot — the container becomes healthy when PS responds on :80.
+#
+# Local devs continue to use the parent `qameraai-prestashop/` shell;
+# this file exists only so CI does not depend on a separate repo
+# checkout. Drift between the two is acceptable as long as CI faithfully
+# represents the integration tier's contract (kernel boots, real Db,
+# real _PS_PRODUCT_IMG_DIR_, mocked HTTP).
+
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: prestashop
+      MYSQL_DATABASE: prestashop
+      MYSQL_USER: prestashop
+      MYSQL_PASSWORD: prestashop
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pprestashop"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  prestashop:
+    image: prestashop/prestashop:9.0-apache
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    environment:
+      DB_SERVER: mysql
+      DB_NAME: prestashop
+      DB_USER: prestashop
+      DB_PASSWD: prestashop
+      DB_PREFIX: ps_
+      PS_INSTALL_AUTO: "1"
+      PS_ERASE_DB: "0"
+      PS_DEV_MODE: "1"
+      PS_FOLDER_INSTALL: install
+      PS_FOLDER_ADMIN: admin-dev
+      PS_DOMAIN: localhost:8080
+      PS_LANGUAGE: en
+      PS_COUNTRY: us
+      ADMIN_MAIL: ci@qamera.test
+      ADMIN_PASSWD: prestashop_demo
+    volumes:
+      # The module under test is bind-mounted into the standard PS9
+      # modules dir. The integration job copies modules/qameraai (with
+      # vendor/ already installed by composer install on the host) into
+      # the path this volume points at, in the workflow's setup step.
+      - ./module:/var/www/html/modules/qameraai
