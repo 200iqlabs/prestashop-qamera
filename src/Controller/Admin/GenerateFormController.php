@@ -117,9 +117,7 @@ final class GenerateFormController extends FrameworkBundleAdminController
                 $unsynced++;
                 continue;
             }
-            if ($link->analysisStatus !== SyncedProductLink::ANALYSIS_STATUS_DESCRIBED
-                && $link->analysisStatus !== SyncedProductLink::ANALYSIS_STATUS_PARTIAL
-            ) {
+            if ($link->analysisStatus !== SyncedProductLink::ANALYSIS_STATUS_DESCRIBED) {
                 $awaiting++;
                 continue;
             }

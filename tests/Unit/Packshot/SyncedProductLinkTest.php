@@ -45,8 +45,8 @@ final class SyncedProductLinkTest extends TestCase
         return [
             'image + described enables generate'
                 => ['img-uuid', 'described', true, null],
-            'image + partial enables generate (multi-image forward-compat)'
-                => ['img-uuid', 'partial', true, null],
+            'image + partial blocks generate (multi-image future will revisit)'
+                => ['img-uuid', 'partial', false, 'Some images still analysing — refresh'],
             'image + processing blocks with processing hint'
                 => ['img-uuid', 'processing', false, 'Image is being analysed…'],
             'image + pending blocks with pending hint'

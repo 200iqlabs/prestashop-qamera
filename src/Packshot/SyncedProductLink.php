@@ -60,6 +60,11 @@ final class SyncedProductLink
      * The "sync first" reason takes precedence over "analysis pending":
      * without an image_id there's literally nothing to analyse, so showing
      * the analysis hint would be misleading.
+     *
+     * Note on `partial`: the spec gates Generate strictly on `described`
+     * — the multi-image future will revisit this when the operator
+     * actually has a per-image picker. For now, a `partial` row is
+     * blocked with the same "still analysing" hint as `processing`.
      */
     public function getDisabledHint(): ?string
     {
@@ -68,8 +73,9 @@ final class SyncedProductLink
         }
 
         return match ($this->analysisStatus) {
-            self::ANALYSIS_STATUS_DESCRIBED, self::ANALYSIS_STATUS_PARTIAL => null,
+            self::ANALYSIS_STATUS_DESCRIBED => null,
             self::ANALYSIS_STATUS_PROCESSING => 'Image is being analysed…',
+            self::ANALYSIS_STATUS_PARTIAL => 'Some images still analysing — refresh',
             self::ANALYSIS_STATUS_ERROR => 'Image analysis failed — re-sync product',
             self::ANALYSIS_STATUS_PENDING => 'Waiting for image analysis…',
             null => 'Awaiting analysis status — refresh',

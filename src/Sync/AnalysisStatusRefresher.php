@@ -286,7 +286,7 @@ class AnalysisStatusRefresher
 
     private function escape(string $value): string
     {
-        return pSQL($value);
+        return $this->db->escape($value, true, true);
     }
 
     private function truncate(string $value, int $max): string

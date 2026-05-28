@@ -244,7 +244,7 @@ final class PackshotJobSubmitterTest extends TestCase
         );
     }
 
-    private function link(int $idProduct): SyncedProductLink
+    private function link(int $idProduct, ?string $analysisStatus = SyncedProductLink::ANALYSIS_STATUS_DESCRIBED): SyncedProductLink
     {
         return new SyncedProductLink(
             idLink: 100 + $idProduct,
@@ -253,6 +253,12 @@ final class PackshotJobSubmitterTest extends TestCase
             qameraImageId: 'img-' . $idProduct,
             qameraProductRef: 'ps:1:' . $idProduct,
             displayNameSnapshot: 'Product ' . $idProduct,
+            // Phase 4.4 — submitter still gates on canGenerate(), which
+            // now requires `described` in addition to a non-null image
+            // id. Test fixtures default to `described` so existing
+            // submitter scenarios stay green; tests that need to verify
+            // the new gate pass an explicit override.
+            analysisStatus: $analysisStatus,
         );
     }
 

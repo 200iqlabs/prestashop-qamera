@@ -14,6 +14,7 @@ use QameraAi\Module\Api\QameraApiClient;
 use QameraAi\Module\Packshot\SyncedProductLink;
 use QameraAi\Module\Sync\AnalysisStatusRefresher;
 use QameraAi\Module\Sync\PrestaShopLoggerWrapper;
+use QameraAi\Module\Tests\Support\TestableAnalysisStatusRefresher;
 
 final class AnalysisStatusRefresherTest extends TestCase
 {
@@ -37,6 +38,14 @@ final class AnalysisStatusRefresherTest extends TestCase
     {
         parent::setUp();
         $this->db = $this->createMock(Db::class);
+        // The refresher routes string interpolation through Db::escape;
+        // the mock's default null return would silently swallow the
+        // escaped enum literal into an empty string and the UPDATE
+        // assertion would mismatch. Return the input unchanged so the
+        // SQL fragment is verifiable.
+        $this->db->method('escape')->willReturnCallback(
+            static fn ($value, $html = false, $bqSql = false) => (string) $value,
+        );
         $this->client = $this->createMock(QameraApiClient::class);
         $this->logger = $this->createMock(PrestaShopLoggerWrapper::class);
         $this->refresher = new TestableAnalysisStatusRefresher(
@@ -311,22 +320,5 @@ final class AnalysisStatusRefresherTest extends TestCase
             packshots: [],
             packshotsTruncated: false,
         );
-    }
-}
-
-/**
- * Test-only subclass that freezes `now()` so the TTL gate is
- * deterministic and the persisted timestamp string is predictable.
- */
-final class TestableAnalysisStatusRefresher extends AnalysisStatusRefresher
-{
-    protected function now(): string
-    {
-        return date('Y-m-d H:i:s', $this->nowTimestamp());
-    }
-
-    protected function nowTimestamp(): int
-    {
-        return 1779000000;
     }
 }

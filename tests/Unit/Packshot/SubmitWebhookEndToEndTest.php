@@ -48,6 +48,7 @@ final class SubmitWebhookEndToEndTest extends TestCase
             qameraImageId: 'img-42',
             qameraProductRef: 'ps:1:42',
             displayNameSnapshot: 'Widget',
+            analysisStatus: SyncedProductLink::ANALYSIS_STATUS_DESCRIBED,
         );
 
         $capturedRef = null;
@@ -131,6 +132,7 @@ final class SubmitWebhookEndToEndTest extends TestCase
             qameraImageId: 'img-42',
             qameraProductRef: 'ps:1:42',
             displayNameSnapshot: 'Widget',
+            analysisStatus: SyncedProductLink::ANALYSIS_STATUS_DESCRIBED,
         );
 
         $apiClient = $this->stubClient(static function (): SubmitJobResponse {
@@ -176,6 +178,7 @@ final class SubmitWebhookEndToEndTest extends TestCase
             qameraImageId: 'img-42',
             qameraProductRef: 'ps:1:42',
             displayNameSnapshot: 'Widget',
+            analysisStatus: SyncedProductLink::ANALYSIS_STATUS_DESCRIBED,
         );
 
         // Webhook arrives BEFORE the submitter has persisted anything —

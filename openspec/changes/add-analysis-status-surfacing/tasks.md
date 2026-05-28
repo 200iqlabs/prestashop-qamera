@@ -67,12 +67,12 @@
 
 ## 8. Contract + integration regression
 
-- [ ] 8.1 Run full PHPUnit suite (`docker run --rm -v "$PWD:/app" -w /app php:8.1-cli vendor/bin/phpunit`) — green on PHP 8.1
-- [ ] 8.2 Re-run on PHP 8.2 + 8.3 to mirror CI matrix
-- [ ] 8.3 Run PHPStan level 5 (`vendor/bin/phpstan analyse`) — green
-- [ ] 8.4 Run PHPCS (`vendor/bin/phpcs`) — green
-- [ ] 8.5 Re-run `tests/Contract/QameraApiContractTest.php` against updated `products-detail` fixture — green
-- [ ] 8.6 Confirm existing webhook flow tests still pass (no regression in `job.*` handlers from the canGenerate change)
+- [x] 8.1 PHPUnit full suite on PHP 8.1 docker: **378 tests, 1025 assertions, 12 skipped (pre-existing PS-bootstrap stubs), 0 failures**. Includes 14 new AnalysisStatusRefresher tests + 9 SyncedProductLink canGenerate matrix rows + 4 new ProductImageDto decoder tests.
+- [ ] 8.2 Re-run on PHP 8.2 + 8.3 deferred to CI matrix (local docker covers 8.1; CI handles cross-version).
+- [ ] 8.3 PHPStan level 5 — pre-existing 208 "unknown class Db" errors caused by missing PS bootstrap; my changed files add zero new PHPStan errors (baseline count identical with/without my diff). CI runs with real PS bootstrap to resolve them.
+- [x] 8.4 PHPCS — auto-fixed CRLF on all my changed files via `phpcbf`; remaining 2 CRLF errors are in `src/Sync/ImageUploadStrategy.php` + `src/Sync/InMemoryDedupCache.php` (pre-existing, untouched by this change).
+- [x] 8.5 Contract suite green: `products-detail.fixture.json` decodes through `ProductDetailResponse` carrying the two new `images[].analysis_status` + `analyzed_at` fields. 46 contract tests, 0 failures, 12 skipped (unimplemented endpoints).
+- [x] 8.6 Existing webhook flow tests still pass; the `canGenerate()` tightening required adding `analysisStatus: DESCRIBED` to test fixtures in `PackshotJobSubmitterTest::link()` helper and three call-sites in `SubmitWebhookEndToEndTest`. Behaviour unchanged for valid generatable rows.
 
 ## 9. Smoke (operator-driven, against live `qamera.ai` install)
 
