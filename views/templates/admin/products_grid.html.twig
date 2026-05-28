@@ -78,7 +78,7 @@
                     {{ row.last_synced_at|default('—') }}
                   </td>
                   <td>
-                    <a href="{{ generate_url }}?products={{ row.id_product }}"
+                    <a href="{{ path('_qameraai_admin_generate_form', {'products': row.id_product}) }}"
                        class="btn btn-sm js-qameraai-generate {% if row.can_generate %}btn-primary{% else %}btn-secondary disabled{% endif %}"
                        data-id-link="{{ row.id_link }}"
                        data-id-product="{{ row.id_product }}"
