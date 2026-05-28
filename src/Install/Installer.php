@@ -104,7 +104,11 @@ final class Installer
                 `last_error_message` TEXT NULL,
                 `last_synced_at` DATETIME NULL,
                 `created_at` DATETIME NOT NULL,
-                `updated_at` DATETIME NOT NULL,
+                -- DEFAULT CURRENT_TIMESTAMP mirrors what migratePackshotLinkSchema()
+                -- emits on the ALTER path, so fresh installs and upgraded
+                -- installs share an identical schema (no INSERT-without-
+                -- updated_at divergence between the two install paths).
+                `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (`id_link`),
                 UNIQUE KEY `qamera_packshot_link_ref` (`qamera_packshot_ref`),
                 UNIQUE KEY `qamera_packshot_link_qamera_packshot_id` (`qamera_packshot_id`)

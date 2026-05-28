@@ -32,9 +32,32 @@ class ProductLinkHeartbeat
      */
     public function touch(int $idShop, int $idProduct): bool
     {
-        // Capture once — a second-boundary crossing between two calls
-        // would leave `last_synced_at` and `updated_at` 1s apart on the
-        // same row, complicating debugging without any operational gain.
+        // Existence probe BEFORE the UPDATE.
+        //
+        // Why not infer from Affected_Rows() alone: MySQL with the default
+        // PrestaShop connection flags reports `affected = 0` for an UPDATE
+        // that matches a row but changes no column. Our SET clause writes
+        // only NOW() with second resolution, so a second touch() for the
+        // same (id_shop, id_product) within the same second on a row that
+        // already carries those timestamps reports `affected = 0` — which
+        // looks identical to "no row matched". Treating that as "product
+        // unknown" makes the handler silently skip the packshot upsert.
+        //
+        // A dedicated SELECT is one extra round-trip per dispatch (typical
+        // dispatch is <5ms; +0.5ms is in the noise) but removes the
+        // false-negative entirely.
+        $probeSql = sprintf(
+            'SELECT 1 FROM `%sqamera_product_link` '
+            . 'WHERE `id_shop` = %d AND `id_product` = %d LIMIT 1;',
+            $this->tablePrefix,
+            $idShop,
+            $idProduct
+        );
+        $probe = $this->db->getRow($probeSql);
+        if (!is_array($probe)) {
+            return false;
+        }
+
         $now = $this->escape($this->nowUtc());
         $sql = sprintf(
             'UPDATE `%sqamera_product_link` '
@@ -51,7 +74,7 @@ class ProductLinkHeartbeat
             throw new QameraDbException('product_link heartbeat failed');
         }
 
-        return (int) $this->db->Affected_Rows() >= 1;
+        return true;
     }
 
     private function nowUtc(): string

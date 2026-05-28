@@ -25,6 +25,9 @@ final class RecordingDb extends Db
     /** @var list<int> Queue of affected-row counts. */
     public array $affectedRowsScript = [];
 
+    /** @var list<array<string, mixed>|false> Queue of getRow() return values. */
+    public array $getRowScript = [];
+
     public bool $failNextExecute = false;
     public ?\Throwable $throwOnExecute = null;
 
@@ -58,7 +61,10 @@ final class RecordingDb extends Db
     public function getRow(string $sql, bool $useCache = true)
     {
         $this->executed[] = $sql;
-        return false;
+        if ($this->getRowScript === []) {
+            return false;
+        }
+        return array_shift($this->getRowScript);
     }
 
     // phpcs:disable PSR1.Methods.CamelCapsMethodName
