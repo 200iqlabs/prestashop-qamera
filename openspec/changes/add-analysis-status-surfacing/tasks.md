@@ -15,23 +15,23 @@
 
 ## 3. AnalysisStatusRefresher service
 
-- [ ] 3.1 Create `src/Sync/AnalysisStatusRefresher.php` exposing `refresh(SyncedProductLink $link, bool $force = false): RefreshResult`
-- [ ] 3.2 Create `src/Sync/RefreshResult.php` value object carrying `analysisStatus, describedCount, totalCount, refreshedAt, ?refreshError`
-- [ ] 3.3 Implement TTL gate in `shouldRefresh()` helper: 60s for `{pending, processing, NULL}`, 3600s for `{described, error, partial}`; `force=true` always bypasses
-- [ ] 3.4 Implement aggregate reduction `aggregate(ProductImageDto[]): array{status, described, total}` per the algorithm in `product-image-sync` spec ("Aggregate reduction" requirement)
-- [ ] 3.5 Wire `QameraApiClient::getProduct($link->qameraProductRef)` call + UPDATE on `ps_qamera_product_link` writing the four columns
-- [ ] 3.6 Wrap upstream `ApiException` subclasses → sanitised `refreshError` string (reuse the mapping conventions from `ProductImageSyncService` error mapping); log at severity 2 via `PrestaShopLoggerWrapper`; return cached row values
-- [ ] 3.7 Add unit test `tests/Unit/Sync/AnalysisStatusRefresherTest.php` covering: TTL-fresh skip, TTL-stale pull, force bypass, NULL refreshed_at always pulls, upstream exception preserves cache + sets refreshError, aggregate algorithm matrix (all 7 scenarios from spec)
+- [x] 3.1 Created `src/Sync/AnalysisStatusRefresher.php` with `refresh(SyncedProductLink $link, bool $force = false): RefreshResult`. Class is non-`final` so tests subclass `now()`/`nowTimestamp()`.
+- [x] 3.2 Created `src/Sync/RefreshResult.php` value object (`analysisStatus, describedCount, totalCount, refreshedAt, ?refreshError`).
+- [x] 3.3 TTL gate `shouldRefresh()` — 60s for in-flight (`pending`/`processing`/NULL), 3600s for settled (`described`/`error`/`partial`); `force=true` bypasses; NULL `analysisRefreshedAt` always pulls.
+- [x] 3.4 Aggregate reduction as `public static AnalysisStatusRefresher::aggregate(array): array` — algorithm per spec, earliest-match-wins. Exposed static so the test matrix runs without the full service.
+- [x] 3.5 `getProduct($qameraProductRef)` call + UPDATE writing four columns; identifier is `ref` (always non-NULL on registered links).
+- [x] 3.6 Sanitiser mirrors `ProductImageSyncService::mapExceptionToLastError()` conventions; severity-2 PrestaShopLogger write; cached row values returned + `refreshError` populated.
+- [x] 3.7 `tests/Unit/Sync/AnalysisStatusRefresherTest.php` — 14 tests: TTL fresh/stale, force bypass, NULL pulls, ServerException + ValidationException preserve cache + sanitise, 8 aggregate scenarios (single described/processing/error, multi described+processing→partial, described+error→partial, all-error, empty→null, all-pending).
 
 ## 4. SyncedProductLink + Lookup extensions
 
-- [ ] 4.1 Extend `src/Packshot/SyncedProductLink.php` constructor with `?string $analysisStatus, ?int $analysisDescribedCount, ?int $analysisTotalCount, ?string $analysisRefreshedAt` (all nullable for legacy rows)
-- [ ] 4.2 Update `SyncedProductLink::canGenerate()` to require `qameraImageId !== null AND analysisStatus === 'described'`
-- [ ] 4.3 Add `SyncedProductLink::getDisabledHint(): ?string` returning the operator-facing hint per the mapping in `product-image-sync` spec
-- [ ] 4.4 Extend `SyncedProductLinkLookup::listForGrid()` SELECT to include the four new columns; pass them into the constructor
-- [ ] 4.5 Extend `SyncedProductLinkLookup::loadByProductIds()` SELECT identically so bulk-select uses the same data
-- [ ] 4.6 Update `tests/Support/FakeSyncedProductLinkLookup.php` (if present) to mirror the new constructor shape
-- [ ] 4.7 Add unit tests for the `canGenerate()` matrix (described/processing/pending/error/NULL × image present/absent) and `getDisabledHint()` mapping
+- [x] 4.1 Extended `SyncedProductLink` ctor with `?string $analysisStatus, ?int $analysisDescribedCount, ?int $analysisTotalCount, ?string $analysisRefreshedAt` + exposed `ANALYSIS_STATUS_*` constants.
+- [x] 4.2 `canGenerate()` requires both `qameraImageId !== null/''` AND `analysisStatus === 'described'` (partial also OK for multi-image forward-compat).
+- [x] 4.3 Added `getDisabledHint(): ?string` returning the per-state hint per spec mapping; "Sync this product first" takes precedence over analysis hints when image is absent.
+- [x] 4.4 `SyncedProductLinkLookup::listForGrid()` SELECT extended; deduplicated row hydration into `hydrate()` helper.
+- [x] 4.5 `SyncedProductLinkLookup::loadByProductIds()` SELECT extended identically; also added `findByIdLink()` for the upcoming status JSON endpoint (preempts section 5).
+- [x] 4.6 `tests/Support/FakeSyncedProductLinkLookup.php` got matching `findByIdLink()`; ctor change is backward-compatible (all new fields default to null).
+- [x] 4.7 `tests/Unit/Packshot/SyncedProductLinkTest.php` — 9-row data provider covering described/partial/processing/pending/error/NULL × image present/absent/empty.
 
 ## 5. BO status JSON endpoint
 
