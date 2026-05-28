@@ -32,13 +32,17 @@ class ProductLinkHeartbeat
      */
     public function touch(int $idShop, int $idProduct): bool
     {
+        // Capture once — a second-boundary crossing between two calls
+        // would leave `last_synced_at` and `updated_at` 1s apart on the
+        // same row, complicating debugging without any operational gain.
+        $now = $this->escape($this->nowUtc());
         $sql = sprintf(
             'UPDATE `%sqamera_product_link` '
             . "SET `last_synced_at` = '%s', `updated_at` = '%s' "
             . 'WHERE `id_shop` = %d AND `id_product` = %d;',
             $this->tablePrefix,
-            $this->escape($this->nowUtc()),
-            $this->escape($this->nowUtc()),
+            $now,
+            $now,
             $idShop,
             $idProduct
         );

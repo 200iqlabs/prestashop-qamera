@@ -11,7 +11,6 @@ use QameraAi\Module\Tests\Support\RecordingEventHandler;
 use QameraAi\Module\Tests\Support\SpyLogger;
 use QameraAi\Module\Tests\Support\ThrowingEventHandler;
 use QameraAi\Module\Webhook\Event\EventDispatcher;
-use QameraAi\Module\Webhook\Event\WebhookEvent;
 use QameraAi\Module\Webhook\HmacVerifier;
 use QameraAi\Module\Webhook\ReplayGuard;
 use QameraAi\Module\Webhook\SignatureHeaderParser;

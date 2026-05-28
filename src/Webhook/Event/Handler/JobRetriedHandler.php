@@ -57,12 +57,11 @@ final class JobRetriedHandler implements EventHandlerInterface
             return;
         }
 
-        // Heartbeat always runs (even if the packshot row doesn't exist
-        // yet) — the goal is to record that the upstream is still alive.
-        // Unknown-product log line follows the same pattern as the other
-        // handlers, but unlike them we still attempt the packshot timestamp
-        // bump because a row may exist from a prior delivery on a different
-        // product mapping (defensive — usually a no-op).
+        // Same unknown-product guard as the other handlers: if no
+        // ps_qamera_product_link row exists for (shopId, productId), this
+        // delivery is for a product this shop doesn't own — log WARNING
+        // and skip the packshot UPDATE entirely. Matches D9's defensive
+        // guard for shared installation_id across multiple PS instances.
         if (!$this->productHeartbeat->touch($externalRef->shopId, $externalRef->productId)) {
             $this->logger->warning('unknown_product_link', [
                 'delivery_id' => $event->deliveryId,

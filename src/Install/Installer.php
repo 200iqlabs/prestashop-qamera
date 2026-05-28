@@ -175,7 +175,13 @@ final class Installer
         $additions = [
             'last_error_message' => '`last_error_message` TEXT NULL',
             'last_synced_at' => '`last_synced_at` DATETIME NULL',
-            'updated_at' => '`updated_at` DATETIME NOT NULL',
+            // `DEFAULT CURRENT_TIMESTAMP` so adding the column to an
+            // existing pre-4.2 table with rows succeeds under strict SQL
+            // modes — without a default, MySQL would reject the ALTER (or
+            // back-fill the zero-date `'0000-00-00 00:00:00'`, which
+            // fails NO_ZERO_DATE). Fresh inserts from the dispatch layer
+            // still supply an explicit timestamp.
+            'updated_at' => '`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
         ];
 
         foreach ($additions as $name => $definition) {

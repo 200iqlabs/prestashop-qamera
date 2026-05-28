@@ -10,7 +10,6 @@ use QameraAi\Module\Webhook\Event\ExternalRefParser;
 use QameraAi\Module\Webhook\Event\InvalidExternalRefException;
 use QameraAi\Module\Webhook\Event\PackshotLinkUpdater;
 use QameraAi\Module\Webhook\Event\ProductLinkHeartbeat;
-use QameraAi\Module\Webhook\Event\QameraDbException;
 use QameraAi\Module\Webhook\Event\WebhookEvent;
 use QameraAi\Module\Webhook\WebhookLogger;
 
