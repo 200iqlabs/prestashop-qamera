@@ -83,13 +83,13 @@
 
 ## 9. PR + merge
 
-- [ ] 9.1. PR against `main` referencing this OpenSpec change
-- [ ] 9.2. Address Copilot + manual review comments
-- [ ] 9.3. Merge after green CI + §8 regression verification signed off
+- [x] 9.1. PR against `main` referencing this OpenSpec change
+- [x] 9.2. Address Copilot + manual review comments
+- [x] 9.3. Merge after green CI + §8 regression verification signed off
 
 ## 10. Archive
 
-- [ ] 10.1. `/opsx:archive add-ps-kernel-integration-tests` rolling delta into:
+- [x] 10.1. `/opsx:archive add-ps-kernel-integration-tests` rolling delta into:
   - `openspec/specs/integration-test-harness/spec.md` (new capability)
-- [ ] 10.2. README — no Phase table update needed (this is test infrastructure, orthogonal to the Phase plan)
-- [ ] 10.3. CHANGELOG (en/pl/uk) — `[Unreleased]` entry noting the new integration harness + tier discipline contract (no user-facing behavior change → no version bump needed; or bump to 1.2.1 if we're tagging the regression-coverage improvement as a patch release; decide at archive time)
+- [x] 10.2. README — no Phase table update needed (this is test infrastructure, orthogonal to the Phase plan)
+- [x] 10.3. CHANGELOG (en/pl/uk) — `[Unreleased]` entry noting the new integration harness + tier discipline contract (no user-facing behavior change → no version bump needed; or bump to 1.2.1 if we're tagging the regression-coverage improvement as a patch release; decide at archive time)

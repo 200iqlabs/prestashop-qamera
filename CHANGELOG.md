@@ -6,6 +6,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 Translations: [polski](CHANGELOG.pl.md) · [українська](CHANGELOG.uk.md)
 
+## [Unreleased]
+
+### Added — test infrastructure
+
+- **Integration test tier (PS9 kernel-booted)** under `tests/Integration/`. A new bootstrap (`tests/Integration/bootstrap.php`) boots a real PrestaShop 9 `AdminKernel` inside the dev container, exposes the booted Symfony container, pins shop context to shop 1, redirects `QAMERAAI_API_BASE_URL` to the RFC 2606 `http://qamera-test.invalid` host so any forgotten API-client rebind fails fast on DNS rather than leaking real credentials, and sweeps any leftover `TEST-`-prefixed fixtures from prior interrupted runs. Suite runs via `vendor/bin/phpunit -c phpunit.integration.xml.dist` with `failOnSkipped="true"`.
+- **Fixture factories** — `ProductFactory`, `ImageFactory`, `BookkeepingFactory` — and an `IntegrationTestCase` base with auto-restoring `rebindContainerService` / `setConfigurationOverride` helpers. Per-test marker (`bin2hex(random_bytes(4))`) drives a targeted teardown DELETE so tests do not depend on execution order.
+- **Phase-3 smoke regression coverage** — three new tests (`ProductImageSyncIntegrationTest`, `PrimaryImageResolverIntegrationTest`, `IdempotencyKeyGeneratorIntegrationTest`) exercise the three bug classes that the Phase-3 operator smoke caught (`Db::getRow` LIMIT 1 semantics, `_PS_PRODUCT_IMG_DIR_` constant resolution, `Uuid::uuid7`/`uuid4` autoloader fallback). Each was verified live on CI by deliberately re-introducing the bug on a scratch commit and observing the corresponding test fail before reverting.
+- **New CI job** `Integration (PS9 kernel)` parallel to the static-analysis matrix (PHP 8.1/8.2/8.3). Spins up PS9 + MySQL 8 via inlined `.ci/docker-compose.integration.yml`, runs `prestashop:module install qameraai`, then executes the integration suite. Gated to same-repo PRs only.
+
+### Changed — test discipline
+
+- `phpunit.xml.dist` no longer carries the `integration` testsuite or the `<groups><exclude><group>integration</group></exclude></groups>` block — the default `vendor/bin/phpunit` now runs unit + contract only.
+- Static-analysis CI job now invokes `vendor/bin/phpunit --testsuite=unit,contract` explicitly so the workflow file documents the contract.
+
+### Refactor — internal
+
+- `ProductImageSyncService`'s in-request `(idProduct, idImage)` dedup cache is now an injected `InMemoryDedupCache` service rather than a private array property. No behavior change; integration tests can rebind the cache per test via the container.
+- `IdempotencyKeyGenerator` exposes a `protected hasUuid7(): bool` indirection over `method_exists(Uuid::class, 'uuid7')` so the integration suite can subclass and force the production `uuid4` fallback branch.
+
+### Operator notes
+
+- No user-facing behavior change. No new BO surface. No new HTTP endpoints. Pure test infrastructure and a single internal refactor.
+- New integration suite runs in the dev container only; not part of `vendor/bin/phpunit` default invocation, so local inner-loop speed is unchanged.
+
 ## [1.3.0] — 2026-05-27
 
 Phase 4.1 — inbound webhook receive-and-verify. The module now exposes a storefront endpoint that authenticates incoming deliveries from `qamera.ai` with HMAC-SHA256 (supporting the upstream 48 h dual-sign rotation grace window via multi-`v1=` headers), enforces a ±300 s past / 60 s future replay window, deduplicates on `X-Qamera-Delivery-Id` via a new `qamera_webhook_delivery` table, and persists every accepted delivery as the substrate for Phase 4.2 to dispatch against. PrestaShop 8.0–9.x, PHP 8.1+.

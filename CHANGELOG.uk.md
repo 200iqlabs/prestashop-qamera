@@ -6,6 +6,30 @@
 
 Переклади: [english](CHANGELOG.md) · [polski](CHANGELOG.pl.md)
 
+## [Unreleased]
+
+### Додано — тестова інфраструктура
+
+- **Інтеграційний рівень тестування з бутом ядра PS9** у `tests/Integration/`. Новий bootstrap (`tests/Integration/bootstrap.php`) піднімає справжнє ядро `AdminKernel` PrestaShop 9 усередині dev-контейнера, відкриває скомпільований Symfony-контейнер, фіксує контекст крамниці на shop 1, перенаправляє `QAMERAAI_API_BASE_URL` на зарезервований RFC 2606 хост `http://qamera-test.invalid` (будь-яке забуте перевизначення API-клієнта падає на DNS, а не витікає реальними обліковими даними) і прибирає залишки записів із префіксом `TEST-` після перерваних попередніх запусків. Suite запускається через `vendor/bin/phpunit -c phpunit.integration.xml.dist` із `failOnSkipped="true"`.
+- **Фабрики фікстур** — `ProductFactory`, `ImageFactory`, `BookkeepingFactory` — і базовий клас `IntegrationTestCase` з помічниками `rebindContainerService` / `setConfigurationOverride`, що автоматично відновлюють стан. Маркер на тест (`bin2hex(random_bytes(4))`) керує адресним DELETE у tearDown, тож тести не залежать від порядку виконання.
+- **Покриття регресій Фази 3 (smoke)** — три нові тести (`ProductImageSyncIntegrationTest`, `PrimaryImageResolverIntegrationTest`, `IdempotencyKeyGeneratorIntegrationTest`) відтворюють три класи помилок, які виявив операторський smoke Фази 3 (семантика `Db::getRow` з авто-LIMIT 1, розв’язання константи `_PS_PRODUCT_IMG_DIR_`, фолбек автозавантажувача `Uuid::uuid7`/`uuid4`). Кожен підтверджено наживо в CI: помилку навмисно повторно вводили scratch-комітом і спостерігали падіння відповідного тесту перед revert.
+- **Нова робота CI** `Integration (PS9 kernel)` паралельно до матриці static-analysis (PHP 8.1/8.2/8.3). Піднімає PS9 + MySQL 8 через інлайновий `.ci/docker-compose.integration.yml`, виконує `prestashop:module install qameraai`, запускає suite. Активна лише для PR-ів з того ж репозиторію.
+
+### Змінено — тестова дисципліна
+
+- `phpunit.xml.dist` більше не містить testsuite `integration` і блок `<groups><exclude><group>integration</group></exclude></groups>` — стандартне `vendor/bin/phpunit` тепер запускає тільки unit + contract.
+- Робота static-analysis у CI явно викликає `vendor/bin/phpunit --testsuite=unit,contract`, щоб контракт був задокументований у файлі workflow.
+
+### Рефакторинг — внутрішній
+
+- Дедуп-кеш `(idProduct, idImage)` у `ProductImageSyncService` тепер ін’єктується як сервіс `InMemoryDedupCache`, а не як приватне поле-масив. Без зміни поведінки; інтеграційні тести можуть підміняти кеш на кожен тест через контейнер.
+- `IdempotencyKeyGenerator` виставляє метод `protected hasUuid7(): bool` поверх `method_exists(Uuid::class, 'uuid7')`, щоб інтеграційний suite міг підкласувати клас і примусово пройти продакшен-гілку фолбеку `uuid4`.
+
+### Нотатки операторам
+
+- Жодних змін, видимих користувачу. Жодних нових поверхонь у BO. Жодних нових HTTP-ендпоїнтів. Чиста тестова інфраструктура і один внутрішній рефакторинг.
+- Новий інтеграційний suite запускається лише в dev-контейнері; не входить у стандартне `vendor/bin/phpunit`, тож швидкість локального inner-loop не змінюється.
+
 ## [1.3.0] — 2026-05-27
 
 Фаза 4.1 — приймання та верифікація вхідних вебхуків. Модуль тепер відкриває storefront-ендпоїнт, який автентифікує доставки з `qamera.ai` через HMAC-SHA256 (з підтримкою 48-годинного вікна dual-sign під час ротації секрету апстрімом — кілька `v1=` у заголовку), застосовує вікно replay ±300 с у минуле / 60 с у майбутнє, дедуплікує за `X-Qamera-Delivery-Id` через нову таблицю `qamera_webhook_delivery` і зберігає кожну прийняту доставку як субстрат для Фази 4.2. PrestaShop 8.0–9.x, PHP 8.1+.

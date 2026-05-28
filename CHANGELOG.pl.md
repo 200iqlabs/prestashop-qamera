@@ -6,6 +6,30 @@ Format zgodny z [Keep a Changelog](https://keepachangelog.com/pl/1.1.0/), a proj
 
 Tłumaczenia: [english](CHANGELOG.md) · [українська](CHANGELOG.uk.md)
 
+## [Unreleased]
+
+### Dodane — infrastruktura testowa
+
+- **Warstwa testów integracyjnych z bootem kernela PS9** w `tests/Integration/`. Nowy bootstrap (`tests/Integration/bootstrap.php`) bootuje prawdziwy kernel `AdminKernel` PrestaShop 9 wewnątrz kontenera dev, eksponuje skompilowany kontener Symfony, ustawia kontekst sklepu na shop 1, przekierowuje `QAMERAAI_API_BASE_URL` na zarezerwowany przez RFC 2606 host `http://qamera-test.invalid` (każde zapomniane rebindowanie klienta API kończy się błędem DNS, a nie wyciekiem poświadczeń), i czyści ewentualne pozostałe wpisy z prefiksem `TEST-` z przerwanych poprzednich uruchomień. Suite uruchamiana przez `vendor/bin/phpunit -c phpunit.integration.xml.dist` z `failOnSkipped="true"`.
+- **Fabryki fikstur** — `ProductFactory`, `ImageFactory`, `BookkeepingFactory` — oraz klasa bazowa `IntegrationTestCase` z helperami `rebindContainerService` / `setConfigurationOverride`, które same przywracają stan. Per-testowy marker (`bin2hex(random_bytes(4))`) napędza precyzyjny DELETE w tearDown, dzięki czemu testy nie zależą od kolejności wykonania.
+- **Pokrycie regresji błędów Fazy 3 (smoke)** — trzy nowe testy (`ProductImageSyncIntegrationTest`, `PrimaryImageResolverIntegrationTest`, `IdempotencyKeyGeneratorIntegrationTest`) ćwiczą trzy klasy błędów, które wyłapał operator-driven smoke Fazy 3 (semantyka `Db::getRow` z auto-LIMIT 1, rozwiązanie stałej `_PS_PRODUCT_IMG_DIR_`, fallback autoloadera `Uuid::uuid7`/`uuid4`). Każdy z nich został zweryfikowany na żywo w CI przez celowe ponowne wprowadzenie błędu na scratch-commicie i obserwację, że odpowiedni test pada, zanim revert wrócił do stanu czystego.
+- **Nowy job CI** `Integration (PS9 kernel)` równolegle do matrycy static-analysis (PHP 8.1/8.2/8.3). Wstaje PS9 + MySQL 8 przez inlineowane `.ci/docker-compose.integration.yml`, instaluje moduł poleceniem `prestashop:module install qameraai`, uruchamia suite. Włączony tylko dla PR-ów z tego samego repo.
+
+### Zmienione — dyscyplina testowa
+
+- `phpunit.xml.dist` nie zawiera już testsuite `integration` ani bloku `<groups><exclude><group>integration</group></exclude></groups>` — domyślne `vendor/bin/phpunit` uruchamia teraz tylko unit + contract.
+- Job static-analysis w CI wywołuje teraz `vendor/bin/phpunit --testsuite=unit,contract` jawnie, żeby kontrakt był udokumentowany w pliku workflow.
+
+### Refaktor — wewnętrzny
+
+- Cache deduplikacji `(idProduct, idImage)` w `ProductImageSyncService` jest teraz wstrzykiwaną usługą `InMemoryDedupCache`, a nie prywatnym polem-tablicą. Bez zmiany zachowania; testy integracyjne mogą podmieniać cache per test przez kontener.
+- `IdempotencyKeyGenerator` wystawia metodę `protected hasUuid7(): bool` ponad `method_exists(Uuid::class, 'uuid7')`, dzięki czemu suite integracyjny może podklasować klasę i wymusić produkcyjną gałąź fallback `uuid4`.
+
+### Notatki operatorskie
+
+- Brak zmian widocznych dla użytkownika. Brak nowych powierzchni w BO. Brak nowych endpointów HTTP. Czysta infrastruktura testowa i jeden refaktor wewnętrzny.
+- Nowy suite integracyjny uruchamia się tylko w kontenerze dev; nie wchodzi w domyślne `vendor/bin/phpunit`, więc szybkość lokalnej pętli inner-loop pozostaje bez zmian.
+
 ## [1.3.0] — 2026-05-27
 
 Faza 4.1 — odbiór i weryfikacja przychodzących webhooków. Moduł udostępnia teraz endpoint storefront, który uwierzytelnia dostawy z `qamera.ai` przez HMAC-SHA256 (z obsługą 48-godzinnego okna dual-sign przy rotacji sekretu po stronie upstreamu — wielokrotne `v1=` w nagłówku), wymusza okno replay ±300 s w przeszłość / 60 s w przyszłość, deduplikuje po `X-Qamera-Delivery-Id` przez nową tabelę `qamera_webhook_delivery` i zapisuje każdą zaakceptowaną dostawę jako substrat dla Fazy 4.2. PrestaShop 8.0–9.x, PHP 8.1+.
