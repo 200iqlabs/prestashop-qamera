@@ -29,23 +29,36 @@
                   <input type="checkbox" id="qameraai-select-all">
                 </th>
                 <th>{{ 'Product'|trans({}, 'Modules.Qameraai.Admin') }}</th>
-                <th>{{ 'Status'|trans({}, 'Modules.Qameraai.Admin') }}</th>
+                <th>{{ 'Sync status'|trans({}, 'Modules.Qameraai.Admin') }}</th>
+                <th>{{ 'Analysis'|trans({}, 'Modules.Qameraai.Admin') }}</th>
                 <th>{{ 'Last synced'|trans({}, 'Modules.Qameraai.Admin') }}</th>
-                <th style="width:160px;">{{ 'Action'|trans({}, 'Modules.Qameraai.Admin') }}</th>
+                <th style="width:200px;">{{ 'Action'|trans({}, 'Modules.Qameraai.Admin') }}</th>
               </tr>
             </thead>
             <tbody>
               {% for row in rows %}
+                {% set analysis_status_key = row.analysis_status|default('null') %}
+                {% set badge_meta = {
+                  'described': {'class': 'badge-success', 'label': 'Ready'|trans({}, 'Modules.Qameraai.Admin'), 'icon': '✓'},
+                  'partial':   {'class': 'badge-warning', 'label': 'Partial'|trans({}, 'Modules.Qameraai.Admin'), 'icon': '◐'},
+                  'processing':{'class': 'badge-info',    'label': 'Processing'|trans({}, 'Modules.Qameraai.Admin'), 'icon': '🔄'},
+                  'error':     {'class': 'badge-danger',  'label': 'Error'|trans({}, 'Modules.Qameraai.Admin'),   'icon': '⚠'},
+                  'pending':   {'class': 'badge-secondary','label': 'Pending'|trans({}, 'Modules.Qameraai.Admin'),'icon': '⏳'},
+                  'null':      {'class': 'badge-secondary','label': 'Pending'|trans({}, 'Modules.Qameraai.Admin'),'icon': '⏳'},
+                }[analysis_status_key] %}
                 <tr>
                   <td>
                     {% if row.can_generate %}
                       <input type="checkbox"
                              class="qameraai-row-select"
                              name="products[]"
-                             value="{{ row.id_product }}">
+                             value="{{ row.id_product }}"
+                             data-id-link="{{ row.id_link }}">
                     {% else %}
                       <input type="checkbox" disabled
-                             title="{{ 'Sync this product first'|trans({}, 'Modules.Qameraai.Admin') }}">
+                             class="qameraai-row-select"
+                             data-id-link="{{ row.id_link }}"
+                             title="{{ row.disabled_hint|default('Sync this product first')|trans({}, 'Modules.Qameraai.Admin') }}">
                     {% endif %}
                   </td>
                   <td>
@@ -59,24 +72,40 @@
                     </span>
                   </td>
                   <td>
+                    <span class="badge {{ badge_meta.class }}"
+                          data-id-link="{{ row.id_link }}"
+                          data-analysis-status="{{ analysis_status_key }}"
+                          {% if row.analysis_refreshed_at %}title="{{ 'Refreshed at'|trans({}, 'Modules.Qameraai.Admin') }} {{ row.analysis_refreshed_at }}"{% endif %}>
+                      {{ badge_meta.icon }} {{ badge_meta.label }}{% if row.analysis_total_count and row.analysis_total_count > 1 %} ({{ row.analysis_described_count|default(0) }} of {{ row.analysis_total_count }}){% endif %}
+                    </span>
+                  </td>
+                  <td>
                     {{ row.last_synced_at|default('—') }}
                   </td>
                   <td>
                     {% if row.can_generate %}
                       <a href="{{ generate_url }}?products={{ row.id_product }}"
-                         class="btn btn-primary btn-sm">
+                         class="btn btn-primary btn-sm js-qameraai-generate"
+                         data-id-link="{{ row.id_link }}">
                         <i class="material-icons">auto_fix_high</i>
                         {{ 'Generate'|trans({}, 'Modules.Qameraai.Admin') }}
                       </a>
                     {% else %}
                       <button type="button"
-                              class="btn btn-secondary btn-sm"
+                              class="btn btn-secondary btn-sm js-qameraai-generate"
                               disabled
-                              title="{{ 'Sync this product first'|trans({}, 'Modules.Qameraai.Admin') }}">
+                              data-id-link="{{ row.id_link }}"
+                              title="{{ row.disabled_hint|default('Sync this product first')|trans({}, 'Modules.Qameraai.Admin') }}">
                         <i class="material-icons">block</i>
                         {{ 'Generate'|trans({}, 'Modules.Qameraai.Admin') }}
                       </button>
                     {% endif %}
+                    <button type="button"
+                            class="btn btn-outline-secondary btn-sm js-qameraai-refresh-analysis"
+                            data-id-link="{{ row.id_link }}"
+                            title="{{ 'Refresh analysis status'|trans({}, 'Modules.Qameraai.Admin') }}">
+                      <i class="material-icons">refresh</i>
+                    </button>
                   </td>
                 </tr>
               {% endfor %}
@@ -111,29 +140,9 @@
   </div>
 
   <script>
-    (function () {
-      var form = document.getElementById('qameraai-products-bulk-form');
-      if (!form) { return; }
-      var selectAll = document.getElementById('qameraai-select-all');
-      var rowChecks = form.querySelectorAll('.qameraai-row-select');
-      var bulkBtn = document.getElementById('qameraai-bulk-generate');
-      var counter = document.getElementById('qameraai-bulk-count');
-
-      function refresh() {
-        var n = 0;
-        rowChecks.forEach(function (cb) { if (cb.checked) { n++; } });
-        counter.textContent = String(n);
-        bulkBtn.disabled = n === 0;
-      }
-
-      selectAll.addEventListener('change', function () {
-        rowChecks.forEach(function (cb) { cb.checked = selectAll.checked; });
-        refresh();
-      });
-      rowChecks.forEach(function (cb) {
-        cb.addEventListener('change', refresh);
-      });
-      refresh();
-    })();
+    window.QameraAiProductsGrid = {
+      statusUrlTemplate: {{ status_url_template|json_encode|raw }}
+    };
   </script>
+  <script src="{{ js_asset_url }}"></script>
 {% endblock %}

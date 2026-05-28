@@ -35,34 +35,35 @@
 
 ## 5. BO status JSON endpoint
 
-- [ ] 5.1 Create `src/Controller/Admin/ProductStatusController.php` extending `FrameworkBundleAdminController`
-- [ ] 5.2 Route `GET /modules/qameraai/products/{idLink}/status` with `force` query param; register in module routing config alongside the existing `_qameraai_admin_products` route
-- [ ] 5.3 Implement: shop scoping, 404 JSON on unknown idLink, `AnalysisStatusRefresher::refresh($link, force: $force)` call, JSON response with `id_link, analysis_status, analysis_described_count, analysis_total_count, analysis_refreshed_at, analyzed_at, generate_enabled, badge_class, badge_label, badge_icon, hint, refresh_error?`
-- [ ] 5.4 Add `Cache-Control: private, max-age=5` header
-- [ ] 5.5 Integration test: 200 happy path, 200 with refresh_error on upstream failure, 404 unknown idLink, force=1 bypasses TTL
+- [x] 5.1 Created `src/Controller/Admin/ProductStatusController.php` extending `FrameworkBundleAdminController`.
+- [x] 5.2 Route `GET /qameraai/products/{idLink}/status` (digits-only `idLink` requirement) registered as `_qameraai_admin_product_status` in `config/routes.yml`.
+- [x] 5.3 Implements: shop scoping via Context, 404 JSON on `findByIdLink()` miss, force param from `?force=1`, `AnalysisStatusRefresher::refresh()` call, JSON response with the documented envelope. Note: dropped `analyzed_at` from per-row payload — it's per-image, not aggregate-derivable from the local cache; tooltip uses `analysis_refreshed_at` ("last checked at") instead.
+- [x] 5.4 `Cache-Control: private, max-age=5` via `JsonResponse::setPrivate()` + `setMaxAge(5)`.
+- [ ] 5.5 Integration test deferred to section 9 (smoke). Controller is thin glue over the unit-covered refresher; HTTP-layer test would need the PS Symfony bundle harness.
+- [x] 5.6 Service wiring added to `config/services.yml` (`AnalysisStatusRefresher` block — explicit `$tablePrefix` constructor arg, autowire-incompatible).
 
 ## 6. Products grid controller + template update
 
-- [ ] 6.1 Extend `ProductsGridController::indexAction()` row dict mapping to include `analysis_status`, `analysis_described_count`, `analysis_total_count`, `analysis_refreshed_at`, `analyzed_at` (last one read from API on demand? — actually `analyzed_at` is per-image not aggregate, decide: pull through OR drop from row dict and let only the status endpoint surface it; sub-task: confirm in implementation)
-- [ ] 6.2 Extend `ProductsGridController::indexAction()` to compute and pass `disabled_hint` per row from `SyncedProductLink::getDisabledHint()`
-- [ ] 6.3 Update bulk-select handler (lives in `GenerateFormController` per current Phase-4.3 wiring) to partition selected ids into `[generatable, unsynced, awaiting_analysis]` and emit the combined flash-info per the qamera-bo-ui spec scenario
-- [ ] 6.4 Update `views/templates/admin/products_grid.html.twig` to add the "Analysis" column header + badge cell with `data-analysis-status` and `data-id-link` attributes per the badge mapping table
-- [ ] 6.5 Update the Generate button in the template to honor `disabled_hint` (set `disabled` + `title` attribute)
-- [ ] 6.6 Add a per-row "Refresh analysis" icon button next to Generate; class `js-qamera-refresh-analysis`; carries `data-id-link`
-- [ ] 6.7 Add translations to `translations/Modules.Qameraai.Admin.pl-PL.xlf` and `.en-US.xlf` for: badge labels (Pending/Processing/Ready/Error/Partial), hints (Waiting for image analysis…, Image is being analysed…, Image analysis failed — re-sync product, Awaiting analysis status — refresh), bulk-flash sentences, Refresh button label
+- [x] 6.1 Row dict extended with `analysis_status`, `analysis_described_count`, `analysis_total_count`, `analysis_refreshed_at`. Dropped `analyzed_at` per 5.3.
+- [x] 6.2 `disabled_hint` populated from `SyncedProductLink::getDisabledHint()` and passed to template.
+- [x] 6.3 Bulk filter implemented as `GenerateFormController::filterGeneratableAndFlash()` (called from `showAction`). Partitions into `[generatable, unsynced, awaiting_analysis]`; flash composition: combined when both counts > 0, single-reason otherwise, silent on zero exclusions.
+- [x] 6.4 Twig template gained "Analysis" column with badge cell + `data-analysis-status` + `data-id-link`; multi-image `(k of n)` suffix when `analysis_total_count > 1`.
+- [x] 6.5 Generate button `title` reads `row.disabled_hint` with fallback to "Sync this product first".
+- [x] 6.6 Per-row Refresh button (`<i class="material-icons">refresh</i>`, btn-outline-secondary) added with class `js-qameraai-refresh-analysis` + `data-id-link`.
+- [ ] 6.7 Translation XLF entries deferred — English keys are already meaningful and PS falls back to the key on missing PL translation. A cosmetic PL polish commit can land separately when ready.
 
 ## 7. Grid JS poll
 
-- [ ] 7.1 Create `views/js/products_grid.js` (no NPM, no build — vanilla ES5/ES6 + jQuery if needed)
-- [ ] 7.2 Implement on `DOMContentLoaded`: enumerate `[data-analysis-status="pending"], [data-analysis-status="processing"], [data-analysis-status="null"]` → build FIFO queue of id_link integers
-- [ ] 7.3 Implement `setInterval` 5000ms tick: dequeue up to 10 ids → `fetch('/modules/qameraai/products/<id>/status')` concurrently per id
-- [ ] 7.4 On each response: update badge classes/label/icon, toggle Generate button enabled/disabled per `generate_enabled`, update `data-analysis-status` attribute, update Generate button `title` from response `hint`
-- [ ] 7.5 If response status still in-flight → push id back to tail of queue; if settled → drop
-- [ ] 7.6 Clear `setInterval` when queue empties
-- [ ] 7.7 Implement per-row Refresh button click handler: disable button + spinner → `fetch('?force=1')` → same response handling → re-enable
-- [ ] 7.8 If `refresh_error` is present in response, surface a non-blocking Bootstrap toast (or `PrestaShop.module.displayWarningMessage` equivalent — confirm available in PS 8.x BO)
-- [ ] 7.9 Load the JS asset from `ProductsGridController::indexAction()` via the existing `addJS()` pattern used by the generate form
-- [ ] 7.10 Manual smoke test (browser): grid with mix of pending + described rows → confirm pending rows tick to described within 5s of upstream flip; confirm Refresh button bypasses TTL on a described row
+- [x] 7.1 Created `views/js/products_grid.js` — vanilla ES5/ES6, no NPM, no build. Co-locates bulk-select + Refresh handler + JS poll; template's inline `<script>` shrinks to a config bootstrap (`window.QameraAiProductsGrid = {statusUrlTemplate: ...}`).
+- [x] 7.2 `collectInFlightRows()` enumerates `[data-analysis-status="pending"|"processing"|"null"]` into a FIFO queue keyed by `data-id-link`.
+- [x] 7.3 `setInterval(POLL_INTERVAL_MS=5000)` dequeues `ROWS_PER_CYCLE=10` per tick; fires concurrent `fetch()`.
+- [x] 7.4 `applyStatusToRow()` swaps badge class/label/icon + Generate button class/disabled/title from response payload; updates `data-analysis-status` attribute so subsequent polls re-select correctly.
+- [x] 7.5 In-flight responses push id back to queue tail; settled responses drop. `seen{}` guard prevents duplicate-enqueue races between concurrent fetches.
+- [x] 7.6 `clearInterval()` once queue empties; poller does not self-restart.
+- [x] 7.7 Refresh button shares `runRefresh(idLink, urlTemplate, force=true, button)` with the poll; toggles `disabled` + `qameraai-spinner` class on the button.
+- [x] 7.8 `refresh_error` surfaced via `console.warn` — non-blocking, no toast library dependency (PS BO lacks a stable warning-toast API across 8.x/9.x).
+- [x] 7.9 Controller passes `js_asset_url` = `/modules/qameraai/views/js/products_grid.js`; template loads it via `<script src>` after the config bootstrap.
+- [ ] 7.10 Browser smoke test deferred to section 9.
 
 ## 8. Contract + integration regression
 

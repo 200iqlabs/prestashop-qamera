@@ -16,6 +16,8 @@ use QameraAi\Module\Packshot\CalculatorBridge;
 use QameraAi\Module\Packshot\PackshotJobSubmitter;
 use QameraAi\Module\Packshot\SubmitFormInput;
 use QameraAi\Module\Packshot\SubmitResult;
+use QameraAi\Module\Packshot\SyncedProductLink;
+use QameraAi\Module\Packshot\SyncedProductLinkLookup;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -38,9 +40,11 @@ final class GenerateFormController extends FrameworkBundleAdminController
 {
     public function showAction(
         Request $request,
-        CachedReferenceClientFactory $referenceFactory
+        CachedReferenceClientFactory $referenceFactory,
+        SyncedProductLinkLookup $linkLookup
     ): Response {
-        $productIds = $this->parseProductIds($request->query->get('products', ''));
+        $rawProductIds = $this->parseProductIds($request->query->get('products', ''));
+        $productIds = $this->filterGeneratableAndFlash($rawProductIds, $linkLookup);
 
         try {
             $reference = $referenceFactory->create();
@@ -71,6 +75,87 @@ final class GenerateFormController extends FrameworkBundleAdminController
                 'products_url' => $this->generateUrl('_qameraai_admin_products_grid'),
             ]
         );
+    }
+
+    /**
+     * Phase 4.4 (add-analysis-status-surfacing) — partition the
+     * grid-selected product ids into [generatable, unsynced,
+     * awaiting_analysis] and emit a flash-info naming the per-reason
+     * counts of excluded rows. Matches the qamera-bo-ui spec scenario:
+     *
+     *  - both reasons present → "N products excluded (X unsynced, Y awaiting analysis)"
+     *  - one reason present  → "N products excluded — <reason>"
+     *
+     * The flash is suppressed when nothing was excluded — the operator
+     * gets no spurious info in the happy path.
+     *
+     * @param int[] $rawProductIds
+     * @return int[] generatable subset, in original order
+     */
+    private function filterGeneratableAndFlash(
+        array $rawProductIds,
+        SyncedProductLinkLookup $lookup
+    ): array {
+        if ($rawProductIds === []) {
+            return [];
+        }
+
+        $links = $lookup->loadByProductIds($this->resolveShopId(), $rawProductIds);
+
+        $generatable = [];
+        $unsynced = 0;
+        $awaiting = 0;
+        foreach ($rawProductIds as $idProduct) {
+            $link = $links[$idProduct] ?? null;
+            if ($link === null) {
+                // No bookkeeping row at all — treat as unsynced (operator
+                // turned auto-register on after creating the product).
+                $unsynced++;
+                continue;
+            }
+            if ($link->qameraImageId === null || $link->qameraImageId === '') {
+                $unsynced++;
+                continue;
+            }
+            if ($link->analysisStatus !== SyncedProductLink::ANALYSIS_STATUS_DESCRIBED
+                && $link->analysisStatus !== SyncedProductLink::ANALYSIS_STATUS_PARTIAL
+            ) {
+                $awaiting++;
+                continue;
+            }
+            $generatable[] = $idProduct;
+        }
+
+        $excluded = $unsynced + $awaiting;
+        if ($excluded === 0) {
+            return $generatable;
+        }
+
+        if ($unsynced > 0 && $awaiting > 0) {
+            $this->addFlash('info', $this->trans(
+                '%total% products excluded (%unsynced% unsynced, %awaiting% awaiting analysis)',
+                'Modules.Qameraai.Admin',
+                [
+                    '%total%' => $excluded,
+                    '%unsynced%' => $unsynced,
+                    '%awaiting%' => $awaiting,
+                ]
+            ));
+        } elseif ($unsynced > 0) {
+            $this->addFlash('info', $this->trans(
+                '%count% products excluded — sync required first',
+                'Modules.Qameraai.Admin',
+                ['%count%' => $unsynced]
+            ));
+        } else {
+            $this->addFlash('info', $this->trans(
+                '%count% products excluded — awaiting analysis',
+                'Modules.Qameraai.Admin',
+                ['%count%' => $awaiting]
+            ));
+        }
+
+        return $generatable;
     }
 
     public function submitAction(
