@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace QameraAi\Module\Webhook\Event\Handler;
 
+use QameraAi\Module\Packshot\PackshotJobUpdater;
 use QameraAi\Module\Webhook\Event\EventHandlerInterface;
 use QameraAi\Module\Webhook\Event\ExternalRef;
 use QameraAi\Module\Webhook\Event\ExternalRefParser;
@@ -35,7 +36,8 @@ final class JobCompletedHandler implements EventHandlerInterface
     public function __construct(
         private readonly PackshotLinkUpdater $packshotUpdater,
         private readonly ProductLinkHeartbeat $productHeartbeat,
-        private readonly WebhookLogger $logger
+        private readonly WebhookLogger $logger,
+        private readonly PackshotJobUpdater $packshotJobUpdater
     ) {
     }
 
@@ -83,6 +85,24 @@ final class JobCompletedHandler implements EventHandlerInterface
             'last_error_message' => null,
             'now' => gmdate('Y-m-d H:i:s'),
         ]);
+
+        // Phase 4.3 — also mirror this delivery into ps_qamera_packshot_job
+        // (the per-job mirror used by the BO jobs-history grid). Distinct
+        // from the per-packshot ps_qamera_packshot_link upserted above:
+        // one packshot can have N jobs (imagesCount > 1).
+        $jobId = PayloadExtractor::string($event->payload, 'job_id');
+        if ($jobId !== null) {
+            $this->packshotJobUpdater->upsert(
+                eventType: $event->eventType,
+                deliveryId: $event->deliveryId,
+                qameraJobId: $jobId,
+                outputUrl: PayloadExtractor::nullableString($event->payload, 'output_url'),
+                outputUrlExpiresAt: PayloadExtractor::nullableString($event->payload, 'output_url_expires_at'),
+                lastErrorMessage: null,
+                payloadExternalRef: PayloadExtractor::nullableString($event->payload, 'packshot_external_ref'),
+                payloadOrderId: PayloadExtractor::nullableString($event->payload, 'order_id'),
+            );
+        }
     }
 
     public static function packshotRef(ExternalRef $ref, string $packshotId): string

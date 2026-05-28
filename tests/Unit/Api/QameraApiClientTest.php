@@ -595,6 +595,53 @@ final class QameraApiClientTest extends TestCase
     }
 
     /* ----------------------------------------------------------------------
+     * §10.4b — listMannequinModels (Phase 4.3 addition)
+     * -------------------------------------------------------------------- */
+
+    public function testListMannequinModelsDecodesModelsWrapper(): void
+    {
+        $body = (string) json_encode([
+            'models' => [
+                [
+                    'id' => 'm1',
+                    'name' => 'Studio Model',
+                    'thumbnail' => 'https://cdn.example.com/m1.jpg',
+                    'source' => 'marketplace',
+                    'status' => 'active',
+                    'created_at' => '2026-05-01T10:00:00Z',
+                ],
+            ],
+        ]);
+        $client = $this->clientWith([new Response(200, [], $body)]);
+
+        $models = $client->listMannequinModels();
+
+        self::assertCount(1, $models);
+        self::assertSame('m1', $models[0]->id);
+        self::assertSame('Studio Model', $models[0]->name);
+        self::assertSame('marketplace', $models[0]->source);
+        self::assertSame('2026-05-01T10:00:00Z', $models[0]->createdAt);
+    }
+
+    public function testListMannequinModelsEmptyListReturnsEmptyArray(): void
+    {
+        $client = $this->clientWith([new Response(200, [], (string) json_encode(['models' => []]))]);
+
+        self::assertSame([], $client->listMannequinModels());
+    }
+
+    public function testListMannequinModelsWrongWrapperKeyThrows(): void
+    {
+        $client = $this->clientWith([
+            new Response(200, [], (string) json_encode(['items' => [['id' => 'm1']]])),
+        ]);
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('models');
+        $client->listMannequinModels();
+    }
+
+    /* ----------------------------------------------------------------------
      * §10.5 — getPricing list-with-currency
      * -------------------------------------------------------------------- */
 

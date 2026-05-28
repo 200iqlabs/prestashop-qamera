@@ -14,6 +14,16 @@ services:
       # Symfony scan them produces "Cannot autowire service" failures at
       # container-compilation time, which kills module install.
       - '../src/Webhook/Event/*'
+      # Phase 4.3 reference cache + cost calculator: deferred to Slice B
+      # of add-packshots-ui. ReferenceCache takes $cacheDir (string),
+      # CachedReferenceClient takes $apiKey (string), CostCalculator
+      # transitively depends on the cached client. Wiring them now means
+      # resolving QAMERAAI_API_KEY at container compile time, which fires
+      # before Configuration is populated during install — kills the
+      # initial `make install`. Slice B introduces a factory for the
+      # request-time read.
+      - '../src/Api/Cache/*'
+      - '../src/Packshot/CostCalculator.php'
 
   QameraAi\Module\Api\QameraApiClient:
     factory: ['@QameraAi\Module\Api\Factory\QameraApiClientFactory', 'create']
@@ -130,3 +140,43 @@ services:
       $repository: '@QameraAi\Module\Webhook\WebhookDeliveryRepository'
       $clock: '@QameraAi\Module\Webhook\SystemClock'
       $logger: '@QameraAi\Module\Webhook\Log\PrestaShopLoggerAdapter'
+
+  # ---- Phase 4.3: packshot-jobs + reference cache ----
+  # Every class below carries a string-typed constructor arg (table prefix,
+  # cache dir, or API key) that Symfony's autowire cannot resolve on its
+  # own. Explicit wiring is required even though they sit inside the
+  # auto-discovered ../src/* glob — without these blocks the container
+  # compilation fails the moment any consumer asks for one.
+
+  QameraAi\Module\Packshot\PackshotJobRepository:
+    public: true
+    arguments:
+      $db: '@qameraai.db'
+      $tablePrefix: !php/const _DB_PREFIX_
+
+  QameraAi\Module\Packshot\SyncedProductLinkLookup:
+    public: true
+    arguments:
+      $db: '@qameraai.db'
+      $tablePrefix: !php/const _DB_PREFIX_
+
+  QameraAi\Module\Packshot\PackshotJobUpdater:
+    public: true
+    arguments:
+      $repository: '@QameraAi\Module\Packshot\PackshotJobRepository'
+      $linkLookup: '@QameraAi\Module\Packshot\SyncedProductLinkLookup'
+      $logger: '@QameraAi\Module\Webhook\WebhookLogger'
+
+  QameraAi\Module\Packshot\PackshotJobSubmitter:
+    public: true
+    arguments:
+      $apiClient: '@QameraAi\Module\Api\QameraApiClient'
+      $repository: '@QameraAi\Module\Packshot\PackshotJobRepository'
+      $linkLookup: '@QameraAi\Module\Packshot\SyncedProductLinkLookup'
+      $logger: '@QameraAi\Module\Sync\PrestaShopLoggerWrapper'
+
+  # ReferenceCache + CachedReferenceClient are not wired here yet — they
+  # only have BO-controller consumers in Slice B. Wiring them now would
+  # require resolving QAMERAAI_API_KEY at container compile time, which
+  # is a footgun for cache cold-start under installer/uninstaller flows.
+  # Slice B adds a factory that reads Configuration at request time.

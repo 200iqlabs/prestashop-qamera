@@ -17,6 +17,7 @@ use QameraAi\Module\Api\Dto\ImageResponse;
 use QameraAi\Module\Api\Dto\JobDto;
 use QameraAi\Module\Api\Dto\JobsListFilters;
 use QameraAi\Module\Api\Dto\JobsListResponse;
+use QameraAi\Module\Api\Dto\MannequinModel;
 use QameraAi\Module\Api\Dto\MeResponse;
 use QameraAi\Module\Api\Dto\PackshotResponse;
 use QameraAi\Module\Api\Dto\Preset;
@@ -107,6 +108,17 @@ class QameraApiClient
     public function listSceneries(): array
     {
         return $this->sendList('GET', '/sceneries', 'sceneries', Scenery::class);
+    }
+
+    /**
+     * Mannequin model catalog served at `GET /models`. Distinct from
+     * `/ai-models` (provider/model pairings for image generation).
+     *
+     * @return MannequinModel[]
+     */
+    public function listMannequinModels(): array
+    {
+        return $this->sendList('GET', '/models', 'models', MannequinModel::class);
     }
 
     /**

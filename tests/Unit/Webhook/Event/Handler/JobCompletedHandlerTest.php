@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace QameraAi\Module\Tests\Unit\Webhook\Event\Handler;
 
 use PHPUnit\Framework\TestCase;
+use QameraAi\Module\Tests\Support\FakePackshotJobUpdater;
 use QameraAi\Module\Tests\Support\FakePackshotLinkUpdater;
 use QameraAi\Module\Tests\Support\FakeProductLinkHeartbeat;
 use QameraAi\Module\Tests\Support\SpyLogger;
@@ -17,6 +18,7 @@ final class JobCompletedHandlerTest extends TestCase
     private FakePackshotLinkUpdater $packshot;
     private FakeProductLinkHeartbeat $heartbeat;
     private SpyLogger $logger;
+    private FakePackshotJobUpdater $packshotJob;
     private JobCompletedHandler $handler;
 
     protected function setUp(): void
@@ -25,7 +27,13 @@ final class JobCompletedHandlerTest extends TestCase
         $this->packshot = new FakePackshotLinkUpdater();
         $this->heartbeat = new FakeProductLinkHeartbeat();
         $this->logger = new SpyLogger();
-        $this->handler = new JobCompletedHandler($this->packshot, $this->heartbeat, $this->logger);
+        $this->packshotJob = new FakePackshotJobUpdater();
+        $this->handler = new JobCompletedHandler(
+            $this->packshot,
+            $this->heartbeat,
+            $this->logger,
+            $this->packshotJob
+        );
     }
 
     public function testHappyPathInsertsPackshotAndBumpsHeartbeat(): void

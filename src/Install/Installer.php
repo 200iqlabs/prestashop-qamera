@@ -127,6 +127,55 @@ final class Installer
                 PRIMARY KEY (`delivery_id`),
                 KEY `qamera_webhook_event_type` (`event_type`, `received_at`)
             ) ENGINE=InnoDB DEFAULT CHARSET={$charset};",
+
+            // Phase 4.3 — local mirror of submitted generation jobs.
+            // One row per upstream `job_id` returned by `POST /jobs`. Rows
+            // live independently of `qamera_packshot_link` so failed jobs
+            // (no packshot row) and pending jobs (submitted, no webhook
+            // yet) remain visible to the operator. FK targets
+            // `qamera_product_link.id_link` (the table's real PK column —
+            // the OpenSpec uses the logical name `id_qamera_product_link`
+            // for clarity, but the physical key is `id_link`). CASCADE
+            // on delete so unsyncing a product cleans up its job history.
+            "CREATE TABLE IF NOT EXISTS `{$prefix}qamera_packshot_job` (
+                `id_qamera_packshot_job` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                `qamera_job_id` CHAR(36) NOT NULL,
+                `qamera_order_id` CHAR(36) NOT NULL,
+                `id_qamera_product_link` INT UNSIGNED NOT NULL,
+                `id_shop` INT UNSIGNED NOT NULL,
+                `id_product` INT UNSIGNED NOT NULL,
+                `packshot_external_ref` VARCHAR(100) NOT NULL,
+                `status` ENUM('pending','in_progress','completed','failed','cancelled')
+                    NOT NULL DEFAULT 'pending',
+                `output_url` TEXT NULL,
+                `output_url_expires_at` DATETIME NULL,
+                `last_error_message` TEXT NULL,
+                `ai_model` VARCHAR(100) NOT NULL,
+                `aspect_ratio` VARCHAR(8) NOT NULL,
+                `images_count` SMALLINT UNSIGNED NOT NULL,
+                -- JSON column type: native on MySQL 5.7+ / MariaDB 10.2+,
+                -- which is the floor PrestaShop 8/9 already require.
+                `session_config_json` JSON NOT NULL,
+                `submitted_at` DATETIME NOT NULL,
+                `last_synced_at` DATETIME NULL,
+                PRIMARY KEY (`id_qamera_packshot_job`),
+                UNIQUE KEY `qamera_packshot_job_job_id` (`qamera_job_id`),
+                -- packshot_external_ref is NOT unique on purpose: with
+                -- `images_count > 1` a single submitted Subject yields N
+                -- `job_ids` upstream that all map to the SAME local
+                -- packshot row (`auto_register_packshot=true` registers
+                -- one packshot per Subject regardless of imagesCount).
+                -- The OpenSpec preview marked this UNIQUE; that conflicts
+                -- with its own 10-rows-for-5-products-x-2-images scenario.
+                -- Surface the divergence in PR review.
+                KEY `qamera_packshot_job_external_ref` (`packshot_external_ref`),
+                KEY `qamera_packshot_job_shop_product` (`id_shop`, `id_product`),
+                KEY `qamera_packshot_job_status_submitted` (`status`, `submitted_at`),
+                CONSTRAINT `fk_qamera_packshot_job_product_link`
+                    FOREIGN KEY (`id_qamera_product_link`)
+                    REFERENCES `{$prefix}qamera_product_link` (`id_link`)
+                    ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET={$charset};",
         ];
 
         foreach ($statements as $sql) {
@@ -288,6 +337,11 @@ final class Installer
             'status' => '`status` ENUM(\'pending\',\'registered\',\'error\') NOT NULL DEFAULT \'pending\'',
             'last_error_message' => '`last_error_message` TEXT NULL',
             'last_synced_at' => '`last_synced_at` DATETIME NULL',
+            // Phase 4.3 — populated by ProductImageSyncService on a
+            // successful `POST /images`. NULL means "never synced an
+            // image upstream", which the BO uses to disable the
+            // Generate action for that row.
+            'qamera_image_id' => '`qamera_image_id` CHAR(36) NULL',
         ];
 
         foreach ($additions as $name => $definition) {
@@ -309,8 +363,17 @@ final class Installer
     {
         $prefix = _DB_PREFIX_;
 
+        // Order matters: `qamera_packshot_job` FKs to `qamera_product_link`
+        // with ON DELETE CASCADE, so it MUST drop first. MySQL evaluates
+        // DROP TABLE in list order; listing the child before the parent
+        // avoids a `cannot drop … referenced by foreign key` failure on
+        // strict-mode servers.
         return Db::getInstance()->execute(
-            "DROP TABLE IF EXISTS `{$prefix}qamera_webhook_delivery`, `{$prefix}qamera_packshot_link`, `{$prefix}qamera_product_link`;"
+            "DROP TABLE IF EXISTS "
+            . "`{$prefix}qamera_packshot_job`, "
+            . "`{$prefix}qamera_webhook_delivery`, "
+            . "`{$prefix}qamera_packshot_link`, "
+            . "`{$prefix}qamera_product_link`;"
         );
     }
 

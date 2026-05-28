@@ -197,13 +197,26 @@ class ProductImageSyncService
         bool $isRegistered,
         ImageResponse $response
     ): void {
+        // `qamera_image_id` always updates on a successful registerImage
+        // — both the cascade-create AND re-sync paths surface a fresh
+        // upstream `images.id`, which the Phase-4.3 BO needs to feed
+        // `Subject.packshot_asset_id` on the next generate-job submit.
+        $imageId = $response->imageId;
+        $imageIdSql = $imageId !== ''
+            ? sprintf("'%s'", $this->escape($imageId))
+            : 'NULL';
+
         if ($isRegistered) {
-            // Cascade is not needed; only bump last_synced_at.
+            // Already-registered path: bump heartbeat AND refresh the
+            // image id so re-syncs propagate after a manual image
+            // replace in PS BO.
             $sql = sprintf(
                 'UPDATE `%sqamera_product_link` '
-                . 'SET `last_synced_at` = NOW(), `updated_at` = NOW() '
+                . 'SET `last_synced_at` = NOW(), `updated_at` = NOW(), '
+                . '`qamera_image_id` = %s '
                 . 'WHERE `id_product` = %d AND `id_shop` = %d',
                 $this->tablePrefix,
+                $imageIdSql,
                 $idProduct,
                 $idShop
             );
@@ -227,11 +240,13 @@ class ProductImageSyncService
         $sql = sprintf(
             'UPDATE `%sqamera_product_link` '
             . "SET `status` = 'registered', `qamera_product_id` = '%s', "
+            . '`qamera_image_id` = %s, '
             . '`last_error_message` = NULL, `last_synced_at` = NOW(), '
             . '`updated_at` = NOW() '
             . 'WHERE `id_product` = %d AND `id_shop` = %d',
             $this->tablePrefix,
             $this->escape($productId),
+            $imageIdSql,
             $idProduct,
             $idShop
         );

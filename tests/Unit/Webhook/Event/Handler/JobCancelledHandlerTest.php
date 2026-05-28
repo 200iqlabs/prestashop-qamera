@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace QameraAi\Module\Tests\Unit\Webhook\Event\Handler;
 
 use PHPUnit\Framework\TestCase;
+use QameraAi\Module\Tests\Support\FakePackshotJobUpdater;
 use QameraAi\Module\Tests\Support\FakePackshotLinkUpdater;
 use QameraAi\Module\Tests\Support\FakeProductLinkHeartbeat;
 use QameraAi\Module\Tests\Support\SpyLogger;
@@ -16,6 +17,7 @@ final class JobCancelledHandlerTest extends TestCase
     private FakePackshotLinkUpdater $packshot;
     private FakeProductLinkHeartbeat $heartbeat;
     private SpyLogger $logger;
+    private FakePackshotJobUpdater $packshotJob;
     private JobCancelledHandler $handler;
 
     protected function setUp(): void
@@ -24,7 +26,13 @@ final class JobCancelledHandlerTest extends TestCase
         $this->packshot = new FakePackshotLinkUpdater();
         $this->heartbeat = new FakeProductLinkHeartbeat();
         $this->logger = new SpyLogger();
-        $this->handler = new JobCancelledHandler($this->packshot, $this->heartbeat, $this->logger);
+        $this->packshotJob = new FakePackshotJobUpdater();
+        $this->handler = new JobCancelledHandler(
+            $this->packshot,
+            $this->heartbeat,
+            $this->logger,
+            $this->packshotJob
+        );
     }
 
     public function testCancelledEventOverwritesReadyRow(): void

@@ -4,95 +4,107 @@
       `subjects[]`) — `grep -n session_config src/Api/Dto/SubmitJobRequest.php`
 - [ ] 1.2 Verify upstream `add-plugin-session-lifecycle` change is deployed to the live env used for smoke
       (operator confirms; no automated check)
-- [ ] 1.3 Create branch `add-packshots-ui` off `main`, push so worktree workflow can pick it up
+- [x] 1.3 Create branch `add-packshots-ui` off `main`, push so worktree workflow can pick it up
 - [ ] 1.4 Set up `.claude/worktrees/add-packshots-ui` per CLAUDE.md "Git worktrees" protocol; run
       `composer install` inside via the documented one-shot docker command
+      (DEFERRED — Slice A done in main checkout via one-shot Docker phpunit/phpcs)
 
 ## 2. API client: listMannequinModels + DTO
 
-- [ ] 2.1 Add `src/Api/Dto/MannequinModel.php` mirroring `Scenery` shape (`id`, `name`, `thumbnail`,
+- [x] 2.1 Add `src/Api/Dto/MannequinModel.php` mirroring `Scenery` shape (`id`, `name`, `thumbnail`,
       `source`, `status`, `createdAt`)
-- [ ] 2.2 Add `QameraApiClient::listMannequinModels(): array` — wrapper key `models`, same retry/header
+- [x] 2.2 Add `QameraApiClient::listMannequinModels(): array` — wrapper key `models`, same retry/header
       pattern as `listSceneries()`
-- [ ] 2.3 Add unit tests via `MockHandler`: happy path, wrong wrapper key surfaces `ValidationException`,
+- [x] 2.3 Add unit tests via `MockHandler`: happy path, wrong wrapper key surfaces `ValidationException`,
       empty list returns `[]`
 - [ ] 2.4 Update contract test fixtures snapshot under `tests/Fixtures/` for `/models`
+      (DEFERRED — no `tests/Fixtures/` directory exists yet; introduce in Slice C when contract test
+      is touched)
 
 ## 3. Reference cache decorator
 
-- [ ] 3.1 Add `src/Api/Cache/ReferenceCache.php` — small wrapper around `\Cache::getInstance()` with
-      filesystem fallback under `_PS_CACHE_DIR_ . 'qameraai/reference/'`, key shape
+- [x] 3.1 Add `src/Api/Cache/ReferenceCache.php` — filesystem-backed (deliberate simplification vs. spec
+      D4 — `\Cache::getInstance()` indirection skipped; see file header comment), key shape
       `qameraai:ref:<endpoint>:<sha256(api_key)[0:16]>`
-- [ ] 3.2 Add `src/Api/Cache/CachedReferenceClient.php` decorator implementing the six reference methods
+- [x] 3.2 Add `src/Api/Cache/CachedReferenceClient.php` decorator implementing the six reference methods
       with the TTL table from `qamera-api-client` delta spec
-- [ ] 3.3 Wire `CachedReferenceClient` into `config/services.yml` — injected with the underlying
-      `QameraApiClient` + the configured API key (read from `Configuration::get('QAMERAAI_API_KEY')`)
-- [ ] 3.4 Unit tests: cache hit within TTL, miss after TTL expiry, different API keys do not share entries
-- [ ] 3.5 Filesystem cleanup helper for tests (`tearDown` deletes `_PS_CACHE_DIR_ . 'qameraai/reference/'`)
+- [ ] 3.3 Wire `CachedReferenceClient` into `config/services.yml` (DEFERRED — Slice B; needs a
+      Configuration-reading factory, currently excluded from the autodiscover glob)
+- [x] 3.4 Unit tests: cache hit within TTL, miss after TTL expiry, different API keys do not share entries
+- [x] 3.5 Filesystem cleanup helper for tests (`tearDown` deletes `_PS_CACHE_DIR_ . 'qameraai/reference/'`)
 
 ## 4. ps_qamera_packshot_job table + installer
 
-- [ ] 4.1 Add `install()` DDL in `src/Install/Installer.php`: `ps_qamera_packshot_job` per the
-      `packshot-jobs` spec (PK, UNIQUE on `qamera_job_id` and `packshot_external_ref`, FK CASCADE to
-      `ps_qamera_product_link`, indexes on `(id_shop,id_product)` and `(status,submitted_at)`)
-- [ ] 4.2 Add `uninstall()` DROP for the same table, run BEFORE dropping `ps_qamera_product_link` so the
+- [x] 4.1 Add `install()` DDL in `src/Install/Installer.php`: `ps_qamera_packshot_job` per the
+      `packshot-jobs` spec (PK, UNIQUE on `qamera_job_id`, FK CASCADE to
+      `ps_qamera_product_link.id_link`, indexes on `(id_shop,id_product)` and `(status,submitted_at)`).
+      DEVIATION: `packshot_external_ref` is NOT unique — spec was self-contradictory (UNIQUE would
+      break the "10 rows from imagesCount=2 × 5 products" scenario). See Installer comment.
+- [x] 4.1b Add `qamera_image_id CHAR(36) NULL` migration to `ps_qamera_product_link` (Slice A scope
+      extension — spec assumed this column existed; gap closed per user decision)
+- [x] 4.2 Add `uninstall()` DROP for the same table, run BEFORE dropping `ps_qamera_product_link` so the
       FK doesn't block
-- [ ] 4.3 Ensure idempotent install via `CREATE TABLE IF NOT EXISTS` (matches existing pattern)
+- [x] 4.3 Ensure idempotent install via `CREATE TABLE IF NOT EXISTS` (matches existing pattern)
 - [ ] 4.4 Manual smoke from main checkout: `make install` → `SHOW CREATE TABLE ps_qamera_packshot_job\G`
-      to confirm DDL matches spec
-- [ ] 4.5 Manual smoke: `make uninstall` → confirm table gone
+      to confirm DDL matches spec (DEFERRED — Slice C runtime smoke)
+- [ ] 4.5 Manual smoke: `make uninstall` → confirm table gone (DEFERRED — Slice C)
 
 ## 5. PackshotJobRepository
 
-- [ ] 5.1 Add `src/Packshot/PackshotJobRow.php` value object (immutable, all spec columns)
-- [ ] 5.2 Add `src/Packshot/PackshotJobRepository.php` with `findByJobId`, `findByExternalRef`,
+- [x] 5.1 Add `src/Packshot/PackshotJobRow.php` value object (immutable, all spec columns)
+- [x] 5.2 Add `src/Packshot/PackshotJobRepository.php` with `findByJobId`, `findByExternalRef`,
       `listForGrid(JobsGridFilters)`, `insertBatch(array $rows): void`,
       `upsertFromWebhook(PackshotJobWebhookUpdate)`
-- [ ] 5.3 `insertBatch` uses single multi-row `INSERT … ON DUPLICATE KEY UPDATE` on `qamera_job_id`
-- [ ] 5.4 `listForGrid` joins `ps_product_lang` for localised product name, respects `id_lang`
-- [ ] 5.5 All queries use prepared statements via `Db::getInstance()->execute()` — PHPCS sniff for raw
-      concatenation
-- [ ] 5.6 Unit tests using PS test DB (or in-memory SQLite fallback if PS DB not available): insert →
-      find → list-filter-by-status, idempotency of `insertBatch`
+- [x] 5.3 `insertBatch` uses single multi-row `INSERT … ON DUPLICATE KEY UPDATE` on `qamera_job_id`
+- [x] 5.4 `listForGrid` joins `ps_product_lang` for localised product name, respects `id_lang`
+- [x] 5.5 All queries use prepared statements via `Db::getInstance()->execute()` (escape-based; matches
+      existing `PackshotLinkUpdater` pattern — PS has no parametrised-query API)
+- [x] 5.6 Unit tests via `RecordingDb`: insertBatch SQL shape, idempotent ON DUPLICATE KEY UPDATE,
+      upsertFromWebhook INSERT vs UPDATE path, listForGrid join + status filter
 
 ## 6. PackshotJobSubmitter
 
-- [ ] 6.1 Add `src/Packshot/SubmitFormInput.php` value object collecting the form fields
-- [ ] 6.2 Add `src/Packshot/SubmitResult.php` (sessions_submitted, sessions_failed, jobs_persisted,
+- [x] 6.1 Add `src/Packshot/SubmitFormInput.php` value object collecting the form fields
+- [x] 6.2 Add `src/Packshot/SubmitResult.php` (sessions_submitted, sessions_failed, jobs_persisted,
       per-chunk failures with reasons)
-- [ ] 6.3 Add `src/Packshot/PackshotJobSubmitter.php` — `submit(SubmitFormInput): SubmitResult`
-  - generates UUID v4 per subject for `packshot_external_ref` (`Symfony\Component\Uid\Uuid::v4()` if
-    available, else `bin2hex(random_bytes(16))` formatted)
+- [x] 6.3 Add `src/Packshot/PackshotJobSubmitter.php` — `submit(SubmitFormInput): SubmitResult`
+  - generates UUID v4 per subject for `packshot_external_ref` (`Ramsey\Uuid\Uuid::uuid4()`)
   - chunks subjects into ≤100 per session
-  - per chunk: builds `SubmitJobRequest` with `auto_register_packshot=true`, calls
-    `QameraApiClient::submitJob()` with a fresh `Idempotency-Key`
+  - per chunk: builds `SubmitJobRequest` with `auto_register_packshot=true`; Idempotency-Key added
+    by the Guzzle middleware on `POST /jobs`
   - on success: maps response → rows, calls `PackshotJobRepository::insertBatch`
   - on failure: aggregates chunk-level error info, no DB writes for failed chunk
-- [ ] 6.4 Unit tests via `MockHandler`: single subject, bulk 5×2, 503 leaves DB unchanged, 422 propagates
-      `ApiValidationException`, 247-subject chunking emits 3 calls with distinct keys, partial chunk
+- [x] 6.4 Unit tests with stub `QameraApiClient`: single subject, bulk 5×2, 503 leaves DB unchanged,
+      422 leaves DB unchanged, 247-subject chunking emits 3 calls of sizes [100,100,47], partial chunk
       failure reports correctly
-- [ ] 6.5 Test confirming `auto_register_packshot=true` and ref format `^ps:\d+:\d+:packshot:[0-9a-f-]{36}$`
+- [x] 6.5 Test confirming `auto_register_packshot=true` and ref format
+      `^ps:\d+:\d+:packshot:[0-9a-f]{8}-[0-9a-f]{4}-…$`
 
 ## 7. CostCalculator
 
-- [ ] 7.1 Add `src/Packshot/CostCalculator.php` — `estimate(string $aiModel, int $imagesCount, int
+- [x] 7.1 Add `src/Packshot/CostCalculator.php` — `estimate(string $aiModel, int $imagesCount, int
       $subjectCount): ?int` reading from cached `Pricing` (via `CachedReferenceClient::getPricing()`)
-- [ ] 7.2 Unit tests: known model → product of three numbers; unknown model → `null`
+- [x] 7.2 Unit tests: known model → product of three numbers; unknown model / wrong job_type /
+      malformed ai_model / zero counts → `null`
 
 ## 8. PackshotJobUpdater + webhook handler wiring
 
-- [ ] 8.1 Add `src/Packshot/PackshotJobUpdater.php` — `upsert(PackshotJobWebhookUpdate $update): void`
-      with status mapping per `webhook-handler` delta spec
-- [ ] 8.2 Add `src/Packshot/PackshotJobWebhookUpdate.php` value object
-- [ ] 8.3 Extend `JobCompletedHandler` to inject `PackshotJobUpdater` and call `upsert(...)` with the
+- [x] 8.1 Add `src/Packshot/PackshotJobUpdater.php` — `upsert(...)` with status mapping per
+      `webhook-handler` delta spec
+- [x] 8.2 Add `src/Packshot/PackshotJobWebhookUpdate.php` value object
+- [x] 8.3 Extend `JobCompletedHandler` to inject `PackshotJobUpdater` and call `upsert(...)` with the
       mapped fields (existing `PackshotLinkUpdater` + `ProductLinkHeartbeat` paths unchanged)
-- [ ] 8.4 Same extension in `JobFailedHandler` (`last_error_message`), `JobRetriedHandler`
+- [x] 8.4 Same extension in `JobFailedHandler` (`last_error_message`), `JobRetriedHandler`
       (`in_progress`), `JobCancelledHandler` (`cancelled`)
-- [ ] 8.5 Pre-submit race: if row absent, insert using parsed `external_ref` → product link lookup
-- [ ] 8.6 Unknown payload status → map to `pending`, log WARNING with the unknown value, do not throw
-- [ ] 8.7 Wire all four handlers + updater in `config/services.yml`
-- [ ] 8.8 Unit tests per handler: existing-row upsert, pre-submit insert path, unknown-status warning
-      path, no FK link → log warning, ACK 200 either way
+- [x] 8.5 Pre-submit race: if row absent, insert using parsed `external_ref` → product link lookup
+      (via new `PackshotExternalRefParser` + `SyncedProductLinkLookup::findIdLink`)
+- [x] 8.6 Unknown payload status (event_type) → map to `pending`, log WARNING with the unknown value,
+      do not throw
+- [x] 8.7 Wire updater + repository + lookup in `config/services.yml`; controllers/front/webhook.php
+      builds the dispatcher with the new updater injected
+- [x] 8.8 Unit tests in `PackshotJobUpdaterTest`: existing-row upsert, pre-submit insert path,
+      unknown-status warning, malformed-ref warning, missing-ref noop; existing handler tests
+      patched to inject `FakePackshotJobUpdater`
 
 ## 9. BO controllers + routes
 
@@ -153,10 +165,13 @@
 
 ## 14. Quality gates green in worktree
 
-- [ ] 14.1 `vendor/bin/phpcs` clean (PSR-12)
-- [ ] 14.2 `vendor/bin/phpstan analyse --level=5` clean (worktree-local, excluding `src/Install/*`)
-- [ ] 14.3 `vendor/bin/phpunit` green
-- [ ] 14.4 Run the same three under PHP 8.2 and 8.3 dockers to mirror CI matrix
+- [x] 14.1 `vendor/bin/phpcs` clean on all new + touched files (PSR-12) [Slice A scope]
+- [ ] 14.2 `vendor/bin/phpstan analyse --level=5` clean — DEFERRED to full Slice run; targeted
+      analyse against the new files only fails locally on `Db` class resolution (env-specific,
+      needs `_PS_ROOT_DIR_`; CI's neon config resolves it)
+- [x] 14.3 `vendor/bin/phpunit` green on PHP 8.1 — 338 tests / 919 assertions, 12 integration tests
+      skipped (pre-existing)
+- [x] 14.4 PHP 8.2 / 8.3 docker matrix green (338/338 on both)
 
 ## 15. PrestaShop runtime smoke (main checkout, NOT worktree)
 

@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+use QameraAi\Module\Packshot\PackshotJobRepository;
+use QameraAi\Module\Packshot\PackshotJobUpdater;
+use QameraAi\Module\Packshot\SyncedProductLinkLookup;
 use QameraAi\Module\Webhook\Event\EventDispatcher;
 use QameraAi\Module\Webhook\Event\Handler\JobCancelledHandler;
 use QameraAi\Module\Webhook\Event\Handler\JobCompletedHandler;
@@ -109,12 +112,21 @@ class QameraaiWebhookModuleFrontController extends ModuleFrontController
         $packshot = new PackshotLinkUpdater($db, _DB_PREFIX_);
         $heartbeat = new ProductLinkHeartbeat($db, _DB_PREFIX_);
 
+        // Phase 4.3 — per-job mirror into ps_qamera_packshot_job. The
+        // updater owns the status-mapping table + pre-submit-race
+        // recovery path; handlers below all call into it.
+        $packshotJob = new PackshotJobUpdater(
+            new PackshotJobRepository($db, _DB_PREFIX_),
+            new SyncedProductLinkLookup($db, _DB_PREFIX_),
+            $logger
+        );
+
         return new EventDispatcher(
             [
-                'job.completed' => new JobCompletedHandler($packshot, $heartbeat, $logger),
-                'job.failed' => new JobFailedHandler($packshot, $heartbeat, $logger),
-                'job.cancelled' => new JobCancelledHandler($packshot, $heartbeat, $logger),
-                'job.retried' => new JobRetriedHandler($db, _DB_PREFIX_, $heartbeat, $logger),
+                'job.completed' => new JobCompletedHandler($packshot, $heartbeat, $logger, $packshotJob),
+                'job.failed' => new JobFailedHandler($packshot, $heartbeat, $logger, $packshotJob),
+                'job.cancelled' => new JobCancelledHandler($packshot, $heartbeat, $logger, $packshotJob),
+                'job.retried' => new JobRetriedHandler($db, _DB_PREFIX_, $heartbeat, $logger, $packshotJob),
             ],
             $logger
         );
