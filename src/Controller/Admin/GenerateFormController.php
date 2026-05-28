@@ -73,6 +73,7 @@ final class GenerateFormController extends FrameworkBundleAdminController
                 'errors' => [],
                 'submit_url' => $this->generateUrl('_qameraai_admin_generate_submit'),
                 'products_url' => $this->generateUrl('_qameraai_admin_products_grid'),
+                'js_asset_url' => rtrim(__PS_BASE_URI__, '/') . '/modules/qameraai/views/js/generate_form.js',
             ]
         );
     }
@@ -350,6 +351,7 @@ final class GenerateFormController extends FrameworkBundleAdminController
                 'submit_url' => $this->generateUrl('_qameraai_admin_generate_submit'),
                 'products_url' => $this->generateUrl('_qameraai_admin_products_grid'),
                 'previous_input' => $request->request->all(),
+                'js_asset_url' => rtrim(__PS_BASE_URI__, '/') . '/modules/qameraai/views/js/generate_form.js',
             ]
         );
     }

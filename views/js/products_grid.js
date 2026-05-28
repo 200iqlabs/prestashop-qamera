@@ -168,10 +168,27 @@
     }
 
     return fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
-      .then(function (res) { return res.json().catch(function () { return null; }); })
+      .then(function (res) {
+        // Gate on res.ok so a 4xx/5xx JSON error envelope (e.g.
+        // {"error":"not_found"} or {"error":"db_error",...}) does not
+        // get fed to applyStatusToRow — that would blank the badge and
+        // force-disable the row from a transient failure.
+        if (!res.ok) {
+          if (window.console) {
+            window.console.warn('[QameraAi] status fetch failed for row ' + idLink + ': HTTP ' + res.status);
+          }
+          return null;
+        }
+        return res.json().catch(function () { return null; });
+      })
       .then(function (payload) {
-        if (payload) { applyStatusToRow(idLink, payload); }
-        return payload;
+        // Defensive: even with res.ok, only apply payloads that look
+        // like the success envelope (`id_link` is always populated).
+        if (payload && typeof payload.id_link !== 'undefined') {
+          applyStatusToRow(idLink, payload);
+          return payload;
+        }
+        return null;
       })
       .catch(function () { return null; })
       .then(function (result) {

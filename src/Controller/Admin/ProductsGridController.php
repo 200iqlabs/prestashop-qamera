@@ -76,7 +76,13 @@ final class ProductsGridController extends FrameworkBundleAdminController
                     $this->generateUrl('_qameraai_admin_product_status', ['idLink' => 0]),
                     1
                 ),
-                'js_asset_url' => '/modules/qameraai/views/js/products_grid.js',
+                // Prepend __PS_BASE_URI__ (e.g. '/' for root installs,
+                // '/shop/' for sub-path installs) so the script tag works
+                // regardless of mount point. Twig `asset()` cannot be
+                // used here — the PS admin kernel resolves it to
+                // `/admin-dev/modules/...` which 404s (see commit
+                // d1c9c18 for the empirical confirmation).
+                'js_asset_url' => rtrim(__PS_BASE_URI__, '/') . '/modules/qameraai/views/js/products_grid.js',
             ]
         );
     }
