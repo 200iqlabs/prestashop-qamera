@@ -76,6 +76,8 @@
 
 ## 9. Smoke (operator-driven, against live `qamera.ai` install)
 
+Operator-only — cannot be executed autonomously. Run from parent shell `qameraai-prestashop/`.
+
 - [ ] 9.1 Bring up local dev container (`make up` from parent shell after `composer install` in this dir)
 - [ ] 9.2 Install/upgrade module → verify migration ran (check `SHOW COLUMNS FROM ps_qamera_product_link`)
 - [ ] 9.3 Sync a fresh product via the BO product save hook → confirm new row has `analysis_status=NULL`
@@ -86,7 +88,11 @@
 
 ## 10. Branch wrap-up
 
-- [ ] 10.1 Verify `openspec validate add-analysis-status-surfacing` is clean
-- [ ] 10.2 Commit on `add-analysis-status-surfacing` branch with conventional-commits message `feat(analysis-status-surfacing): ...`
-- [ ] 10.3 Open PR against `main`; CI must be green on PHP 8.1/8.2/8.3 matrix
-- [ ] 10.4 Archive the change with `/opsx:archive add-analysis-status-surfacing` after merge
+- [x] 10.1 `openspec validate add-analysis-status-surfacing` clean.
+- [x] 10.2 Five conventional-commits on branch `add-analysis-status-surfacing`: openspec baseline + 4 feature commits (schema/DTO → refresher+model → endpoint+UI → test green).
+- [ ] 10.3 Push branch + open PR — requires operator confirmation. Commands:
+       ```bash
+       git push -u origin add-analysis-status-surfacing
+       gh pr create --title "feat(analysis-status-surfacing): Phase 4.4" --body "..."
+       ```
+- [ ] 10.4 Archive the change with `/opsx:archive add-analysis-status-surfacing` after merge.
