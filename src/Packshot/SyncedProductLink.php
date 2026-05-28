@@ -20,6 +20,8 @@ final class SyncedProductLink
         public readonly ?string $qameraImageId,
         public readonly string $qameraProductRef,
         public readonly string $displayNameSnapshot,
+        public readonly ?string $status = null,
+        public readonly ?string $lastSyncedAt = null,
     ) {
     }
 

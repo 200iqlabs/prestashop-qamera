@@ -408,34 +408,99 @@ final class Installer
         return true;
     }
 
+    /**
+     * Phase 4.3 tab structure (replaces the Phase-1 single-tab layout):
+     *
+     *   IMPROVE
+     *   └─ Qamera AI (parent `AdminQameraAi`)
+     *      ├─ Products       (`AdminQameraAiProducts`)
+     *      ├─ Jobs           (`AdminQameraAiJobs`)
+     *      └─ Configuration  (`AdminQameraAiConfiguration`)
+     *
+     * The Phase-1 install created `AdminQameraAiConfiguration` as a
+     * direct child of IMPROVE. This installer migrates it to a child of
+     * the new parent when present, so re-installs over an existing 1.x
+     * module surface the new menu without a duplicate Configuration link.
+     */
     private function installAdminTabs(): bool
     {
-        $tab = new Tab();
-        $tab->active = 1;
-        $tab->class_name = 'AdminQameraAiConfiguration';
-        $tab->name = [];
-        foreach (Language::getLanguages(true) as $language) {
-            $tab->name[$language['id_lang']] = 'Qamera AI';
+        $improveId = (int) Tab::getIdFromClassName('IMPROVE');
+        if ($improveId <= 0) {
+            $improveId = -1; // hidden orphan fallback for PS builds w/o IMPROVE
         }
 
-        // Attach under the IMPROVE root so the module has a visible menu
-        // entry in the back-office sidebar instead of forcing operators
-        // to reach Configure via Module Manager. Falls back to -1 (hidden
-        // orphan) on PS builds that don't expose the IMPROVE class slug.
-        $parentId = (int) Tab::getIdFromClassName('IMPROVE');
-        $tab->id_parent = $parentId > 0 ? $parentId : -1;
-        $tab->module = $this->module->name;
+        // Migrate or remove any pre-Phase-4.3 standalone Configuration tab.
+        $existingConfigId = (int) Tab::getIdFromClassName('AdminQameraAiConfiguration');
+        if ($existingConfigId > 0) {
+            $existing = new Tab($existingConfigId);
+            $existing->delete();
+        }
 
-        return (bool) $tab->add();
+        $parentId = $this->upsertTab('AdminQameraAi', 'Qamera AI', $improveId);
+        if ($parentId <= 0) {
+            return false;
+        }
+
+        $children = [
+            'AdminQameraAiProducts' => 'Products',
+            'AdminQameraAiJobs' => 'Jobs',
+            'AdminQameraAiConfiguration' => 'Configuration',
+        ];
+        foreach ($children as $className => $label) {
+            if ($this->upsertTab($className, $label, $parentId) <= 0) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
+    private function upsertTab(string $className, string $label, int $parentId): int
+    {
+        // Reuse a row if one already exists for this class — covers the
+        // re-install-over-existing case and lets us be idempotent under
+        // partial install failures.
+        $existingId = (int) Tab::getIdFromClassName($className);
+        $tab = $existingId > 0 ? new Tab($existingId) : new Tab();
+
+        $tab->active = 1;
+        $tab->class_name = $className;
+        $tab->module = $this->module->name;
+        $tab->id_parent = $parentId;
+
+        $tab->name = [];
+        foreach (Language::getLanguages(true) as $language) {
+            $tab->name[$language['id_lang']] = $label;
+        }
+
+        $ok = $existingId > 0 ? $tab->update() : $tab->add();
+        if (!$ok) {
+            return 0;
+        }
+        return (int) $tab->id;
+    }
+
+    /**
+     * Children first, parent last — PS's Tab::delete refuses to remove
+     * a tab that still has children attached.
+     */
     private function uninstallAdminTabs(): bool
     {
-        $idTab = (int) Tab::getIdFromClassName('AdminQameraAiConfiguration');
-        if ($idTab > 0) {
-            $tab = new Tab($idTab);
+        $children = [
+            'AdminQameraAiProducts',
+            'AdminQameraAiJobs',
+            'AdminQameraAiConfiguration',
+        ];
+        foreach ($children as $className) {
+            $id = (int) Tab::getIdFromClassName($className);
+            if ($id > 0) {
+                (new Tab($id))->delete();
+            }
+        }
 
-            return (bool) $tab->delete();
+        $parentId = (int) Tab::getIdFromClassName('AdminQameraAi');
+        if ($parentId > 0) {
+            (new Tab($parentId))->delete();
         }
 
         return true;

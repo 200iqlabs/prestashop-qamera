@@ -83,6 +83,79 @@ class SyncedProductLinkLookup
     }
 
     /**
+     * Paginated grid feed for the BO products page. Includes every
+     * registered product link (synced OR pending) so the grid can
+     * surface both states with one query. Unsynced rows
+     * (qamera_image_id IS NULL) render with a disabled Generate
+     * action — the filter happens client-side via
+     * {@see SyncedProductLink::canGenerate()}.
+     *
+     * @return SyncedProductLink[]  ordered by id_product DESC (newest first)
+     *
+     * @throws \QameraAi\Module\Webhook\Event\QameraDbException on DB error
+     */
+    public function listForGrid(int $idShop, int $limit = 50, int $offset = 0): array
+    {
+        $limit = max(1, min(200, $limit));
+        $offset = max(0, $offset);
+
+        $sql = sprintf(
+            'SELECT `id_link`, `id_shop`, `id_product`, `qamera_image_id`, '
+            . '`qamera_product_ref`, `display_name_snapshot`, `status`, `last_synced_at` '
+            . 'FROM `%sqamera_product_link` '
+            . 'WHERE `id_shop` = %d '
+            . 'ORDER BY `id_product` DESC '
+            . 'LIMIT %d OFFSET %d',
+            $this->tablePrefix,
+            $idShop,
+            $limit,
+            $offset
+        );
+
+        $rows = $this->db->executeS($sql);
+        if ($rows === false) {
+            throw new \QameraAi\Module\Webhook\Event\QameraDbException('product_link grid query failed');
+        }
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[] = new SyncedProductLink(
+                (int) $row['id_link'],
+                (int) $row['id_shop'],
+                (int) $row['id_product'],
+                isset($row['qamera_image_id']) && $row['qamera_image_id'] !== ''
+                    ? (string) $row['qamera_image_id']
+                    : null,
+                (string) $row['qamera_product_ref'],
+                (string) ($row['display_name_snapshot'] ?? ''),
+                isset($row['status']) ? (string) $row['status'] : null,
+                isset($row['last_synced_at']) && $row['last_synced_at'] !== ''
+                    ? (string) $row['last_synced_at']
+                    : null,
+            );
+        }
+
+        return $out;
+    }
+
+    public function countForShop(int $idShop): int
+    {
+        $sql = sprintf(
+            'SELECT COUNT(*) AS `n` FROM `%sqamera_product_link` WHERE `id_shop` = %d',
+            $this->tablePrefix,
+            $idShop
+        );
+        $row = $this->db->getRow($sql);
+        if (!is_array($row) || !isset($row['n'])) {
+            return 0;
+        }
+        return (int) $row['n'];
+    }
+
+    /**
      * Resolve a single `(id_shop, id_product)` to the surrogate `id_link`
      * — used by the webhook pre-submit-race path so a freshly-arrived
      * `job.*` delivery can insert a stub row with the right FK before

@@ -28,8 +28,9 @@
       `qameraai:ref:<endpoint>:<sha256(api_key)[0:16]>`
 - [x] 3.2 Add `src/Api/Cache/CachedReferenceClient.php` decorator implementing the six reference methods
       with the TTL table from `qamera-api-client` delta spec
-- [ ] 3.3 Wire `CachedReferenceClient` into `config/services.yml` (DEFERRED — Slice B; needs a
-      Configuration-reading factory, currently excluded from the autodiscover glob)
+- [x] 3.3 Wire `CachedReferenceClient` into `config/services.yml` via
+      `CachedReferenceClientFactory` (request-time `QAMERAAI_API_KEY` read);
+      `ReferenceCache` wired with `_PS_CACHE_DIR_` constant
 - [x] 3.4 Unit tests: cache hit within TTL, miss after TTL expiry, different API keys do not share entries
 - [x] 3.5 Filesystem cleanup helper for tests (`tearDown` deletes `_PS_CACHE_DIR_ . 'qameraai/reference/'`)
 
@@ -108,41 +109,45 @@
 
 ## 9. BO controllers + routes
 
-- [ ] 9.1 Add `controllers/admin/AdminQameraAiProductsController.php` thin shim → forwards to
-      Symfony `ProductsGridController`
-- [ ] 9.2 Add `controllers/admin/AdminQameraAiJobsController.php` shim → `JobsHistoryController`
-- [ ] 9.3 Add `src/Controller/Admin/ProductsGridController.php` extending
-      `FrameworkBundleAdminController` — `indexAction(Request)` paginates link rows, joins
-      `ps_product_lang`, prepares row VMs with `canGenerate = qamera_image_id !== null`
-- [ ] 9.4 Add `src/Controller/Admin/GenerateFormController.php` — `showAction` renders form with
+- [ ] 9.1 `controllers/admin/AdminQameraAiProductsController.php` shim — NOT NEEDED.
+      PS's Symfony admin routing handles `_legacy_controller: AdminQameraAi*` without a
+      shim file (same pattern as the existing `AdminQameraAiConfiguration`).
+- [ ] 9.2 `controllers/admin/AdminQameraAiJobsController.php` shim — NOT NEEDED (same reason)
+- [x] 9.3 Add `src/Controller/Admin/ProductsGridController.php` extending
+      `FrameworkBundleAdminController` — `indexAction(Request)` paginates link rows from
+      `SyncedProductLinkLookup::listForGrid`, prepares row VMs with `canGenerate`
+- [x] 9.4 Add `src/Controller/Admin/GenerateFormController.php` — `showAction` renders form with
       reference data (via `CachedReferenceClient`), `submitAction` validates → calls submitter →
-      flash + redirect or re-render
-- [ ] 9.5 Add `src/Controller/Admin/JobsHistoryController.php` — `indexAction` paginates from
+      flash + redirect or re-render; plus `costAction` JSON endpoint for the live cost recalc
+- [x] 9.5 Add `src/Controller/Admin/JobsHistoryController.php` — `indexAction` paginates from
       `PackshotJobRepository::listForGrid`, status filter via query string
-- [ ] 9.6 Register routes in `config/routes.yml`: `/modules/qameraai/{products,generate,jobs}`
-- [ ] 9.7 Wire services in `config/services.yml` (controllers, submitter, calculator, repository,
-      updater, cached reference client)
+- [x] 9.6 Register routes in `config/routes.yml`: `/qameraai/{products,generate,generate/submit,
+      generate/cost,jobs}` (deviated from spec's `/modules/qameraai/*` to match the existing
+      `/qameraai/configuration` pattern)
+- [x] 9.7 Wire services in `config/services.yml` (CachedReferenceClientFactory + ReferenceCache +
+      CalculatorBridge; controllers auto-discovered via `config/admin/services.yml`)
 
 ## 10. Twig templates + JS + CSS
 
-- [ ] 10.1 `views/templates/admin/products_grid.html.twig` — Bootstrap 4 table, bulk-select form,
+- [x] 10.1 `views/templates/admin/products_grid.html.twig` — Bootstrap 4 table, bulk-select form,
       disabled action button + title hint for unsynced rows
-- [ ] 10.2 `views/templates/admin/generate_form.html.twig` — form with all fields, error-display
-      partial, cost display element
-- [ ] 10.3 `views/templates/admin/jobs_history.html.twig` — table with status badge, output thumbnail,
+- [x] 10.2 `views/templates/admin/generate_form.html.twig` — form with all fields, error-display
+      partial, live cost display element
+- [x] 10.3 `views/templates/admin/jobs_history.html.twig` — table with status badge, output thumbnail,
       error snippet, status filter dropdown
-- [ ] 10.4 `views/js/generate_form.js` — vanilla JS: subject toggle, cost recalc on field change
-      (calls a small JSON endpoint or recomputes from pre-rendered pricing map), max-subjects guard
-- [ ] 10.5 `views/css/admin.css` — minimal additions (badges, disabled state)
-- [ ] 10.6 Ensure NO `package.json`, NO `node_modules/`, NO bundler config introduced
+- [x] 10.4 `views/js/generate_form.js` — vanilla JS: cost recalc on field change (debounced fetch
+      to the `/generate/cost` JSON endpoint)
+- [x] 10.5 `views/css/admin.css` — badge palette per status
+- [x] 10.6 No `package.json`, no `node_modules/`, no bundler config introduced
 
 ## 11. Admin tabs registration
 
-- [ ] 11.1 Extend `Installer::installTabs()` (or add it) to create parent `AdminQameraAi` under IMPROVE
-      > Catalog, plus child tabs `AdminQameraAiProducts`, `AdminQameraAiJobs`
-- [ ] 11.2 Extend `Installer::uninstallTabs()` to remove all three in reverse order
-- [ ] 11.3 Tab labels in EN, PL, UK
-- [ ] 11.4 Manual smoke: parent + children appear under IMPROVE > Catalog after `make install`
+- [x] 11.1 Extend `Installer::installAdminTabs()` to create parent `AdminQameraAi` under IMPROVE
+      with children `AdminQameraAiProducts`, `AdminQameraAiJobs`, `AdminQameraAiConfiguration`
+      (Configuration migrated from its prior standalone slot to be a child of the new parent)
+- [x] 11.2 Extend `Installer::uninstallAdminTabs()` to remove children first, then parent
+- [ ] 11.3 Tab labels in EN, PL, UK — currently EN-only; PL/UK come in Slice C i18n pass
+- [ ] 11.4 Manual smoke — DEFERRED to Slice C runtime smoke
 
 ## 12. i18n strings
 
