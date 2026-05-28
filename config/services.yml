@@ -164,6 +164,17 @@ services:
       $linkLookup: '@QameraAi\Module\Packshot\SyncedProductLinkLookup'
       $logger: '@QameraAi\Module\Webhook\WebhookLogger'
 
+  # Phase 4.4 (add-analysis-status-surfacing) — Refresher takes the
+  # PS table prefix as a constructor string so Symfony cannot autowire
+  # it. Wires through @qameraai.db + autowired API client + logger.
+  QameraAi\Module\Sync\AnalysisStatusRefresher:
+    public: true
+    arguments:
+      $db: '@qameraai.db'
+      $tablePrefix: !php/const _DB_PREFIX_
+      $client: '@QameraAi\Module\Api\QameraApiClient'
+      $logger: '@QameraAi\Module\Sync\PrestaShopLoggerWrapper'
+
   QameraAi\Module\Packshot\PackshotJobSubmitter:
     public: true
     arguments:

@@ -47,4 +47,14 @@ final class FakeSyncedProductLinkLookup extends SyncedProductLinkLookup
         }
         return null;
     }
+
+    public function findByIdLink(int $idShop, int $idLink): ?SyncedProductLink
+    {
+        foreach ($this->byIdProduct as $link) {
+            if ($link->idLink === $idLink && $link->idShop === $idShop) {
+                return $link;
+            }
+        }
+        return null;
+    }
 }

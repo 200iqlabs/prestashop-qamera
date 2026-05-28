@@ -821,6 +821,8 @@ final class QameraApiClientTest extends TestCase
                 'width' => null,
                 'height' => null,
                 'sha256' => str_repeat('a', 64),
+                'analysis_status' => 'described',
+                'analyzed_at' => '2026-05-28T10:00:00Z',
                 'created_at' => 'now',
             ]],
             'images_truncated' => false,
@@ -833,6 +835,119 @@ final class QameraApiClientTest extends TestCase
         self::assertSame('Widget', $product->displayName);
         self::assertCount(1, $product->images);
         self::assertSame('a1', $product->images[0]->assetId);
+        self::assertSame('described', $product->images[0]->analysisStatus);
+        self::assertSame('2026-05-28T10:00:00Z', $product->images[0]->analyzedAt);
+    }
+
+    public function testGetProductAcceptsPendingImageWithNullAnalyzedAt(): void
+    {
+        $body = (string) json_encode([
+            'id' => '33333333-3333-3333-3333-333333333333',
+            'external_ref' => 'ps:1:42',
+            'display_name' => 'Widget',
+            'sku' => null,
+            'description' => null,
+            'source_metadata' => [],
+            'deleted_at' => null,
+            'created_at' => 'now',
+            'updated_at' => 'now',
+            'images' => [[
+                'id' => 'i1',
+                'external_ref' => null,
+                'product_id' => '33333333-3333-3333-3333-333333333333',
+                'asset_id' => 'a1',
+                'byte_size' => 100,
+                'content_type' => 'image/jpeg',
+                'width' => null,
+                'height' => null,
+                'sha256' => str_repeat('a', 64),
+                'analysis_status' => 'pending',
+                'analyzed_at' => null,
+                'created_at' => 'now',
+            ]],
+            'images_truncated' => false,
+            'packshots' => [],
+            'packshots_truncated' => false,
+        ]);
+        $client = $this->clientWith([new Response(200, [], $body)]);
+
+        $product = $client->getProduct('ps:1:42');
+        self::assertSame('pending', $product->images[0]->analysisStatus);
+        self::assertNull($product->images[0]->analyzedAt);
+    }
+
+    public function testGetProductThrowsWhenAnalysisStatusMissing(): void
+    {
+        $body = (string) json_encode([
+            'id' => '33333333-3333-3333-3333-333333333333',
+            'external_ref' => 'ps:1:42',
+            'display_name' => 'Widget',
+            'sku' => null,
+            'description' => null,
+            'source_metadata' => [],
+            'deleted_at' => null,
+            'created_at' => 'now',
+            'updated_at' => 'now',
+            'images' => [[
+                'id' => 'i1',
+                'external_ref' => null,
+                'product_id' => '33333333-3333-3333-3333-333333333333',
+                'asset_id' => 'a1',
+                'byte_size' => 100,
+                'content_type' => 'image/jpeg',
+                'width' => null,
+                'height' => null,
+                'sha256' => str_repeat('a', 64),
+                // analysis_status absent — backend regression
+                'analyzed_at' => null,
+                'created_at' => 'now',
+            ]],
+            'images_truncated' => false,
+            'packshots' => [],
+            'packshots_truncated' => false,
+        ]);
+        $client = $this->clientWith([new Response(200, [], $body)]);
+
+        $this->expectException(\QameraAi\Module\Api\Exception\ValidationException::class);
+        $this->expectExceptionMessageMatches('/analysis_status/');
+        $client->getProduct('ps:1:42');
+    }
+
+    public function testGetProductThrowsWhenAnalysisStatusUnknownEnumValue(): void
+    {
+        $body = (string) json_encode([
+            'id' => '33333333-3333-3333-3333-333333333333',
+            'external_ref' => 'ps:1:42',
+            'display_name' => 'Widget',
+            'sku' => null,
+            'description' => null,
+            'source_metadata' => [],
+            'deleted_at' => null,
+            'created_at' => 'now',
+            'updated_at' => 'now',
+            'images' => [[
+                'id' => 'i1',
+                'external_ref' => null,
+                'product_id' => '33333333-3333-3333-3333-333333333333',
+                'asset_id' => 'a1',
+                'byte_size' => 100,
+                'content_type' => 'image/jpeg',
+                'width' => null,
+                'height' => null,
+                'sha256' => str_repeat('a', 64),
+                'analysis_status' => 'unknown_value',
+                'analyzed_at' => null,
+                'created_at' => 'now',
+            ]],
+            'images_truncated' => false,
+            'packshots' => [],
+            'packshots_truncated' => false,
+        ]);
+        $client = $this->clientWith([new Response(200, [], $body)]);
+
+        $this->expectException(\QameraAi\Module\Api\Exception\ValidationException::class);
+        $this->expectExceptionMessageMatches('/unknown_value.*analysis_status/');
+        $client->getProduct('ps:1:42');
     }
 
     public function testDeleteProductDiscardsResponseBody(): void

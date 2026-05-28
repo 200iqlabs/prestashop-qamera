@@ -55,3 +55,15 @@ _qameraai_admin_jobs_history:
     _controller: 'QameraAi\Module\Controller\Admin\JobsHistoryController::indexAction'
     _legacy_controller: AdminQameraAiJobs
     _legacy_link: AdminQameraAiJobs
+
+# --- Phase 4.4: analysis-status surfacing ---
+
+_qameraai_admin_product_status:
+  path: /qameraai/products/{idLink}/status
+  methods: [GET]
+  requirements:
+    idLink: '\d+'
+  defaults:
+    _controller: 'QameraAi\Module\Controller\Admin\ProductStatusController::statusAction'
+    _legacy_controller: AdminQameraAiProducts
+    _legacy_link: AdminQameraAiProducts

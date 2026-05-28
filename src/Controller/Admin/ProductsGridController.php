@@ -15,6 +15,13 @@ use Symfony\Component\HttpFoundation\Response;
  * Lists synced products with single + bulk "Generate" actions. Rows
  * whose `qamera_image_id IS NULL` render with the action disabled and
  * a hover hint per the `qamera-bo-ui` spec.
+ *
+ * Phase 4.4 (add-analysis-status-surfacing) added an Analysis column
+ * with a badge driven by the local cache columns and refreshed
+ * client-side by `views/js/products_grid.js` against the per-row
+ * status JSON endpoint. The Generate gate hardens to require
+ * `analysis_status='described'` (or `'partial'` once multi-image
+ * sync lands).
  */
 final class ProductsGridController extends FrameworkBundleAdminController
 {
@@ -44,6 +51,11 @@ final class ProductsGridController extends FrameworkBundleAdminController
                     'status' => $r->status,
                     'last_synced_at' => $r->lastSyncedAt,
                     'can_generate' => $r->canGenerate(),
+                    'disabled_hint' => $r->getDisabledHint(),
+                    'analysis_status' => $r->analysisStatus,
+                    'analysis_described_count' => $r->analysisDescribedCount,
+                    'analysis_total_count' => $r->analysisTotalCount,
+                    'analysis_refreshed_at' => $r->analysisRefreshedAt,
                 ], $rows),
                 'page' => $page,
                 'total_pages' => $totalPages,
@@ -51,6 +63,26 @@ final class ProductsGridController extends FrameworkBundleAdminController
                 'page_size' => self::PAGE_SIZE,
                 'generate_url' => $this->generateUrl('_qameraai_admin_generate_form'),
                 'jobs_url' => $this->generateUrl('_qameraai_admin_jobs_history'),
+                // Status endpoint URL is per-row; the JS builds the
+                // concrete URL by substituting {idLink} at runtime.
+                // The route has an int requirement on `idLink`, so we
+                // pass `0` as a placeholder and rewrite the trailing
+                // `/0/status` segment with an anchored regex (matches
+                // only at end-of-path, immune to collisions with any
+                // other `/0/status` substring earlier in the URL).
+                'status_url_template' => preg_replace(
+                    '#/0/status(?=\?|$)#',
+                    '/{idLink}/status',
+                    $this->generateUrl('_qameraai_admin_product_status', ['idLink' => 0]),
+                    1
+                ),
+                // Prepend __PS_BASE_URI__ (e.g. '/' for root installs,
+                // '/shop/' for sub-path installs) so the script tag works
+                // regardless of mount point. Twig `asset()` cannot be
+                // used here — the PS admin kernel resolves it to
+                // `/admin-dev/modules/...` which 404s (see commit
+                // d1c9c18 for the empirical confirmation).
+                'js_asset_url' => rtrim(__PS_BASE_URI__, '/') . '/modules/qameraai/views/js/products_grid.js',
             ]
         );
     }

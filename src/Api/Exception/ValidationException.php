@@ -28,4 +28,17 @@ final class ValidationException extends ApiException
             ),
         );
     }
+
+    /**
+     * @param list<string> $allowed
+     */
+    public static function invalidEnumValue(string $field, string $value, array $allowed): self
+    {
+        return new self(sprintf(
+            'Malformed Qamera AI response: invalid value "%s" for "%s"; allowed: %s',
+            $value,
+            $field,
+            implode('|', $allowed),
+        ));
+    }
 }
