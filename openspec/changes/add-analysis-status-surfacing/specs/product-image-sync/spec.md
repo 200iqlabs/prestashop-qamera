@@ -155,7 +155,7 @@ counts at refresh time, regardless of which branch chose `analysis_status`.
 - **GIVEN** `images` is `[{analysisStatus: 'described'}, {analysisStatus: 'processing'}]`
 - **THEN** the result is `(status: 'partial', described: 1, total: 2)`
 
-#### Scenario: Multi-image with described and error yields described (error ignored when any described)
+#### Scenario: Multi-image with described and error yields partial (error ignored when at least one image described)
 
 - **GIVEN** `images` is `[{analysisStatus: 'described'}, {analysisStatus: 'error'}]`
 - **THEN** the result is `(status: 'partial', described: 1, total: 2)` — not `'error'`, because at least one image is generatable

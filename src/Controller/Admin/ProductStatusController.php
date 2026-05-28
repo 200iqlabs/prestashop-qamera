@@ -87,7 +87,10 @@ final class ProductStatusController extends FrameworkBundleAdminController
     private function renderPayload(SyncedProductLink $link, RefreshResult $result): array
     {
         $generateEnabled = $link->canGenerate();
-        $hint = $link->getDisabledHint();
+        $hintKey = $link->getDisabledHint();
+        $hint = $hintKey === null
+            ? null
+            : $this->trans($hintKey, 'Modules.Qameraai.Admin');
         $badge = $this->renderBadge($result->analysisStatus);
 
         $payload = [
@@ -115,7 +118,7 @@ final class ProductStatusController extends FrameworkBundleAdminController
      */
     private function renderBadge(?string $analysisStatus): array
     {
-        return match ($analysisStatus) {
+        $meta = match ($analysisStatus) {
             SyncedProductLink::ANALYSIS_STATUS_DESCRIBED => [
                 'class' => 'badge-success',
                 'label' => 'Ready',
@@ -143,6 +146,10 @@ final class ProductStatusController extends FrameworkBundleAdminController
                 'icon' => '⏳',
             ],
         };
+
+        $meta['label'] = $this->trans($meta['label'], 'Modules.Qameraai.Admin');
+
+        return $meta;
     }
 
     private function resolveShopId(): int

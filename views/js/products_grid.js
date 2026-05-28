@@ -193,7 +193,19 @@
     if (badge) {
       badge.setAttribute('data-analysis-status', stringifyStatus(payload.analysis_status));
       badge.className = 'badge ' + (payload.badge_class || 'badge-secondary');
-      badge.textContent = (payload.badge_icon || '') + ' ' + (payload.badge_label || '');
+      var label = (payload.badge_icon || '') + ' ' + (payload.badge_label || '');
+      // Mirror the Twig "(k of n)" suffix that the initial render appends
+      // when the row has more than one upstream image — otherwise a poll
+      // tick or Refresh click drops the count indicator on multi-image
+      // partial/described rows.
+      var total = payload.analysis_total_count;
+      if (typeof total === 'number' && total > 1) {
+        var described = typeof payload.analysis_described_count === 'number'
+          ? payload.analysis_described_count
+          : 0;
+        label += ' (' + described + ' of ' + total + ')';
+      }
+      badge.textContent = label;
       if (payload.analysis_refreshed_at) {
         badge.setAttribute('title', 'Refreshed at ' + payload.analysis_refreshed_at);
       }
