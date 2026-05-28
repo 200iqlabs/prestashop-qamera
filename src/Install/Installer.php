@@ -86,6 +86,12 @@ final class Installer
                 `status` ENUM('pending','registered','error') NOT NULL DEFAULT 'pending',
                 `last_error_message` TEXT NULL,
                 `last_synced_at` DATETIME NULL,
+                `analysis_status`
+                    ENUM('pending','processing','described','error','partial')
+                    NULL DEFAULT NULL,
+                `analysis_described_count` INT UNSIGNED NULL DEFAULT NULL,
+                `analysis_total_count` INT UNSIGNED NULL DEFAULT NULL,
+                `analysis_refreshed_at` DATETIME NULL DEFAULT NULL,
                 `created_at` DATETIME NOT NULL,
                 `updated_at` DATETIME NOT NULL,
                 PRIMARY KEY (`id_link`),
@@ -342,6 +348,19 @@ final class Installer
             // image upstream", which the BO uses to disable the
             // Generate action for that row.
             'qamera_image_id' => '`qamera_image_id` CHAR(36) NULL',
+            // Phase 4.4 (add-analysis-status-surfacing) — local cache of
+            // the upstream Gemini-analysis lifecycle aggregated across
+            // the product's `images[]`. NULL on a freshly-migrated row
+            // means "never refreshed" and is treated as `pending` by the
+            // Generate-readiness gate. The `partial` enum value is
+            // reserved for the multi-image future; the v1 single-image
+            // flow never emits it.
+            'analysis_status' => "`analysis_status` "
+                . "ENUM('pending','processing','described','error','partial') "
+                . "NULL DEFAULT NULL",
+            'analysis_described_count' => '`analysis_described_count` INT UNSIGNED NULL DEFAULT NULL',
+            'analysis_total_count' => '`analysis_total_count` INT UNSIGNED NULL DEFAULT NULL',
+            'analysis_refreshed_at' => '`analysis_refreshed_at` DATETIME NULL DEFAULT NULL',
         ];
 
         foreach ($additions as $name => $definition) {

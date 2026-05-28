@@ -1,17 +1,17 @@
 ## 1. Schema migration
 
-- [ ] 1.1 Extend `Installer::createTables()` to include the four analysis columns in the `CREATE TABLE ps_qamera_product_link` statement (`analysis_status` ENUM, `analysis_described_count` INT UNSIGNED NULL, `analysis_total_count` INT UNSIGNED NULL, `analysis_refreshed_at` DATETIME NULL)
-- [ ] 1.2 Add `Installer::migrateProductLinkAnalysisColumns()` with idempotent `INFORMATION_SCHEMA.COLUMNS` check + `ALTER TABLE ADD COLUMN` for each of the four columns, mirroring `migratePackshotLinkSchema()` pattern
-- [ ] 1.3 Wire `migrateProductLinkAnalysisColumns()` into the module's `upgrade` hook sequence
-- [ ] 1.4 Bump `QameraAi::$version` in `qameraai.php` so PS triggers the upgrade
-- [ ] 1.5 Add PHPUnit test under `tests/Unit/Install/` (or extend an existing one) asserting both fresh-install and migrate-existing paths produce the same final shape
+- [x] 1.1 Extend `Installer::createSchema()` to include the four analysis columns in the `CREATE TABLE ps_qamera_product_link` statement (`analysis_status` ENUM, `analysis_described_count` INT UNSIGNED NULL, `analysis_total_count` INT UNSIGNED NULL, `analysis_refreshed_at` DATETIME NULL)
+- [x] 1.2 Extend `Installer::migrateProductLinkSchema()` additions array with the four columns (idempotent `INFORMATION_SCHEMA.COLUMNS` check already in place — no separate method needed; same pattern as `qamera_image_id` added in Phase 4.3)
+- [x] 1.3 Add `upgrade/upgrade-1.4.0.php` mirroring upgrade-1.3.0.php pattern (INFORMATION_SCHEMA-guarded ADD COLUMN per missing column)
+- [x] 1.4 Bump `QameraAi::$version` from `1.3.0` to `1.4.0` in `qameraai.php`
+- [x] 1.5 Extend `tests/Integration/Install/SchemaUpgradeTest.php` with `testAnalysisColumnsConvergeAcrossFreshAndUpgradePaths()` stub (marked incomplete, mirrors the existing fresh+upgrade convergence stub — the integration harness for these is the parent-shell PS bootstrap, not unit-runnable)
 
 ## 2. API client DTO extension
 
-- [ ] 2.1 Add `$analysisStatus: string` and `$analyzedAt: ?string` to `src/Api/Dto/ProductImageDto.php` constructor (required, after `$sha256`, before `$createdAt` to match upstream schema order)
-- [ ] 2.2 Update `QameraApiClient::getProduct()` / its `JsonDecoder` path to populate the new fields; ensure missing field raises `ValidationException::malformedResponse('analysis_status')` and unknown enum value raises `ValidationException` with diagnostic message
-- [ ] 2.3 Update `tests/Contract/Fixtures/products-detail.json` `response_2xx` to include `analysis_status` + `analyzed_at` on every `images[]` entry; bump `_commit` header to the PR #204 merge SHA
-- [ ] 2.4 Add unit test cases in `tests/Unit/Api/` (or wherever `getProduct` decode is tested) covering: described+analyzed_at present, pending+analyzed_at=null, missing analysis_status throws, unknown enum value throws
+- [x] 2.1 Added `$analysisStatus: string` and `$analyzedAt: ?string` to `src/Api/Dto/ProductImageDto.php` constructor (after `$sha256`, before `$createdAt` per upstream order). Exposed `ANALYSIS_STATUSES` constant.
+- [x] 2.2 `JsonDecoder` is reflection-based + snake_case-aware → auto-maps `analysis_status` / `analyzed_at` from payload; missing required field already raises `ValidationException::malformedResponse('analysis_status')` via existing decoder path. Unknown enum value validated in `ProductImageDto::__construct()` via new factory `ValidationException::invalidEnumValue($field, $value, $allowed)`.
+- [x] 2.3 Updated `tests/Contract/Fixtures/products-detail.fixture.json` with `analysis_status='described'` + `analyzed_at` on the single embedded image; bumped `_commit` to `PR-204@2026-05-28` (placeholder for true merge SHA — to refresh when fetching the upstream commit).
+- [x] 2.4 Added 4 new test methods in `tests/Unit/Api/QameraApiClientTest.php`: described+analyzed_at present (extended existing test), pending+null analyzed_at, missing analysis_status throws, unknown enum value throws.
 
 ## 3. AnalysisStatusRefresher service
 
