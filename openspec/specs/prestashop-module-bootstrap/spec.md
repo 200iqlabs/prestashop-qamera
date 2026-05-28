@@ -108,7 +108,7 @@ On upgrade from a pre-4.2 install (where `ps_qamera_packshot_link` was created w
 - **WHEN** the installer creates the packshot-link table
 - **THEN** `INFORMATION_SCHEMA.STATISTICS` shows a `UNIQUE` index on `qamera_packshot_id`
 
-#### Scenario: Packshot status ENUM accepts the four lifecycle states
+#### Scenario: Packshot status ENUM accepts the five lifecycle states
 
 - **WHEN** the install (or idempotent upgrade) completes
 - **THEN** the `status` column on `<prefix>qamera_packshot_link` SHALL be `ENUM('pending','ready','failed','cancelled','archived') NOT NULL DEFAULT 'pending'`
