@@ -82,7 +82,14 @@ class PackshotJobUpdater
         }
 
         if ($lastErrorMessage !== null && strlen($lastErrorMessage) > self::TEXT_CAPACITY_BYTES) {
-            $lastErrorMessage = substr($lastErrorMessage, 0, self::TEXT_CAPACITY_BYTES);
+            // Use mb_strcut so we trim at a byte boundary that does NOT cut
+            // mid-UTF-8-sequence; the DB column is bounded by bytes (TEXT =
+            // 65535 bytes under utf8mb4), not characters. Fall back to
+            // substr only when mbstring is absent, accepting the risk of
+            // an invalid trailing sequence in that environment.
+            $lastErrorMessage = function_exists('mb_strcut')
+                ? mb_strcut($lastErrorMessage, 0, self::TEXT_CAPACITY_BYTES, 'UTF-8')
+                : substr($lastErrorMessage, 0, self::TEXT_CAPACITY_BYTES);
         }
 
         $now = gmdate('Y-m-d H:i:s');

@@ -45,11 +45,20 @@ final class PackshotJobSubmitter
 
     public function submit(SubmitFormInput $input): SubmitResult
     {
-        $links = $this->linkLookup->loadByProductIds($input->idShop, $input->productIds);
+        // Dedupe id_product up front: a manipulated/stale POST could carry
+        // the same product twice, which would later overwrite earlier
+        // entries in $refIndex (keyed by qamera_product_ref) inside
+        // submitChunk() and decouple the response-to-row mapping from the
+        // outbound Subjects. We accept the first occurrence and drop
+        // duplicates silently — the operator-facing skipped counter is
+        // reserved for "not eligible", not "you double-clicked".
+        $productIds = array_values(array_unique($input->productIds));
+
+        $links = $this->linkLookup->loadByProductIds($input->idShop, $productIds);
 
         $generable = [];
         $skipped = 0;
-        foreach ($input->productIds as $idProduct) {
+        foreach ($productIds as $idProduct) {
             $link = $links[$idProduct] ?? null;
             if ($link === null || !$link->canGenerate()) {
                 $skipped++;
@@ -278,7 +287,13 @@ final class PackshotJobSubmitter
         if ($label === '') {
             return '(unnamed product)';
         }
-        if (strlen($label) > 200) {
+        // Subject's 200 limit is character-bounded; strlen/substr would
+        // both miscount and slice mid-sequence for non-ASCII names. Mirror
+        // the mb_substr-with-fallback pattern from src/Sync/*.
+        if (function_exists('mb_strlen') && mb_strlen($label) > 200) {
+            return mb_substr($label, 0, 200);
+        }
+        if (!function_exists('mb_strlen') && strlen($label) > 200) {
             return substr($label, 0, 200);
         }
         return $label;

@@ -26,6 +26,26 @@ namespace QameraAi\Module\Api\Cache;
  */
 final class ReferenceCache
 {
+    /**
+     * Strict allowlist of DTO classes that may be hydrated from the cache.
+     * Any other class encountered during unserialize() becomes
+     * `__PHP_Incomplete_Class`, which we reject as a corrupted entry. This
+     * shuts down PHP object-injection vectors if a cache file is tampered
+     * with on disk: an attacker cannot smuggle in a class with a malicious
+     * `__destruct`/`__wakeup` because it is not on this list.
+     *
+     * @var list<class-string>
+     */
+    private const ALLOWED_CLASSES = [
+        \QameraAi\Module\Api\Dto\AiModel::class,
+        \QameraAi\Module\Api\Dto\AspectRatio::class,
+        \QameraAi\Module\Api\Dto\MannequinModel::class,
+        \QameraAi\Module\Api\Dto\Preset::class,
+        \QameraAi\Module\Api\Dto\Pricing::class,
+        \QameraAi\Module\Api\Dto\PricingEntry::class,
+        \QameraAi\Module\Api\Dto\Scenery::class,
+    ];
+
     public function __construct(private readonly string $cacheDir)
     {
         if ($this->cacheDir === '') {
@@ -48,7 +68,9 @@ final class ReferenceCache
             return null;
         }
 
-        $envelope = @unserialize($raw, ['allowed_classes' => true]);
+        // Envelope itself contains no objects — refuse any class to keep
+        // the outer unserialize() purely scalar.
+        $envelope = @unserialize($raw, ['allowed_classes' => false]);
         if (!is_array($envelope) || !isset($envelope['stored_at'], $envelope['payload'])) {
             return null;
         }
@@ -63,8 +85,14 @@ final class ReferenceCache
             return null;
         }
 
-        $value = @unserialize($payload, ['allowed_classes' => true]);
-        return $value === false && $payload !== serialize(false) ? null : $value;
+        $value = @unserialize($payload, ['allowed_classes' => self::ALLOWED_CLASSES]);
+        if ($value === false && $payload !== serialize(false)) {
+            return null;
+        }
+        if (!$this->isHydrationSafe($value)) {
+            return null;
+        }
+        return $value;
     }
 
     public function set(string $logicalKey, mixed $value): void
@@ -109,6 +137,26 @@ final class ReferenceCache
     {
         $apiKeyHash = substr(hash('sha256', $apiKey), 0, 16);
         return sprintf('qameraai:ref:%s:%s', $endpoint, $apiKeyHash);
+    }
+
+    /**
+     * Recursively confirm that no `__PHP_Incomplete_Class` instance slipped
+     * through the allowlist (which would indicate a disallowed class name
+     * was present in the serialized payload).
+     */
+    private function isHydrationSafe(mixed $value): bool
+    {
+        if ($value instanceof \__PHP_Incomplete_Class) {
+            return false;
+        }
+        if (is_array($value)) {
+            foreach ($value as $item) {
+                if (!$this->isHydrationSafe($item)) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     private function path(string $logicalKey): string

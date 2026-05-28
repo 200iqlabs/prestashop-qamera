@@ -51,7 +51,8 @@ final class PackshotJobUpdaterTest extends TestCase
         // Two SQL statements: 1) SELECT probe, 2) UPDATE (the UPSERT path
         // for an existing row produces UPDATE-only, not INSERT).
         self::assertCount(2, $this->db->executed);
-        self::assertStringContainsString('SELECT * FROM `ps_qamera_packshot_job`', $this->db->executed[0]);
+        self::assertStringContainsString('FROM `ps_qamera_packshot_job`', $this->db->executed[0]);
+        self::assertStringStartsWith('SELECT ', $this->db->executed[0]);
         self::assertStringContainsString('UPDATE `ps_qamera_packshot_job`', $this->db->executed[1]);
         self::assertStringContainsString("`status` = 'completed'", $this->db->executed[1]);
         self::assertStringContainsString("'https://cdn.example.com/out.jpg'", $this->db->executed[1]);

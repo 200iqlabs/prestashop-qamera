@@ -150,7 +150,7 @@ final class GenerateFormController extends FrameworkBundleAdminController
     }
 
     /**
-     * @param array<string, mixed> $context
+     * @return array<string, mixed>
      */
     private function loadReferenceContext(CachedReferenceClient $reference): array
     {

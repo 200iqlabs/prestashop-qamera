@@ -20,6 +20,18 @@ use QameraAi\Module\Webhook\Event\QameraDbException;
  */
 class PackshotJobRepository
 {
+    /**
+     * Columns enumerated so `findByJobId`/`findByExternalRef` stay decoupled
+     * from incidental schema additions (e.g. an audit column added later
+     * should not silently flow through `hydrate()`). Mirrors the
+     * "no SELECT *" discipline used in src/Sync/*.
+     */
+    private const SELECT_COLUMNS = '`id_qamera_packshot_job`, `qamera_job_id`, '
+        . '`qamera_order_id`, `id_qamera_product_link`, `id_shop`, `id_product`, '
+        . '`packshot_external_ref`, `status`, `output_url`, `output_url_expires_at`, '
+        . '`last_error_message`, `ai_model`, `aspect_ratio`, `images_count`, '
+        . '`session_config_json`, `submitted_at`, `last_synced_at`';
+
     public function __construct(
         private readonly Db $db,
         private readonly string $tablePrefix,
@@ -29,7 +41,8 @@ class PackshotJobRepository
     public function findByJobId(string $qameraJobId): ?PackshotJobRow
     {
         $sql = sprintf(
-            'SELECT * FROM `%sqamera_packshot_job` WHERE `qamera_job_id` = \'%s\'',
+            'SELECT %s FROM `%sqamera_packshot_job` WHERE `qamera_job_id` = \'%s\'',
+            self::SELECT_COLUMNS,
             $this->tablePrefix,
             $this->escape($qameraJobId)
         );
@@ -40,7 +53,8 @@ class PackshotJobRepository
     public function findByExternalRef(string $ref): ?PackshotJobRow
     {
         $sql = sprintf(
-            'SELECT * FROM `%sqamera_packshot_job` WHERE `packshot_external_ref` = \'%s\'',
+            'SELECT %s FROM `%sqamera_packshot_job` WHERE `packshot_external_ref` = \'%s\'',
+            self::SELECT_COLUMNS,
             $this->tablePrefix,
             $this->escape($ref)
         );
