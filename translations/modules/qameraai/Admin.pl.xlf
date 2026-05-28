@@ -142,6 +142,214 @@
         <source>Webhook body exceeds the maximum accepted size.</source>
         <target>Treść webhooka przekracza maksymalny dopuszczalny rozmiar.</target>
       </trans-unit>
+
+      <!-- Phase 4.3: packshot generation BO -->
+      <trans-unit id="packshots.products.title">
+        <source>Qamera AI — Products</source>
+        <target>Qamera AI — Produkty</target>
+      </trans-unit>
+      <trans-unit id="packshots.jobs.title">
+        <source>Qamera AI — Jobs history</source>
+        <target>Qamera AI — Historia zadań</target>
+      </trans-unit>
+      <trans-unit id="packshots.jobs.link">
+        <source>Jobs history</source>
+        <target>Historia zadań</target>
+      </trans-unit>
+      <trans-unit id="packshots.products.back">
+        <source>Back to products</source>
+        <target>Wróć do produktów</target>
+      </trans-unit>
+      <trans-unit id="packshots.products.empty">
+        <source>No synced products yet. Save a product or enable auto-register in Configuration.</source>
+        <target>Brak zsynchronizowanych produktów. Zapisz produkt lub włącz automatyczną rejestrację w Konfiguracji.</target>
+      </trans-unit>
+      <trans-unit id="packshots.jobs.empty">
+        <source>No jobs yet. Submit one from the Products tab.</source>
+        <target>Brak zadań. Wyślij zadanie z zakładki Produkty.</target>
+      </trans-unit>
+      <trans-unit id="packshots.col.product">
+        <source>Product</source>
+        <target>Produkt</target>
+      </trans-unit>
+      <trans-unit id="packshots.col.status">
+        <source>Status</source>
+        <target>Status</target>
+      </trans-unit>
+      <trans-unit id="packshots.col.last_synced">
+        <source>Last synced</source>
+        <target>Ostatnia synchronizacja</target>
+      </trans-unit>
+      <trans-unit id="packshots.col.action">
+        <source>Action</source>
+        <target>Akcja</target>
+      </trans-unit>
+      <trans-unit id="packshots.col.submitted">
+        <source>Submitted</source>
+        <target>Wysłano</target>
+      </trans-unit>
+      <trans-unit id="packshots.col.ai_model">
+        <source>AI model</source>
+        <target>Model AI</target>
+      </trans-unit>
+      <trans-unit id="packshots.col.aspect">
+        <source>Aspect</source>
+        <target>Proporcje</target>
+      </trans-unit>
+      <trans-unit id="packshots.col.output">
+        <source>Output</source>
+        <target>Wynik</target>
+      </trans-unit>
+      <trans-unit id="packshots.action.generate">
+        <source>Generate</source>
+        <target>Generuj</target>
+      </trans-unit>
+      <trans-unit id="packshots.action.generate_selected">
+        <source>Generate selected</source>
+        <target>Generuj zaznaczone</target>
+      </trans-unit>
+      <trans-unit id="packshots.action.sync_first">
+        <source>Sync this product first</source>
+        <target>Najpierw zsynchronizuj ten produkt</target>
+      </trans-unit>
+      <trans-unit id="packshots.action.submit">
+        <source>Submit</source>
+        <target>Wyślij</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.title">
+        <source>Generate packshots</source>
+        <target>Generuj packshoty</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.selected">
+        <source>Selected products</source>
+        <target>Wybrane produkty</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.count_selected">
+        <source>%count% product(s) selected.</source>
+        <target>Wybrano %count% produkt(ów).</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.aspect_ratio">
+        <source>Aspect ratio</source>
+        <target>Proporcje obrazu</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.images_count">
+        <source>Images per subject</source>
+        <target>Liczba obrazów na produkt</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.scenery">
+        <source>Scenery</source>
+        <target>Sceneria</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.mannequin">
+        <source>Mannequin model</source>
+        <target>Model manekina</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.preset">
+        <source>Preset</source>
+        <target>Preset</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.suggestions">
+        <source>Suggestions</source>
+        <target>Sugestie</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.suggestions_placeholder">
+        <source>Free-form notes for the AI (optional)</source>
+        <target>Dodatkowe wskazówki dla AI (opcjonalnie)</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.cost_label">
+        <source>Estimated cost</source>
+        <target>Szacowany koszt</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.cost_unit">
+        <source>credits</source>
+        <target>kredytów</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.cost_unavailable">
+        <source>unavailable</source>
+        <target>niedostępny</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.cost_hint">
+        <source>Live preview from %pricing% endpoint</source>
+        <target>Podgląd na żywo z endpointu %pricing%</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.select_placeholder">
+        <source>— Select —</source>
+        <target>— Wybierz —</target>
+      </trans-unit>
+      <trans-unit id="packshots.form.none">
+        <source>— None —</source>
+        <target>— Brak —</target>
+      </trans-unit>
+      <trans-unit id="packshots.jobs.filter_label">
+        <source>Filter by status</source>
+        <target>Filtruj wg statusu</target>
+      </trans-unit>
+      <trans-unit id="packshots.status.all">
+        <source>all</source>
+        <target>wszystkie</target>
+      </trans-unit>
+      <trans-unit id="packshots.status.pending">
+        <source>pending</source>
+        <target>oczekuje</target>
+      </trans-unit>
+      <trans-unit id="packshots.status.in_progress">
+        <source>in_progress</source>
+        <target>w toku</target>
+      </trans-unit>
+      <trans-unit id="packshots.status.completed">
+        <source>completed</source>
+        <target>ukończone</target>
+      </trans-unit>
+      <trans-unit id="packshots.status.failed">
+        <source>failed</source>
+        <target>niepowodzenie</target>
+      </trans-unit>
+      <trans-unit id="packshots.status.cancelled">
+        <source>cancelled</source>
+        <target>anulowane</target>
+      </trans-unit>
+      <trans-unit id="packshots.status.registered">
+        <source>registered</source>
+        <target>zarejestrowany</target>
+      </trans-unit>
+      <trans-unit id="packshots.status.error">
+        <source>error</source>
+        <target>błąd</target>
+      </trans-unit>
+
+      <!-- Flash + validation messages -->
+      <trans-unit id="packshots.error.ai_model_required">
+        <source>AI model is required.</source>
+        <target>Model AI jest wymagany.</target>
+      </trans-unit>
+      <trans-unit id="packshots.error.images_count_range">
+        <source>Images per subject must be between 1 and 50.</source>
+        <target>Liczba obrazów na produkt musi być z zakresu 1–50.</target>
+      </trans-unit>
+      <trans-unit id="packshots.error.products_required">
+        <source>Select at least one product.</source>
+        <target>Wybierz co najmniej jeden produkt.</target>
+      </trans-unit>
+      <trans-unit id="packshots.error.aspect_ratio_invalid">
+        <source>Aspect ratio is not in the upstream catalog.</source>
+        <target>Wybrane proporcje obrazu nie znajdują się w katalogu Qamera AI.</target>
+      </trans-unit>
+      <trans-unit id="packshots.error.reference_failed">
+        <source>Could not load Qamera AI reference data: %message%</source>
+        <target>Nie udało się pobrać danych referencyjnych Qamera AI: %message%</target>
+      </trans-unit>
+      <trans-unit id="packshots.flash.full_success">
+        <source>Submitted %sessions% session(s); %jobs% job(s) queued. Order(s): %orders%.</source>
+        <target>Wysłano %sessions% sesj(e); zakolejkowano %jobs% zadań. Zamówienia: %orders%.</target>
+      </trans-unit>
+      <trans-unit id="packshots.flash.full_failure">
+        <source>All sessions failed: %message%</source>
+        <target>Wszystkie sesje zakończyły się niepowodzeniem: %message%</target>
+      </trans-unit>
+      <trans-unit id="packshots.flash.partial">
+        <source>Partial success: %ok% session(s) queued (%jobs% jobs), %failed% failed. Details in logs.</source>
+        <target>Częściowy sukces: zakolejkowano %ok% sesj(e) (%jobs% zadań), %failed% niepowodzeń. Szczegóły w logach.</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

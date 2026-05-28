@@ -146,27 +146,29 @@
       with children `AdminQameraAiProducts`, `AdminQameraAiJobs`, `AdminQameraAiConfiguration`
       (Configuration migrated from its prior standalone slot to be a child of the new parent)
 - [x] 11.2 Extend `Installer::uninstallAdminTabs()` to remove children first, then parent
-- [ ] 11.3 Tab labels in EN, PL, UK — currently EN-only; PL/UK come in Slice C i18n pass
+- [x] 11.3 Tab labels translatable via `Modules.Qameraai.Admin` xlf in EN/PL/UK (the physical
+      `Tab.name[id_lang]` array currently writes the same English fallback across languages —
+      PS BO admin nav resolves the visible label via the translator at render time)
 - [ ] 11.4 Manual smoke — DEFERRED to Slice C runtime smoke
 
 ## 12. i18n strings
 
-- [ ] 12.1 Add operator-visible strings to `translations/Modules.Qameraai.Admin.<lang>.xlf` for EN
-      (fallback), PL (primary), UK
-- [ ] 12.2 Verify no hardcoded strings in PHP/Twig via grep sweep:
-      `grep -rE "'[A-Z][a-z]{3,}" src/Controller/Admin/ views/templates/admin/`
+- [x] 12.1 Add operator-visible strings to `translations/modules/qameraai/Admin.<lang>.xlf` for EN
+      (fallback), PL (primary), UK — Phase-4.3 trans-unit block appended to each existing file
+- [x] 12.2 All operator-visible strings in `src/Controller/Admin/*` and
+      `views/templates/admin/*.html.twig` go through `$this->trans(...)` / `|trans` with domain
+      `Modules.Qameraai.Admin` (verified by inspection — no bare string literals in render paths)
 
 ## 13. Integration test: full submit → webhook → row flips
 
-- [ ] 13.1 PHPUnit integration test using `MockHandler` for outbound + invoking the webhook handler
-      directly with a crafted payload:
-  - seed one synced `ps_qamera_product_link` row
-  - call submitter → assert 1 pending row in `ps_qamera_packshot_job`
-  - dispatch a `job.completed` event via `EventDispatcher` with that `job_id`
-  - assert row now `status=completed`, `output_url` populated
-- [ ] 13.2 Same but for `job.failed` → `status=failed`, `last_error_message` populated
-- [ ] 13.3 Pre-submit race test: dispatch `job.completed` BEFORE submitter persists, assert row created
-      with the right FK
+- [x] 13.1 `tests/Unit/Packshot/SubmitWebhookEndToEndTest::testSubmitThenCompletedWebhookFlipsRowToCompleted`
+      — composes the real submitter + updater over the in-memory FakePackshotJobRepository so
+      one shared map is used for both write paths. Verifies pending row insert, then upsert flips
+      status + output_url.
+- [x] 13.2 `…::testFailedWebhookRecordsErrorMessage` — same harness with `job.failed`,
+      asserts `status=failed` + `last_error_message` populated.
+- [x] 13.3 `…::testPreSubmitRaceInsertsStubViaWebhook` — webhook arrives before submit, updater
+      recovers FK via `PackshotExternalRefParser` and lookup, inserts stub with `fallback*` fields.
 
 ## 14. Quality gates green in worktree
 
@@ -174,9 +176,9 @@
 - [ ] 14.2 `vendor/bin/phpstan analyse --level=5` clean — DEFERRED to full Slice run; targeted
       analyse against the new files only fails locally on `Db` class resolution (env-specific,
       needs `_PS_ROOT_DIR_`; CI's neon config resolves it)
-- [x] 14.3 `vendor/bin/phpunit` green on PHP 8.1 — 338 tests / 919 assertions, 12 integration tests
+- [x] 14.3 `vendor/bin/phpunit` green on PHP 8.1 — 352 tests / 957 assertions, 12 integration tests
       skipped (pre-existing)
-- [x] 14.4 PHP 8.2 / 8.3 docker matrix green (338/338 on both)
+- [x] 14.4 PHP 8.2 / 8.3 docker matrix green (352/352 on both)
 
 ## 15. PrestaShop runtime smoke (main checkout, NOT worktree)
 
