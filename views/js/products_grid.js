@@ -24,6 +24,11 @@
   var POLL_INTERVAL_MS = 5000;
   var ROWS_PER_CYCLE = 10;
   var IN_FLIGHT_STATES = ['pending', 'processing', 'null'];
+  // Cap consecutive transient failures per row before we drop it from
+  // the poll queue. Without a cap, a permanently-broken endpoint would
+  // be hammered indefinitely; without re-enqueueing on failure, a single
+  // transient blip would silently strand an in-flight row until reload.
+  var MAX_CONSECUTIVE_FAILURES = 5;
 
   function init() {
     var config = window.QameraAiProductsGrid || {};
@@ -114,6 +119,7 @@
     if (queue.length === 0) { return; }
 
     var seen = {};
+    var failures = {};
     queue.forEach(function (id) { seen[id] = true; });
 
     var timer = window.setInterval(function () {
@@ -126,7 +132,19 @@
       batch.forEach(function (idLink) {
         delete seen[idLink];
         runRefresh(idLink, statusUrlTemplate, false, null).then(function (payload) {
-          if (!payload) { return; }
+          if (!payload) {
+            // Transient failure (network error, 4xx/5xx, bad envelope).
+            // The row is still in-flight by assumption — re-queue with
+            // a small retry budget so a one-off blip doesn't strand it,
+            // but a permanently-broken endpoint stops eventually.
+            failures[idLink] = (failures[idLink] || 0) + 1;
+            if (failures[idLink] <= MAX_CONSECUTIVE_FAILURES && !seen[idLink]) {
+              seen[idLink] = true;
+              queue.push(idLink);
+            }
+            return;
+          }
+          failures[idLink] = 0;
           if (IN_FLIGHT_STATES.indexOf(stringifyStatus(payload.analysis_status)) !== -1) {
             // Still in-flight — push back to tail (FIFO across visible window).
             if (!seen[idLink]) {

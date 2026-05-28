@@ -108,7 +108,33 @@ class AnalysisStatusRefresher
         $agg = self::aggregate($product->images);
         $refreshedAt = $this->now();
 
-        $this->persist($link->idLink, $agg, $refreshedAt);
+        if (!$this->persist($link->idLink, $agg, $refreshedAt)) {
+            // Persist failed (transient DB error, lock contention, etc.).
+            // Surface the fresh aggregate to the operator but keep the
+            // prior `analysis_refreshed_at` so the TTL gate still treats
+            // the row as stale on the next tick — otherwise the cache
+            // row never converges and we keep burning upstream budget.
+            $this->logger->addLog(
+                sprintf(
+                    '[QameraAi] analysis-status persist failed for id_link=%d (product_ref=%s)',
+                    $link->idLink,
+                    $link->qameraProductRef,
+                ),
+                2,
+                null,
+                'QameraAiModule',
+                $link->idProduct,
+                true,
+            );
+
+            return new RefreshResult(
+                $agg['status'],
+                $agg['described'],
+                $agg['total'],
+                $link->analysisRefreshedAt,
+                'Failed to persist analysis-status cache — refresh again shortly.',
+            );
+        }
 
         return new RefreshResult(
             $agg['status'],
@@ -227,8 +253,11 @@ class AnalysisStatusRefresher
 
     /**
      * @param array{status: ?string, described: int, total: int} $agg
+     *
+     * Returns the boolean signal from `Db::execute()` so the caller can
+     * distinguish a successful UPDATE from a silent transient failure.
      */
-    private function persist(int $idLink, array $agg, string $refreshedAt): void
+    private function persist(int $idLink, array $agg, string $refreshedAt): bool
     {
         $sql = sprintf(
             'UPDATE `%sqamera_product_link` SET '
@@ -246,7 +275,7 @@ class AnalysisStatusRefresher
             $idLink,
         );
 
-        $this->db->execute($sql);
+        return (bool) $this->db->execute($sql);
     }
 
     private function sanitizeError(ApiException $e): string
