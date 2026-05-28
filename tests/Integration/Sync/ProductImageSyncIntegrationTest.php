@@ -104,6 +104,9 @@ final class ProductImageSyncIntegrationTest extends IntegrationTestCase
         $decoded = json_decode($capturedBody, true);
         self::assertIsArray($decoded);
         self::assertArrayHasKey('images', $decoded);
+        self::assertIsArray($decoded['images']);
+        self::assertArrayHasKey(0, $decoded['images']);
+        self::assertIsArray($decoded['images'][0]);
         self::assertArrayNotHasKey(
             'product_metadata',
             $decoded['images'][0],

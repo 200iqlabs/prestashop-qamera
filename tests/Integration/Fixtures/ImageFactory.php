@@ -21,11 +21,9 @@ use RuntimeException;
  */
 final class ImageFactory
 {
-    private const DEFAULT_SOURCE = '/var/www/html/img/p/lt.jpg';
-
     public static function attachImage(Product $product, ?string $sourcePath = null): Image
     {
-        $source = $sourcePath ?? self::DEFAULT_SOURCE;
+        $source = $sourcePath ?? self::resolveDefaultSource();
         if (!is_file($source)) {
             throw new RuntimeException(
                 sprintf('ImageFactory: source file %s not found in dev container.', $source)
@@ -70,5 +68,23 @@ final class ImageFactory
         }
 
         return $image;
+    }
+
+    /**
+     * Resolves the default source file via the same PrestaShop image-
+     * root constant the kernel exposes after bootstrap. Honors the
+     * `QAMERAAI_PS_ROOT` override implicitly: `_PS_IMG_DIR_` is computed
+     * by `config/config.inc.php` relative to whichever PS root the
+     * bootstrap loaded, so non-default container layouts work without
+     * a hardcoded absolute path.
+     */
+    private static function resolveDefaultSource(): string
+    {
+        if (!defined('_PS_IMG_DIR_')) {
+            throw new RuntimeException(
+                'ImageFactory: _PS_IMG_DIR_ is not defined — kernel not booted?'
+            );
+        }
+        return rtrim((string) constant('_PS_IMG_DIR_'), '/') . '/p/lt.jpg';
     }
 }
