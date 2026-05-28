@@ -65,12 +65,16 @@ final class ProductsGridController extends FrameworkBundleAdminController
                 'jobs_url' => $this->generateUrl('_qameraai_admin_jobs_history'),
                 // Status endpoint URL is per-row; the JS builds the
                 // concrete URL by substituting {idLink} at runtime.
-                // generateUrl() emits the real path with a placeholder
-                // value we can search-and-replace.
-                'status_url_template' => str_replace(
-                    '/0/status',
+                // The route has an int requirement on `idLink`, so we
+                // pass `0` as a placeholder and rewrite the trailing
+                // `/0/status` segment with an anchored regex (matches
+                // only at end-of-path, immune to collisions with any
+                // other `/0/status` substring earlier in the URL).
+                'status_url_template' => preg_replace(
+                    '#/0/status(?=\?|$)#',
                     '/{idLink}/status',
-                    $this->generateUrl('_qameraai_admin_product_status', ['idLink' => 0])
+                    $this->generateUrl('_qameraai_admin_product_status', ['idLink' => 0]),
+                    1
                 ),
                 'js_asset_url' => '/modules/qameraai/views/js/products_grid.js',
             ]

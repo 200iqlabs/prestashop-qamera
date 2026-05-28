@@ -48,18 +48,13 @@
                 }[analysis_status_key] %}
                 <tr>
                   <td>
-                    {% if row.can_generate %}
-                      <input type="checkbox"
-                             class="qameraai-row-select"
-                             name="products[]"
-                             value="{{ row.id_product }}"
-                             data-id-link="{{ row.id_link }}">
-                    {% else %}
-                      <input type="checkbox" disabled
-                             class="qameraai-row-select"
-                             data-id-link="{{ row.id_link }}"
-                             title="{{ row.disabled_hint|default('Sync this product first')|trans({}, 'Modules.Qameraai.Admin') }}">
-                    {% endif %}
+                    <input type="checkbox"
+                           class="qameraai-row-select"
+                           name="products[]"
+                           value="{{ row.id_product }}"
+                           data-id-link="{{ row.id_link }}"
+                           data-id-product="{{ row.id_product }}"
+                           {% if not row.can_generate %}disabled title="{{ row.disabled_hint|default('Sync this product first')|trans({}, 'Modules.Qameraai.Admin') }}"{% endif %}>
                   </td>
                   <td>
                     <strong>{{ row.name }}</strong>
@@ -83,23 +78,14 @@
                     {{ row.last_synced_at|default('—') }}
                   </td>
                   <td>
-                    {% if row.can_generate %}
-                      <a href="{{ generate_url }}?products={{ row.id_product }}"
-                         class="btn btn-primary btn-sm js-qameraai-generate"
-                         data-id-link="{{ row.id_link }}">
-                        <i class="material-icons">auto_fix_high</i>
-                        {{ 'Generate'|trans({}, 'Modules.Qameraai.Admin') }}
-                      </a>
-                    {% else %}
-                      <button type="button"
-                              class="btn btn-secondary btn-sm js-qameraai-generate"
-                              disabled
-                              data-id-link="{{ row.id_link }}"
-                              title="{{ row.disabled_hint|default('Sync this product first')|trans({}, 'Modules.Qameraai.Admin') }}">
-                        <i class="material-icons">block</i>
-                        {{ 'Generate'|trans({}, 'Modules.Qameraai.Admin') }}
-                      </button>
-                    {% endif %}
+                    <a href="{{ generate_url }}?products={{ row.id_product }}"
+                       class="btn btn-sm js-qameraai-generate {% if row.can_generate %}btn-primary{% else %}btn-secondary disabled{% endif %}"
+                       data-id-link="{{ row.id_link }}"
+                       data-id-product="{{ row.id_product }}"
+                       {% if not row.can_generate %}aria-disabled="true" tabindex="-1" title="{{ row.disabled_hint|default('Sync this product first')|trans({}, 'Modules.Qameraai.Admin') }}"{% endif %}>
+                      <i class="material-icons">{% if row.can_generate %}auto_fix_high{% else %}block{% endif %}</i>
+                      {{ 'Generate'|trans({}, 'Modules.Qameraai.Admin') }}
+                    </a>
                     <button type="button"
                             class="btn btn-outline-secondary btn-sm js-qameraai-refresh-analysis"
                             data-id-link="{{ row.id_link }}"

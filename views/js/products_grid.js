@@ -32,6 +32,22 @@
     initBulkSelect();
     initRefreshButtons(statusUrlTemplate);
     initPoll(statusUrlTemplate);
+    initGenerateGuard();
+  }
+
+  /**
+   * Generate is rendered as an `<a>` regardless of state (so the JS poll
+   * can flip a disabled row to enabled without swapping element shape).
+   * Intercept clicks on rows that are still gated so a stale-disabled
+   * anchor cannot navigate.
+   */
+  function initGenerateGuard() {
+    document.addEventListener('click', function (evt) {
+      var anchor = evt.target.closest && evt.target.closest('.js-qameraai-generate');
+      if (anchor && anchor.getAttribute('aria-disabled') === 'true') {
+        evt.preventDefault();
+      }
+    });
   }
 
   /* --------------------------------------------------------------------
@@ -188,14 +204,16 @@
     );
     if (generateBtn) {
       if (payload.generate_enabled) {
-        generateBtn.removeAttribute('disabled');
+        generateBtn.removeAttribute('aria-disabled');
+        generateBtn.removeAttribute('tabindex');
         generateBtn.removeAttribute('title');
-        generateBtn.classList.remove('btn-secondary');
+        generateBtn.classList.remove('btn-secondary', 'disabled');
         generateBtn.classList.add('btn-primary');
       } else {
-        generateBtn.setAttribute('disabled', 'disabled');
+        generateBtn.setAttribute('aria-disabled', 'true');
+        generateBtn.setAttribute('tabindex', '-1');
         generateBtn.classList.remove('btn-primary');
-        generateBtn.classList.add('btn-secondary');
+        generateBtn.classList.add('btn-secondary', 'disabled');
         if (payload.hint) {
           generateBtn.setAttribute('title', payload.hint);
         }
