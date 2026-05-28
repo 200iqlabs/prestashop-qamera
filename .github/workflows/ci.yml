@@ -134,6 +134,19 @@ jobs:
           docker compose -f .ci/docker-compose.integration.yml logs --tail=200 prestashop || true
           exit 1
 
+      - name: Install qameraai module via prestashop:module console
+        working-directory: .ci
+        # PS_INSTALL_AUTO bootstraps the storefront DB but does NOT
+        # install third-party modules sitting in modules/. Running the
+        # console install creates ps_qamera_product_link, registers the
+        # actionProductSave / actionWatermark hooks, and seeds
+        # configuration defaults — everything BookkeepingFactory and
+        # the sync flow rely on. The command is idempotent: re-running
+        # against an already-installed module exits 0 with a notice.
+        run: |
+          docker compose -f docker-compose.integration.yml exec -T prestashop \
+            php /var/www/html/bin/console prestashop:module install qameraai
+
       - name: Run integration suite inside the PS container
         working-directory: .ci
         run: |

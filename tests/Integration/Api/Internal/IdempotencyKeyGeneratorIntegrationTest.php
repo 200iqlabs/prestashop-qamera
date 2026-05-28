@@ -17,7 +17,8 @@ use Ramsey\Uuid\Uuid;
  * Note: this test does NOT reproduce the cross-module autoloader clash
  * with `ps_checkout` / `ps_accounts` (those modules are not present in
  * the dev container) — see design.md Non-Goals. The fallback's
- * existence and correctness is what this test guarantees.
+ * existence and correctness under THIS autoloader is what this test
+ * guarantees; cross-module clashes remain operator-smoke territory.
  */
 final class IdempotencyKeyGeneratorIntegrationTest extends IntegrationTestCase
 {
@@ -31,30 +32,43 @@ final class IdempotencyKeyGeneratorIntegrationTest extends IntegrationTestCase
         self::assertMatchesRegularExpression(self::UUID_REGEX, $value);
     }
 
-    public function testUuid7BranchIsExercisedWhenAvailable(): void
+    public function testUuid7BranchProducesValidUuid(): void
     {
+        // composer.json pins ramsey/uuid 4.7+, where uuid7 is always
+        // available — the production `hasUuid7()` guard exists to
+        // tolerate cross-module autoloader clashes (see
+        // testFallsBackToUuid4WhenUuid7Unavailable for the inverse).
+        // Two consecutive calls must each be valid UUIDs. We
+        // deliberately do NOT assert lexicographic ordering — uuid7's
+        // lower 74 bits are random and two values generated within
+        // the same millisecond can compare in either direction
+        // (RFC 9562 §6.2).
         self::assertTrue(
             method_exists(Uuid::class, 'uuid7'),
-            'ramsey/uuid 4.7+ is required — uuid7 should be available under real autoload'
+            'ramsey/uuid 4.7+ should expose uuid7 — composer.json contract.'
         );
-
-        // Two consecutive uuid7 values must both be valid AND, being
-        // time-ordered, the second SHOULD compare greater-or-equal to
-        // the first lexicographically.
         $first = (new IdempotencyKeyGenerator())->generate();
         $second = (new IdempotencyKeyGenerator())->generate();
         self::assertMatchesRegularExpression(self::UUID_REGEX, $first);
         self::assertMatchesRegularExpression(self::UUID_REGEX, $second);
-        self::assertGreaterThanOrEqual(0, strcmp($second, $first));
+        self::assertNotSame($first, $second);
     }
 
-    public function testUuid4FallbackProducesValidUuid(): void
+    public function testFallsBackToUuid4WhenUuid7Unavailable(): void
     {
-        // Directly exercise the fallback branch's underlying call —
-        // the production `if (method_exists(...))` guard hides this
-        // branch from us when uuid7 is available, so we assert here
-        // that the dependency itself behaves as the fallback expects.
-        $value = Uuid::uuid4()->toString();
+        // Subclass that pretends uuid7 doesn't exist — forces generate()
+        // to take the production fallback branch even though the
+        // ambient ramsey/uuid 4.7+ exposes uuid7. This is the only way
+        // to exercise the actual production code path against the real
+        // autoloader without runkit/uopz.
+        $forcedFallback = new class () extends IdempotencyKeyGenerator {
+            protected function hasUuid7(): bool
+            {
+                return false;
+            }
+        };
+
+        $value = $forcedFallback->generate();
         self::assertMatchesRegularExpression(self::UUID_REGEX, $value);
     }
 }

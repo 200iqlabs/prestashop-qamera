@@ -1,18 +1,16 @@
 <?php
 
-/**
- * Integration test harness bootstrap.
- *
- * Boots a real PrestaShop 9 kernel inside the dev container so that
- * tests under `tests/Integration/` exercise production code paths
- * against real `Db`, real `_PS_PRODUCT_IMG_DIR_`, real
- * `Module::getInstanceByName('qameraai')` autoload composition.
- *
- * Spec: `integration-test-harness` — boot once per process, idempotent,
- * Configuration override to invalid host, suite-wide `TEST-` sweep.
- */
-
 declare(strict_types=1);
+
+// Integration test harness bootstrap.
+//
+// Boots a real PrestaShop 9 kernel inside the dev container so that
+// tests under `tests/Integration/` exercise production code paths
+// against real `Db`, real `_PS_PRODUCT_IMG_DIR_`, real
+// `Module::getInstanceByName('qameraai')` autoload composition.
+//
+// Spec: `integration-test-harness` — boot once per process, idempotent,
+// Configuration override to invalid host, suite-wide `TEST-` sweep.
 
 if (defined('QAMERAAI_INTEGRATION_BOOTSTRAPPED')) {
     return;
