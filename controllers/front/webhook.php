@@ -2,12 +2,20 @@
 
 declare(strict_types=1);
 
+use QameraAi\Module\Webhook\Event\EventDispatcher;
+use QameraAi\Module\Webhook\Event\Handler\JobCancelledHandler;
+use QameraAi\Module\Webhook\Event\Handler\JobCompletedHandler;
+use QameraAi\Module\Webhook\Event\Handler\JobFailedHandler;
+use QameraAi\Module\Webhook\Event\Handler\JobRetriedHandler;
+use QameraAi\Module\Webhook\Event\PackshotLinkUpdater;
+use QameraAi\Module\Webhook\Event\ProductLinkHeartbeat;
 use QameraAi\Module\Webhook\HmacVerifier;
 use QameraAi\Module\Webhook\Log\PrestaShopLoggerAdapter;
 use QameraAi\Module\Webhook\ReplayGuard;
 use QameraAi\Module\Webhook\SignatureHeaderParser;
 use QameraAi\Module\Webhook\SystemClock;
 use QameraAi\Module\Webhook\WebhookDeliveryRepository;
+use QameraAi\Module\Webhook\WebhookLogger;
 use QameraAi\Module\Webhook\WebhookRequestHandler;
 use QameraAi\Module\Webhook\WebhookResponse;
 
@@ -82,6 +90,7 @@ class QameraaiWebhookModuleFrontController extends ModuleFrontController
     private function buildHandler(): WebhookRequestHandler
     {
         $clock = new SystemClock();
+        $logger = new PrestaShopLoggerAdapter(new \QameraAi\Module\Sync\PrestaShopLoggerWrapper());
 
         return new WebhookRequestHandler(
             new SignatureHeaderParser(),
@@ -89,7 +98,25 @@ class QameraaiWebhookModuleFrontController extends ModuleFrontController
             new ReplayGuard($clock),
             new WebhookDeliveryRepository(Db::getInstance(), _DB_PREFIX_),
             $clock,
-            new PrestaShopLoggerAdapter(new \QameraAi\Module\Sync\PrestaShopLoggerWrapper())
+            $logger,
+            $this->buildDispatcher($logger)
+        );
+    }
+
+    private function buildDispatcher(WebhookLogger $logger): EventDispatcher
+    {
+        $db = Db::getInstance();
+        $packshot = new PackshotLinkUpdater($db, _DB_PREFIX_);
+        $heartbeat = new ProductLinkHeartbeat($db, _DB_PREFIX_);
+
+        return new EventDispatcher(
+            [
+                'job.completed' => new JobCompletedHandler($packshot, $heartbeat, $logger),
+                'job.failed' => new JobFailedHandler($packshot, $heartbeat, $logger),
+                'job.cancelled' => new JobCancelledHandler($packshot, $heartbeat, $logger),
+                'job.retried' => new JobRetriedHandler($db, _DB_PREFIX_, $heartbeat, $logger),
+            ],
+            $logger
         );
     }
 

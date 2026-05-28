@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace QameraAi\Module\Webhook;
 
 use JsonException;
+use QameraAi\Module\Webhook\Event\EventDispatcher;
+use QameraAi\Module\Webhook\Event\WebhookEvent;
 use Throwable;
 
 /**
@@ -43,7 +45,8 @@ final class WebhookRequestHandler
         private readonly ReplayGuard $replayGuard,
         private readonly WebhookDeliveryRepository $repository,
         private readonly Clock $clock,
-        private readonly WebhookLogger $logger
+        private readonly WebhookLogger $logger,
+        private readonly ?EventDispatcher $dispatcher = null
     ) {
     }
 
@@ -237,6 +240,29 @@ final class WebhookRequestHandler
             'accepted',
             ['delivery_id' => $deliveryId, 'event_type' => $eventType]
         );
+
+        // Phase 4.2 — dispatch the verified delivery to the event handlers
+        // exactly once. The dispatcher itself swallows handler exceptions,
+        // but we wrap the call again here so a future refactor that lets
+        // exceptions escape `dispatch()` cannot regress the spec's
+        // "Dispatch never blocks or alters the HTTP ACK" requirement.
+        if ($this->dispatcher !== null) {
+            try {
+                $this->dispatcher->dispatch(new WebhookEvent(
+                    $eventType,
+                    $deliveryId,
+                    isset($decoded['installation_id']) && is_string($decoded['installation_id'])
+                        ? $decoded['installation_id']
+                        : null,
+                    isset($decoded['payload']) && is_array($decoded['payload']) ? $decoded['payload'] : []
+                ));
+            } catch (Throwable $e) {
+                $this->logger->error('dispatch_uncaught', [
+                    'delivery_id' => $deliveryId,
+                    'exception' => get_class($e),
+                ]);
+            }
+        }
 
         return WebhookResponse::ok();
     }
