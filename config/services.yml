@@ -8,6 +8,12 @@ services:
     resource: '../src/*'
     exclude:
       - '../src/Install/*'
+      # Phase 4.2 event-dispatch classes carry non-autowirable constructor
+      # args (string $tablePrefix, array $handlers) and are wired manually
+      # inside controllers/front/webhook.php::buildDispatcher(). Letting
+      # Symfony scan them produces "Cannot autowire service" failures at
+      # container-compilation time, which kills module install.
+      - '../src/Webhook/Event/*'
 
   QameraAi\Module\Api\QameraApiClient:
     factory: ['@QameraAi\Module\Api\Factory\QameraApiClientFactory', 'create']
