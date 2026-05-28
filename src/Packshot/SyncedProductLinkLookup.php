@@ -138,13 +138,15 @@ class SyncedProductLinkLookup
             . '`analysis_status`, `analysis_described_count`, '
             . '`analysis_total_count`, `analysis_refreshed_at` '
             . 'FROM `%sqamera_product_link` '
-            . 'WHERE `id_shop` = %d AND `id_link` = %d '
-            . 'LIMIT 1',
+            . 'WHERE `id_shop` = %d AND `id_link` = %d',
             $this->tablePrefix,
             $idShop,
             $idLink
         );
 
+        // NOTE: Db::getRow() auto-appends `LIMIT 1`; we MUST NOT include
+        // it in the SQL string ourselves or the resulting `LIMIT 1 LIMIT 1`
+        // is a parse error (caught the first time during smoke).
         $row = $this->db->getRow($sql);
         if ($row === false) {
             throw new QameraDbException('product_link findByIdLink failed');
