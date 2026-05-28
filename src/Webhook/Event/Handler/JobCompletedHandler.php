@@ -96,7 +96,7 @@ final class JobCompletedHandler implements EventHandlerInterface
                 eventType: $event->eventType,
                 deliveryId: $event->deliveryId,
                 qameraJobId: $jobId,
-                outputUrl: PayloadExtractor::nullableString($event->payload, 'output_url'),
+                outputUrl: PayloadExtractor::nullableHttpUrl($event->payload, 'output_url'),
                 outputUrlExpiresAt: PayloadExtractor::nullableString($event->payload, 'output_url_expires_at'),
                 lastErrorMessage: null,
                 payloadExternalRef: PayloadExtractor::nullableString($event->payload, 'packshot_external_ref'),

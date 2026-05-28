@@ -93,7 +93,21 @@ final class GenerateFormController extends FrameworkBundleAdminController
         $suggestions = $this->emptyToNull($request->request->get('suggestions'));
         $productIds = $this->parseProductIds($request->request->get('product_ids', ''));
 
-        $errors = $this->validate($aiModel, $imagesCount, $productIds);
+        // Reference data is needed for both aspect-ratio validation (we
+        // only accept values that came from /aspect-ratios) and the
+        // re-render path on validation failure. Load once.
+        try {
+            $referenceContext = $this->loadReferenceContext($referenceFactory->create());
+        } catch (MissingConfigurationException | ApiException $e) {
+            $this->addFlash('error', $this->trans(
+                'Could not load Qamera AI reference data: %message%',
+                'Modules.Qameraai.Admin',
+                ['%message%' => $e->getMessage()]
+            ));
+            return $this->redirectToRoute('_qameraai_admin_products_grid');
+        }
+
+        $errors = $this->validate($aiModel, $aspectRatio, $imagesCount, $productIds, $referenceContext['aspect_ratios']);
         if ($errors !== []) {
             return $this->renderWithErrors($referenceFactory, $request, $errors);
         }
@@ -181,11 +195,17 @@ final class GenerateFormController extends FrameworkBundleAdminController
 
     /**
      * @param int[] $productIds
+     * @param AspectRatio[] $aspectRatios
      *
      * @return array<string, string>  field => message
      */
-    private function validate(string $aiModel, int $imagesCount, array $productIds): array
-    {
+    private function validate(
+        string $aiModel,
+        string $aspectRatio,
+        int $imagesCount,
+        array $productIds,
+        array $aspectRatios
+    ): array {
         $errors = [];
         if ($aiModel === '') {
             $errors['ai_model'] = $this->trans('AI model is required.', 'Modules.Qameraai.Admin');
@@ -198,6 +218,18 @@ final class GenerateFormController extends FrameworkBundleAdminController
         }
         if ($productIds === []) {
             $errors['products'] = $this->trans('Select at least one product.', 'Modules.Qameraai.Admin');
+        }
+        // aspect_ratio is forwarded upstream as a Subject field — accept
+        // only values surfaced by /aspect-ratios. This protects against a
+        // crafted POST with an arbitrary string slipping through to the
+        // upstream submitter, and gives the operator a clear field-level
+        // error instead of an opaque API failure.
+        $allowed = array_map(static fn (AspectRatio $ar): string => $ar->value, $aspectRatios);
+        if ($aspectRatio === '' || !in_array($aspectRatio, $allowed, true)) {
+            $errors['aspect_ratio'] = $this->trans(
+                'Invalid aspect ratio. Pick one from the list.',
+                'Modules.Qameraai.Admin'
+            );
         }
         return $errors;
     }

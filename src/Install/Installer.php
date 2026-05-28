@@ -429,13 +429,13 @@ final class Installer
             $improveId = -1; // hidden orphan fallback for PS builds w/o IMPROVE
         }
 
-        // Migrate or remove any pre-Phase-4.3 standalone Configuration tab.
-        $existingConfigId = (int) Tab::getIdFromClassName('AdminQameraAiConfiguration');
-        if ($existingConfigId > 0) {
-            $existing = new Tab($existingConfigId);
-            $existing->delete();
-        }
-
+        // Migration from the Phase-1 layout is handled entirely by
+        // upsertTab() below: when AdminQameraAiConfiguration already
+        // exists as a direct child of IMPROVE, the call further down
+        // re-uses the same id_tab row, only rewriting id_parent to point
+        // at the new AdminQameraAi parent. That preserves the tab id and
+        // any employee/profile permissions attached to it — deleting and
+        // re-creating would silently reset access control.
         $parentId = $this->upsertTab('AdminQameraAi', 'Qamera AI', $improveId);
         if ($parentId <= 0) {
             return false;

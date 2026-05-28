@@ -1,5 +1,10 @@
 {% extends '@PrestaShop/Admin/layout.html.twig' %}
 
+{# `previous_input` is set on the validation-failure re-render path and
+   is the operator's raw POST. On the GET path it is absent — `default()`
+   keeps the empty-state behaviour intact. #}
+{% set prev = previous_input|default({}) %}
+
 {% block content %}
   <div class="card">
     <div class="card-header">
@@ -48,8 +53,10 @@
                     class="form-control {% if errors.ai_model is defined %}is-invalid{% endif %}" required>
               <option value="">{{ '— Select —'|trans({}, 'Modules.Qameraai.Admin') }}</option>
               {% for m in ai_models %}
-                <option value="{{ m.provider }}/{{ m.model }}"
-                        data-cost="{{ m.baseCreditCost }}">
+                {% set _val = m.provider ~ '/' ~ m.model %}
+                <option value="{{ _val }}"
+                        data-cost="{{ m.baseCreditCost }}"
+                        {% if prev.ai_model is defined and prev.ai_model == _val %}selected{% endif %}>
                   {{ m.provider }}/{{ m.model }}
                 </option>
               {% endfor %}
@@ -65,14 +72,20 @@
             {{ 'Aspect ratio'|trans({}, 'Modules.Qameraai.Admin') }} *
           </label>
           <div class="col-sm-9">
-            <select id="qameraai-aspect-ratio" name="aspect_ratio" class="form-control" required>
+            <select id="qameraai-aspect-ratio" name="aspect_ratio"
+                    class="form-control {% if errors.aspect_ratio is defined %}is-invalid{% endif %}" required>
               {% for ar in aspect_ratios %}
                 <option value="{{ ar.value }}"
-                        {% if ar.value == default_aspect_ratio %}selected{% endif %}>
+                        {% if prev.aspect_ratio is defined
+                              ? prev.aspect_ratio == ar.value
+                              : ar.value == default_aspect_ratio %}selected{% endif %}>
                   {{ ar.label }}
                 </option>
               {% endfor %}
             </select>
+            {% if errors.aspect_ratio is defined %}
+              <div class="invalid-feedback">{{ errors.aspect_ratio }}</div>
+            {% endif %}
           </div>
         </div>
 
@@ -98,7 +111,10 @@
             <select id="qameraai-scenery" name="scenery_id" class="form-control">
               <option value="">{{ '— None —'|trans({}, 'Modules.Qameraai.Admin') }}</option>
               {% for s in sceneries %}
-                <option value="{{ s.id }}">{{ s.name }}</option>
+                <option value="{{ s.id }}"
+                        {% if prev.scenery_id is defined and prev.scenery_id == s.id %}selected{% endif %}>
+                  {{ s.name }}
+                </option>
               {% endfor %}
             </select>
           </div>
@@ -112,7 +128,10 @@
             <select id="qameraai-mannequin" name="mannequin_model_id" class="form-control">
               <option value="">{{ '— None —'|trans({}, 'Modules.Qameraai.Admin') }}</option>
               {% for m in mannequins %}
-                <option value="{{ m.id }}">{{ m.name }}</option>
+                <option value="{{ m.id }}"
+                        {% if prev.mannequin_model_id is defined and prev.mannequin_model_id == m.id %}selected{% endif %}>
+                  {{ m.name }}
+                </option>
               {% endfor %}
             </select>
           </div>
@@ -126,7 +145,10 @@
             <select id="qameraai-preset" name="preset_id" class="form-control">
               <option value="">{{ '— None —'|trans({}, 'Modules.Qameraai.Admin') }}</option>
               {% for p in presets %}
-                <option value="{{ p.id }}">{{ p.name }}</option>
+                <option value="{{ p.id }}"
+                        {% if prev.preset_id is defined and prev.preset_id == p.id %}selected{% endif %}>
+                  {{ p.name }}
+                </option>
               {% endfor %}
             </select>
           </div>
@@ -139,7 +161,7 @@
           <div class="col-sm-9">
             <textarea id="qameraai-suggestions" name="suggestions" class="form-control"
                       rows="3" maxlength="2000"
-                      placeholder="{{ 'Free-form notes for the AI (optional)'|trans({}, 'Modules.Qameraai.Admin') }}"></textarea>
+                      placeholder="{{ 'Free-form notes for the AI (optional)'|trans({}, 'Modules.Qameraai.Admin') }}">{{ prev.suggestions|default('') }}</textarea>
           </div>
         </div>
 

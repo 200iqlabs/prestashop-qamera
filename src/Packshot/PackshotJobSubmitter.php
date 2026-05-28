@@ -54,7 +54,29 @@ final class PackshotJobSubmitter
         // reserved for "not eligible", not "you double-clicked".
         $productIds = array_values(array_unique($input->productIds));
 
-        $links = $this->linkLookup->loadByProductIds($input->idShop, $productIds);
+        // SyncedProductLinkLookup::loadByProductIds throws QameraDbException
+        // on DB failure; surface that as a structured SubmitResult so the
+        // BO controller flashes a coherent error rather than rendering a
+        // 500 (the chunk-level paths already handle DB failure this way).
+        try {
+            $links = $this->linkLookup->loadByProductIds($input->idShop, $productIds);
+        } catch (QameraDbException $e) {
+            $this->logEvent(
+                3,
+                'submit_lookup_db_failed',
+                [
+                    'id_shop' => $input->idShop,
+                    'message' => $e->getMessage(),
+                ]
+            );
+            return new SubmitResult(
+                0,
+                1,
+                0,
+                [],
+                [1 => 'Lookup failed: ' . $e->getMessage()],
+            );
+        }
 
         $generable = [];
         $skipped = 0;
