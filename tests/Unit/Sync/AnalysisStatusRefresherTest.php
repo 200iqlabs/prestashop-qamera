@@ -272,7 +272,7 @@ final class AnalysisStatusRefresherTest extends TestCase
             idLink: 1,
             idShop: 1,
             idProduct: 42,
-            qameraImageId: 'img-uuid',
+            qameraAssetId: 'asset-uuid',
             qameraProductRef: 'ps:1:42',
             displayNameSnapshot: 'Widget',
             analysisStatus: $analysisStatus,

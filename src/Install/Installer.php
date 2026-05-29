@@ -343,11 +343,14 @@ final class Installer
             'status' => '`status` ENUM(\'pending\',\'registered\',\'error\') NOT NULL DEFAULT \'pending\'',
             'last_error_message' => '`last_error_message` TEXT NULL',
             'last_synced_at' => '`last_synced_at` DATETIME NULL',
-            // Phase 4.3 — populated by ProductImageSyncService on a
-            // successful `POST /images`. NULL means "never synced an
-            // image upstream", which the BO uses to disable the
-            // Generate action for that row.
-            'qamera_image_id' => '`qamera_image_id` CHAR(36) NULL',
+            // Phase 4.3 — the storage `asset_id` returned by
+            // `QameraApiClient::requestUpload()` for the product's primary
+            // uploaded image, populated by ProductImageSyncService on a
+            // successful `POST /images`. This is the value sent as
+            // `Subject.packshot_asset_id` on job submission. NULL means
+            // "never synced an image upstream (or migrated and awaiting
+            // re-sync)", which the BO uses to disable the Generate action.
+            'qamera_asset_id' => '`qamera_asset_id` CHAR(36) NULL',
             // Phase 4.4 (add-analysis-status-surfacing) — local cache of
             // the upstream Gemini-analysis lifecycle aggregated across
             // the product's `images[]`. NULL on a freshly-migrated row
