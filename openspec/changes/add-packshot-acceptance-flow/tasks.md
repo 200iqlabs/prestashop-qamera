@@ -1,0 +1,58 @@
+# Tasks — add-packshot-acceptance-flow
+
+> **OUTLINE — not ready for `/opsx:apply`.** Two prerequisites must merge + deploy first
+> (`fix-packshot-asset-id-mismatch`, `fix-webhook-payload-contract`), then this is finalized
+> against the runtime-confirmed contract (see design.md "Open items"). Section 0 gates the rest.
+
+## 0. Prerequisites confirmed (gate)
+
+- [ ] 0.1 `fix-packshot-asset-id-mismatch` merged + deployed; a stage-1 `job_type='packshot'` submit reaches the backend with a correct source `asset_id` (no `generation_failed`).
+- [ ] 0.2 `fix-webhook-payload-contract` merged + deployed; a real `job.completed` with `job.job_type='packshot'` is accepted (200) and observed (capture the payload to confirm `outputs[0].url` is the packshot preview).
+
+## 1. API client (qamera-api-client)
+
+- [ ] 1.1 `SubmitJobRequest` + optional `?string $jobType`; `toPayload()` emits `job_type` when set.
+- [ ] 1.2 `Subject.packshotAssetId` nullable; `toPayload()` omits `packshot_asset_id` when null.
+- [ ] 1.3 `QameraApiClient::acceptJob(string $id): JobDto` / `rejectJob(string $id): JobDto` → `POST /jobs/{id}/accept|reject`.
+
+## 2. Schema (packshot-acceptance)
+
+- [ ] 2.1 `ps_qamera_packshot_review` table (`Installer::createTables()` + migration in the next `upgrade-1.x.0.php`); keyed on `qamera_job_id`, columns per design D1. No FK to `ps_qamera_product_image`.
+- [ ] 2.2 Review entity + lookup (`src/Packshot/Acceptance/`): insert-from-webhook, find-pending, set-voting, has-accepted-for-product_ref.
+
+## 3. Submitter branch (packshot-jobs)
+
+- [ ] 3.1 Branch the submit path: packshot (job_type='packshot', auto_register=true, source asset_id) vs photo_shoot (job_type='photo_shoot', omit asset_id + auto_register).
+- [ ] 3.2 Photo-shoot eligibility = has a local `voting='accepted'` review row for the product_ref.
+
+## 4. Webhook branch (webhook-event-dispatch / packshot-acceptance)
+
+- [ ] 4.1 `JobCompletedHandler`: if `payload.job.job_type==='packshot'` → upsert review row (voting='pending', asset_url=`outputs[0].url`, product matched via parsed `product_ref`); else existing synced path.
+
+## 5. Vote + gate (packshot-acceptance)
+
+- [ ] 5.1 Vote service: accept/reject → `acceptJob`/`rejectJob`, update local `voting`/`voting_at` on 2xx; leave pending on `ApiException`.
+- [ ] 5.2 422 `packshot_not_approved` handling: detect via `ErrorEnvelope.code`, flash `messageFor(locale)` + "accept a packshot first".
+
+## 6. BO UI (qamera-bo-ui)
+
+- [ ] 6.1 Dedicated "Packshots — review" controller + Twig + JS (thumbnail grid, ✓/✗, AJAX vote).
+- [ ] 6.2 Products grid: relabel Generate → "Generate packshot"; add "Generate photo-shoot" action gated on accepted-packshot JOIN; disabled hint.
+
+## 7. Tests
+
+- [ ] 7.1 DTO: `SubmitJobRequest` job_type emit; `Subject` nullable asset_id omit; `acceptJob`/`rejectJob` request shape.
+- [ ] 7.2 Webhook branch: packshot completion → pending review row; photo_shoot completion → no review row.
+- [ ] 7.3 Gate: accepted unlocks photo-shoot; pending/none disables; 422 friendly flash.
+- [ ] 7.4 Submitter branch: packshot sends auto_register+asset_id; photo_shoot omits both.
+
+## 8. Static analysis + lint
+
+- [ ] 8.1 PHPCS / PHPStan-L5 / PHPUnit green across 8.1/8.2/8.3.
+
+## 9. Smoke (operator-driven)
+
+- [ ] 9.1 Generate packshot → webhook → row appears in "Packshots — review" (pending) with preview.
+- [ ] 9.2 Accept → `/jobs/{id}/accept` 2xx → local voting='accepted' → "Generate photo-shoot" enables on the grid.
+- [ ] 9.3 Generate photo-shoot → succeeds (backend resolves accepted packshot per product_ref).
+- [ ] 9.4 Reject path; and 422 drift path surfaces a friendly flash.
