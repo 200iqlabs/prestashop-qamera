@@ -55,7 +55,7 @@ final class GenerateFormController extends FrameworkBundleAdminController
 
         try {
             $reference = $referenceFactory->create();
-            $context = $this->loadReferenceContext($reference);
+            $context = $this->loadReferenceContextFor($jobType, $reference);
         } catch (MissingConfigurationException) {
             $this->addFlash('error', $this->trans(
                 'Qamera AI API key is not configured. Save your credentials first.',
@@ -71,12 +71,18 @@ final class GenerateFormController extends FrameworkBundleAdminController
             return $this->redirectToRoute('_qameraai_admin_products_grid');
         }
 
+        // Packshot frame is fixed 1:1 (aspect-ratios list not fetched);
+        // photo-shoot resolves the catalog default.
+        $defaultAspectRatio = $jobType === SubmitFormInput::JOB_TYPE_PHOTO_SHOOT
+            ? $this->resolveDefaultAspectRatio($context['aspect_ratios'])
+            : '1:1';
+
         return $this->render(
             '@Modules/qameraai/views/templates/admin/generate_form.html.twig',
             $context + [
                 'product_ids' => $productIds,
                 'job_type' => $jobType,
-                'default_aspect_ratio' => $this->resolveDefaultAspectRatio($context['aspect_ratios']),
+                'default_aspect_ratio' => $defaultAspectRatio,
                 'default_images_count' => 4,
                 'errors' => [],
                 'submit_url' => $this->generateUrl('_qameraai_admin_generate_submit'),
@@ -192,11 +198,11 @@ final class GenerateFormController extends FrameworkBundleAdminController
         $productIds = $this->parseProductIds($request->request->get('product_ids', ''));
         $jobType = $jobTypeEarly;
 
-        // Reference data is needed for both aspect-ratio validation (we
-        // only accept values that came from /aspect-ratios) and the
-        // re-render path on validation failure. Load once.
+        // Reference data is needed for aspect-ratio validation (photo-shoot
+        // only) and the re-render path on validation failure. Scoped by job
+        // type: packshot fetches only /ai-models (1 upstream call, not 5).
         try {
-            $referenceContext = $this->loadReferenceContext($referenceFactory->create());
+            $referenceContext = $this->loadReferenceContextFor($jobType, $referenceFactory->create());
         } catch (MissingConfigurationException | ApiException $e) {
             $this->addFlash('error', $this->trans(
                 'Could not load Qamera AI reference data: %message%',
@@ -277,6 +283,31 @@ final class GenerateFormController extends FrameworkBundleAdminController
         }
 
         return $this->json(['cost' => $cost, 'currency' => 'credits']);
+    }
+
+    /**
+     * Job-type-scoped reference load. A packshot form renders only the
+     * AI-model dropdown (model + count), so it fetches ONLY `/ai-models` —
+     * NOT sceneries/mannequins/presets/aspect-ratios. Beyond matching the
+     * simplified form, this cuts the upstream round-trips from 5 to 1, so an
+     * intermittent SSL-handshake timeout on a photo-shoot-only list can no
+     * longer block the packshot form from opening.
+     *
+     * @return array<string, mixed>
+     */
+    private function loadReferenceContextFor(string $jobType, CachedReferenceClient $reference): array
+    {
+        if ($jobType !== SubmitFormInput::JOB_TYPE_PHOTO_SHOOT) {
+            return [
+                'ai_models' => $reference->listAiModels(),
+                'sceneries' => [],
+                'mannequins' => [],
+                'presets' => [],
+                'aspect_ratios' => [],
+            ];
+        }
+
+        return $this->loadReferenceContext($reference);
     }
 
     /**
@@ -361,8 +392,9 @@ final class GenerateFormController extends FrameworkBundleAdminController
         Request $request,
         array $errors
     ): Response {
+        $jobType = $this->normalizeJobType($request->request->get('job_type'));
         try {
-            $context = $this->loadReferenceContext($referenceFactory->create());
+            $context = $this->loadReferenceContextFor($jobType, $referenceFactory->create());
         } catch (MissingConfigurationException | ApiException) {
             // Already failed once — degrade to a flash + redirect rather
             // than render an empty form.
@@ -374,7 +406,7 @@ final class GenerateFormController extends FrameworkBundleAdminController
             '@Modules/qameraai/views/templates/admin/generate_form.html.twig',
             $context + [
                 'product_ids' => $this->parseProductIds($request->request->get('product_ids', '')),
-                'job_type' => $this->normalizeJobType($request->request->get('job_type')),
+                'job_type' => $jobType,
                 'default_aspect_ratio' => trim((string) $request->request->get('aspect_ratio', '1:1')),
                 'default_images_count' => (int) $request->request->get('images_count', 4),
                 'errors' => $errors,
