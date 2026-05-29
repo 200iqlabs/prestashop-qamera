@@ -2,7 +2,7 @@
 
 ## 0. Runtime confirmation (do first; de-risks the whole change)
 
-- [ ] 0.1 Trigger one real delivery against the live container (submit a job, let it complete) and inspect BO Logs: confirm the inbound delivery is rejected `400` (reason `missing_delivery_id` / `delivery_id_mismatch` / `malformed_event_type`) or no-op'd. Capture the actual raw body + headers (`X-Qamera-Signature`, `X-Qamera-Request-Id`) for a regression fixture. If — unexpectedly — deliveries already succeed, STOP and re-scope: the change may be unnecessary. _(Operator-driven; folded into the collective smoke. Implemented on the strength of the static evidence — dispatcher `JSON.stringify(row.payload)`, mdoc, OpenAPI.)_
+- [x] 0.1 Trigger one real delivery against the live container (submit a job, let it complete) and inspect BO Logs: confirm the inbound delivery is rejected `400` (reason `missing_delivery_id` / `delivery_id_mismatch` / `malformed_event_type`) or no-op'd. Capture the actual raw body + headers (`X-Qamera-Signature`, `X-Qamera-Request-Id`) for a regression fixture. If — unexpectedly — deliveries already succeed, STOP and re-scope: the change may be unnecessary. _(Operator-driven; folded into the collective smoke. Implemented on the strength of the static evidence — dispatcher `JSON.stringify(row.payload)`, mdoc, OpenAPI.)_
 
 ## 1. Envelope parsing (`WebhookRequestHandler`)
 
@@ -56,7 +56,12 @@
 
 ## 9. Smoke (operator-driven, main checkout on this branch)
 
-- [ ] 9.1 Install/upgrade on the live container; confirm `ps_qamera_packshot_link` is dropped and the module still installs/uninstalls cleanly.
-- [ ] 9.2 Trigger a job to completion; confirm the inbound `job.completed` is now accepted `200` and updates the matching `ps_qamera_packshot_job` row (status `completed`, `output_url` populated from `outputs[0].url`).
-- [ ] 9.3 Trigger a failing job; confirm `job.failed` lands `status='failed'` + `last_error_message` from `job.error`.
-- [ ] 9.4 Confirm a retried delivery (same `X-Qamera-Request-Id`) is deduped (`{"status":"duplicate"}`).
+- [x] 9.1 Install/upgrade on the live container; confirm `ps_qamera_packshot_link` is dropped and the module still installs/uninstalls cleanly. _(Smoke 2026-05-29: `prestashop:module upgrade qameraai` 1.5.0→1.6.0 clean; `SHOW TABLES LIKE '%packshot_link%'` empty; no DROP-failure log on QameraAiModule channel.)_
+- [x] 9.2 Trigger a job to completion; confirm the inbound `job.completed` is now accepted `200` and updates the matching `ps_qamera_packshot_job` row (status `completed`, `output_url` populated from `outputs[0].url`). _(Smoke 2026-05-29: real `job.completed` accepted 200; `job.product_ref="ps:1:28"` (clean `ps:N:N`); `outputs[0].url` = signed Supabase preview URL stored verbatim into `output_url`; required a manual `POST /plugin/packshots` first — see registration-gap note below.)_
+- [x] 9.3 Trigger a failing job; confirm `job.failed` lands `status='failed'` + `last_error_message` from `job.error`. _(Smoke 2026-05-29: `status='failed'` ✅. ⚠️ BUG: real `job.error` is a STRING, but `PayloadExtractor::jobErrorMessage()` (line 112-113) expects an object → `last_error_message` stays NULL. Fix the extractor to accept a non-empty string before acceptance-flow.)_
+- [x] 9.4 Confirm a retried delivery (same `X-Qamera-Request-Id`) is deduped (`{"status":"duplicate"}`). _(Smoke 2026-05-29: replayed a captured delivery with same request-id + fresh valid signature → 200 `{"status":"duplicate"}`; no extra delivery row inserted.)_
+
+**Smoke findings (2026-05-29, operator-driven, live qamera.ai via cloudflared tunnel):**
+- Webhook contract 1.6.0 validated end-to-end: envelope `{event, job:{…}, outputs:[…], delivered_at, callback_url, external_metadata}`, `event` from body, delivery id from `X-Qamera-Request-Id`, accept 200, dedup, drop of `packshot_link`. `job.product_ref` is the clean `ps:N:N` form on both `job.failed` and `job.completed`.
+- ⚠️ Handler bug: `job.error` arrives as a STRING → not mapped to `last_error_message` (see 9.3).
+- 🔴 Separate prereq blocker: plugin never calls `POST /plugin/packshots` (`registerPackshot()` exists but is unwired) → every generate job fails `PLUGIN_JOB_MISSING_CATALOG_ENTRY` until the packshot is registered manually. Tracked as `fix-packshot-catalog-registration`.
