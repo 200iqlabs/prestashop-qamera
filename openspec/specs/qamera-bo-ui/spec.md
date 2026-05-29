@@ -308,3 +308,67 @@ state hasn't silently regressed, or hurry along a `pending` row.
 - **THEN** the endpoint is hit with `?force=1` and `AnalysisStatusRefresher` issues a fresh `GET /products/{ref}` regardless of TTL
 - **AND** the badge re-renders (possibly unchanged) and `analysis_refreshed_at` is bumped to NOW()
 
+### Requirement: Jobs history reflects live job state without a manual reload
+
+The Jobs history view SHALL keep in-flight job rows current via a client-side poll plus a
+per-row Refresh action, mirroring the Products grid's analysis-status refresh.
+
+A BO endpoint `JobStatusController::statusAction` SHALL serve
+`GET /qameraai/jobs/{jobId}/status` (optional `?force=1`) and return JSON with the row's
+reconciled `status`, presentation primitives (`badge_class`, `badge_label`), `output_url`,
+`last_error_message`, an `in_flight` boolean, and an optional `refresh_error`. It SHALL
+return 404 when no local row matches `jobId` and 500 on a DB error. `?force=1` bypasses the
+refresher's TTL gate.
+
+The Jobs history table SHALL render each row with a `data-job-id` and a status badge carrying
+`data-job-status`, an output cell updatable in place, and a per-row Refresh button. Client JS
+SHALL auto-poll only rows whose status is in-flight (`pending`, `in_progress`, `retry_pending`)
+on a 5s interval, batched FIFO at ≤10 rows per cycle, dropping a row after 5 consecutive
+failures, and SHALL stop when no in-flight rows remain. On a successful response it SHALL update
+the status badge and, when the job completed, render the output thumbnail — without a page reload.
+
+#### Scenario: Completed job appears without reload
+- **GIVEN** a row rendered as `in_progress`
+- **WHEN** the upstream job completes and the next poll tick reads the status endpoint
+- **THEN** the badge flips to `completed` and the output thumbnail appears in place
+
+#### Scenario: Per-row Refresh forces an immediate pull
+- **WHEN** the operator clicks a row's Refresh button
+- **THEN** the endpoint is called with `force=1`, bypassing the TTL gate, and the row updates
+
+#### Scenario: Settled rows are not polled
+- **GIVEN** all visible rows are `completed` / `failed` / `cancelled`
+- **THEN** no poll loop runs
+
+### Requirement: Dedicated "Packshots — review" back-office view
+
+The module SHALL expose a back-office view listing `ps_qamera_packshot_review` rows with `voting='pending'`, each showing the preview image (`asset_url`), the localized product name, and Accept / Reject affordances. Accept/Reject SHALL invoke the vote path (`QameraApiClient::acceptJob`/`rejectJob` keyed on `qamera_job_id`) and, on success, remove the row from the pending list. The view is the voting surface only — it does not submit jobs.
+
+#### Scenario: Pending packshots are listed with vote affordances
+- **GIVEN** two `ps_qamera_packshot_review` rows with `voting='pending'`
+- **THEN** the view renders both with a thumbnail, product name, and ✓/✗ controls
+
+#### Scenario: Accepting removes the row from the pending list
+- **WHEN** the operator accepts a row and the API returns 2xx
+- **THEN** the row's local `voting` becomes `accepted` and it no longer appears in the pending list
+
+### Requirement: Products grid splits Generate into two gated actions
+
+The Products grid SHALL offer two actions per row:
+- **Generate packshot** (stage 1) — enabled iff `qamera_asset_id` is present AND `analysis_status='described'` (the existing Generate-readiness gate);
+- **Generate photo-shoot** (stage 4) — enabled iff the row's `product_ref` has at least one `ps_qamera_packshot_review` row with `voting='accepted'` (the grid JOINs the review table for this signal).
+
+A row with a pending (un-accepted) packshot SHALL render "Generate photo-shoot" disabled with a hint to accept a packshot first. The gate is enforced client-side regardless of the server `PLUGIN_PHOTO_SHOOT_GATE_ENABLED` flag.
+
+#### Scenario: Synced+described product can generate a packshot
+- **GIVEN** a row with `qamera_asset_id` set and `analysis_status='described'`
+- **THEN** "Generate packshot" is enabled
+
+#### Scenario: Accepted packshot enables photo-shoot
+- **GIVEN** a row whose `product_ref` has a `ps_qamera_packshot_review` row `voting='accepted'`
+- **THEN** "Generate photo-shoot" is enabled
+
+#### Scenario: Pending packshot keeps photo-shoot disabled with a hint
+- **GIVEN** a row whose only review state is `voting='pending'`
+- **THEN** "Generate photo-shoot" is disabled with a hint to generate+accept a packshot first
+
