@@ -6,6 +6,7 @@ namespace QameraAi\Module\Tests\Unit\Webhook\Event\Handler;
 
 use PHPUnit\Framework\TestCase;
 use QameraAi\Module\Tests\Support\FakePackshotJobUpdater;
+use QameraAi\Module\Tests\Support\FakePackshotReviewWriter;
 use QameraAi\Module\Tests\Support\FakeProductLinkHeartbeat;
 use QameraAi\Module\Tests\Support\SpyLogger;
 use QameraAi\Module\Webhook\Event\Handler\JobCompletedHandler;
@@ -17,6 +18,7 @@ final class JobCompletedHandlerTest extends TestCase
     private FakeProductLinkHeartbeat $heartbeat;
     private SpyLogger $logger;
     private FakePackshotJobUpdater $packshotJob;
+    private FakePackshotReviewWriter $reviewWriter;
     private JobCompletedHandler $handler;
 
     protected function setUp(): void
@@ -25,7 +27,13 @@ final class JobCompletedHandlerTest extends TestCase
         $this->heartbeat = new FakeProductLinkHeartbeat();
         $this->logger = new SpyLogger();
         $this->packshotJob = new FakePackshotJobUpdater();
-        $this->handler = new JobCompletedHandler($this->heartbeat, $this->logger, $this->packshotJob);
+        $this->reviewWriter = new FakePackshotReviewWriter();
+        $this->handler = new JobCompletedHandler(
+            $this->heartbeat,
+            $this->logger,
+            $this->packshotJob,
+            $this->reviewWriter
+        );
     }
 
     public function testHappyPathBumpsHeartbeatAndMirrorsJob(): void
@@ -46,6 +54,61 @@ final class JobCompletedHandlerTest extends TestCase
         self::assertSame('ps:1:42', $u['product_ref']);
         self::assertSame('ord-1', $u['order_id']);
         self::assertNull($u['last_error_message']);
+    }
+
+    public function testPackshotCompletionRecordsPendingReviewRow(): void
+    {
+        $this->heartbeat->nextReturns = true;
+
+        $this->handler->handle($this->event([
+            'job' => [
+                'product_ref' => 'ps:1:42',
+                'id' => 'job-uuid',
+                'order_id' => 'ord-1',
+                'job_type' => 'packshot',
+            ],
+            'outputs' => [['url' => 'https://storage.example/preview.png']],
+        ]));
+
+        // Job mirror still fires...
+        self::assertCount(1, $this->packshotJob->upserts);
+        // ...AND the review queue gets a pending row with the preview URL.
+        self::assertCount(1, $this->reviewWriter->recorded);
+        $r = $this->reviewWriter->recorded[0];
+        self::assertSame('job-uuid', $r['qamera_job_id']);
+        self::assertSame(1, $r['id_shop']);
+        self::assertSame(42, $r['id_product']);
+        self::assertSame('https://storage.example/preview.png', $r['asset_url']);
+    }
+
+    public function testPhotoShootCompletionDoesNotRecordReviewRow(): void
+    {
+        $this->heartbeat->nextReturns = true;
+
+        $this->handler->handle($this->event([
+            'job' => [
+                'product_ref' => 'ps:1:42',
+                'id' => 'job-uuid',
+                'order_id' => 'ord-1',
+                'job_type' => 'photo_shoot',
+            ],
+            'outputs' => [['url' => 'https://storage.example/shoot.png']],
+        ]));
+
+        self::assertCount(1, $this->packshotJob->upserts, 'mirror still updates');
+        self::assertCount(0, $this->reviewWriter->recorded, 'no review row for photo_shoot');
+    }
+
+    public function testUntypedCompletionDoesNotRecordReviewRow(): void
+    {
+        $this->heartbeat->nextReturns = true;
+
+        $this->handler->handle($this->event([
+            'job' => ['product_ref' => 'ps:1:42', 'id' => 'job-uuid', 'order_id' => 'ord-1'],
+            'outputs' => [['url' => 'https://storage.example/o.png']],
+        ]));
+
+        self::assertCount(0, $this->reviewWriter->recorded, 'legacy untyped completion is not a packshot review');
     }
 
     public function testUnknownProductLogsWarningAndSkipsMirror(): void

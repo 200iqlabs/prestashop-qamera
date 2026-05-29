@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace QameraAi\Module\Webhook\Event\Handler;
 
+use QameraAi\Module\Packshot\Acceptance\PackshotReviewWriter;
 use QameraAi\Module\Packshot\PackshotJobUpdater;
 use QameraAi\Module\Webhook\Event\EventHandlerInterface;
 use QameraAi\Module\Webhook\Event\InvalidProductRefException;
@@ -21,6 +22,10 @@ use QameraAi\Module\Webhook\WebhookLogger;
  *      `(id_shop, id_product)` (heartbeat — never touches `status`).
  *   2. UPSERTs the `ps_qamera_packshot_job` mirror keyed on `qamera_job_id`
  *      with `status='completed'` and the output URL.
+ *   3. When `job.job_type === 'packshot'` (add-packshot-acceptance-flow):
+ *      UPSERTs a pending `ps_qamera_packshot_review` row (asset_url =
+ *      `outputs[0].url`). A `photo_shoot` completion takes only steps 1–2.
+ *      Branches on the wire body's `job.job_type`; no new event type.
  *
  * Defensive guards (all terminate quietly with a log line — `200` ACK):
  *   - missing `job.product_ref` or `job.id`           → ERROR
@@ -34,7 +39,8 @@ final class JobCompletedHandler implements EventHandlerInterface
     public function __construct(
         private readonly ProductLinkHeartbeat $productHeartbeat,
         private readonly WebhookLogger $logger,
-        private readonly PackshotJobUpdater $packshotJobUpdater
+        private readonly PackshotJobUpdater $packshotJobUpdater,
+        private readonly PackshotReviewWriter $reviewWriter
     ) {
     }
 
@@ -72,16 +78,32 @@ final class JobCompletedHandler implements EventHandlerInterface
             return;
         }
 
+        $outputUrl = PayloadExtractor::firstOutputUrl($event->payload);
+
         $this->packshotJobUpdater->upsert(
             eventType: $event->eventType,
             deliveryId: $event->deliveryId,
             qameraJobId: $jobId,
-            outputUrl: PayloadExtractor::firstOutputUrl($event->payload),
+            outputUrl: $outputUrl,
             outputUrlExpiresAt: null,
             lastErrorMessage: null,
             productRef: $productRefRaw,
             orderId: PayloadExtractor::jobString($event->payload, 'order_id'),
         );
+
+        // Stage-1 packshot completion → pending review queue. The branch is on
+        // the wire body's `job.job_type` (no new event type — upstream D4); a
+        // `photo_shoot` (or untyped legacy) completion takes only the mirror
+        // path above and never enters the review queue.
+        if (PayloadExtractor::jobString($event->payload, 'job_type') === 'packshot') {
+            $this->reviewWriter->recordPending(
+                deliveryId: $event->deliveryId,
+                qameraJobId: $jobId,
+                idShop: $productRef->shopId,
+                idProduct: $productRef->productId,
+                assetUrl: $outputUrl,
+            );
+        }
     }
 
     private function logMissing(WebhookEvent $event, string $field): void

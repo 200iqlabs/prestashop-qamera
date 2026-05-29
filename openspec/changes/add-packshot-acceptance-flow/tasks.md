@@ -26,7 +26,7 @@
 
 ## 4. Webhook branch (webhook-event-dispatch / packshot-acceptance)
 
-- [ ] 4.1 `JobCompletedHandler`: if `payload.job.job_type==='packshot'` → upsert review row (voting='pending', asset_url=`outputs[0].url`, product matched via parsed `product_ref`); else existing synced path.
+- [x] 4.1 `JobCompletedHandler` branches on `payload.job.job_type`: `'packshot'` → after the job mirror, calls new `PackshotReviewWriter::recordPending` (voting='pending', asset_url=`outputs[0].url`, canonical `ps:shop:product` from the parsed ref, `generated_at=now`); `photo_shoot`/untyped → mirror only, no review row. Writer wired into the manual webhook graph (`controllers/front/webhook.php`) + new `FakePackshotReviewWriter`; handler ctor + `JobCompletedHandlerTest` updated (+3 cases: packshot records / photo_shoot skips / untyped skips). (Handler 9/9; full unit 389/389; PHPCS clean.)
 
 ## 5. Vote + gate (packshot-acceptance)
 
