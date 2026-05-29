@@ -150,6 +150,7 @@ final class PackshotJobSubmitter
         $jobsPersisted = 0;
         $orderIds = [];
         $chunkFailures = [];
+        $firstApiError = null;
 
         foreach ($chunks as $index => $chunk) {
             $chunkNumber = $index + 1; // 1-based for human-facing messages
@@ -161,6 +162,10 @@ final class PackshotJobSubmitter
             } catch (ApiException $e) {
                 $sessionsFailed++;
                 $chunkFailures[$chunkNumber] = $e->getMessage();
+                // Preserve the first upstream exception (with its envelope/code)
+                // so the controller can classify a photo-shoot gate 422 into a
+                // friendly flash — submit() never re-throws.
+                $firstApiError ??= $e;
                 $this->logEvent(
                     3,
                     'submit_chunk_failed',
@@ -196,6 +201,7 @@ final class PackshotJobSubmitter
             $jobsPersisted,
             $orderIds,
             $chunkFailures,
+            $firstApiError,
         );
     }
 

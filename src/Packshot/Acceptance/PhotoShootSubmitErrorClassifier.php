@@ -31,19 +31,34 @@ final class PhotoShootSubmitErrorClassifier
     public function classify(ApiException $e, string $locale): PhotoShootSubmitError
     {
         $envelope = $e->getEnvelope();
-        if ($envelope === null) {
-            return new PhotoShootSubmitError(PhotoShootSubmitError::KIND_OTHER, $e->getMessage());
+        $code = $envelope?->code;
+        $serverMessage = $envelope !== null ? $envelope->messageFor($locale) : $e->getMessage();
+
+        if ($code === self::CODE_NOT_APPROVED) {
+            return new PhotoShootSubmitError(PhotoShootSubmitError::KIND_NOT_APPROVED, $serverMessage);
         }
 
-        $serverMessage = $envelope->messageFor($locale);
-
-        switch ($envelope->code) {
-            case self::CODE_NOT_APPROVED:
-                return new PhotoShootSubmitError(PhotoShootSubmitError::KIND_NOT_APPROVED, $serverMessage);
-            case self::CODE_INVALID_INPUT:
-                return new PhotoShootSubmitError(PhotoShootSubmitError::KIND_GATE_DISABLED, $serverMessage);
-            default:
-                return new PhotoShootSubmitError(PhotoShootSubmitError::KIND_OTHER, $serverMessage);
+        // Gate-disabled (flag OFF upstream): the backend rejects a photo_shoot
+        // that omitted packshot_asset_id. The envelope code is `invalid_input`,
+        // but be robust to wording/code drift by also matching the distinctive
+        // gate-disabled message on either the envelope text or the raw message.
+        if (
+            $code === self::CODE_INVALID_INPUT
+            || $this->looksGateDisabled($serverMessage)
+            || $this->looksGateDisabled($e->getMessage())
+        ) {
+            return new PhotoShootSubmitError(PhotoShootSubmitError::KIND_GATE_DISABLED, $serverMessage);
         }
+
+        return new PhotoShootSubmitError(PhotoShootSubmitError::KIND_OTHER, $serverMessage);
+    }
+
+    private function looksGateDisabled(string $message): bool
+    {
+        $m = strtolower($message);
+
+        return str_contains($m, 'acceptance gate is disabled')
+            || str_contains($m, 'gate resolution')
+            || str_contains($m, 'packshot_asset_id is required');
     }
 }

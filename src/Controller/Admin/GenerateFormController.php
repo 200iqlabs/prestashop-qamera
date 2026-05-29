@@ -10,7 +10,6 @@ use QameraAi\Module\Api\Cache\CachedReferenceClient;
 use QameraAi\Module\Api\Cache\CachedReferenceClientFactory;
 use QameraAi\Module\Api\Dto\AspectRatio;
 use QameraAi\Module\Api\Exception\ApiException;
-use QameraAi\Module\Api\Exception\ValidationException;
 use QameraAi\Module\Api\Factory\MissingConfigurationException;
 use QameraAi\Module\Packshot\Acceptance\PackshotReviewRepository;
 use QameraAi\Module\Packshot\Acceptance\PhotoShootSubmitError;
@@ -245,18 +244,19 @@ final class GenerateFormController extends FrameworkBundleAdminController
             return $this->renderWithErrors($referenceFactory, $request, $errors);
         }
 
-        try {
-            $result = $submitter->submit($input);
-        } catch (ValidationException $e) {
-            // A photo_shoot 422 carries an actionable ErrorEnvelope.code
-            // (packshot_not_approved / invalid_input) — translate it into a
-            // friendly flash + redirect rather than a raw field error.
-            if ($jobType === SubmitFormInput::JOB_TYPE_PHOTO_SHOOT) {
-                $this->flashPhotoShootError($e);
-                return $this->redirectToRoute('_qameraai_admin_products_grid');
-            }
-            $errors['ai_model'] = $e->getMessage();
-            return $this->renderWithErrors($referenceFactory, $request, $errors);
+        $result = $submitter->submit($input);
+
+        // The submitter swallows upstream failures into the result (it never
+        // re-throws), so a photo-shoot 422 surfaces via $result->firstApiError.
+        // Classify it (packshot_not_approved / gate-disabled) into a friendly,
+        // actionable flash instead of the raw "All sessions failed: …" string.
+        if (
+            $jobType === SubmitFormInput::JOB_TYPE_PHOTO_SHOOT
+            && !$result->isFullSuccess()
+            && $result->firstApiError !== null
+        ) {
+            $this->flashPhotoShootError($result->firstApiError);
+            return $this->redirectToRoute('_qameraai_admin_products_grid');
         }
 
         $this->flashResult($result);
@@ -468,7 +468,7 @@ final class GenerateFormController extends FrameworkBundleAdminController
      * Translate a photo-shoot submit 422 into a friendly, actionable flash
      * (add-packshot-acceptance-flow, "Photo-shoot is gated" requirement).
      */
-    private function flashPhotoShootError(ValidationException $e): void
+    private function flashPhotoShootError(ApiException $e): void
     {
         $locale = $this->resolveLocale();
         $classified = (new PhotoShootSubmitErrorClassifier())->classify($e, $locale);

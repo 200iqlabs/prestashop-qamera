@@ -66,4 +66,35 @@ final class PhotoShootSubmitErrorClassifierTest extends TestCase
         self::assertSame(PhotoShootSubmitError::KIND_OTHER, $result->kind);
         self::assertSame('upstream 503', $result->serverMessage);
     }
+
+    public function testGateDisabledMessageWithoutInvalidInputCodeIsStillGateDisabled(): void
+    {
+        // Real wire message seen in smoke (2026-05-29), envelope code may not
+        // be exactly `invalid_input` — the distinctive text must still map.
+        $e = new ValidationException(
+            'subjects[0].packshot_asset_id is required when the photo-shoot '
+            . 'acceptance gate is disabled (gate resolution unavailable)',
+            422
+        );
+
+        self::assertSame(
+            PhotoShootSubmitError::KIND_GATE_DISABLED,
+            $this->classifier->classify($e, 'en')->kind
+        );
+    }
+
+    public function testGateDisabledDetectedViaEnvelopeMessageText(): void
+    {
+        $e = new ValidationException('bad', 422, new ErrorEnvelope(
+            'some_other_code',
+            ['en' => 'packshot_asset_id is required when the acceptance gate is disabled'],
+            false,
+            null
+        ));
+
+        self::assertSame(
+            PhotoShootSubmitError::KIND_GATE_DISABLED,
+            $this->classifier->classify($e, 'en')->kind
+        );
+    }
 }

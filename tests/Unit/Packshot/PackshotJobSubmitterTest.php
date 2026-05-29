@@ -103,6 +103,9 @@ final class PackshotJobSubmitterTest extends TestCase
         self::assertSame([], $repo->insertedRows);
         self::assertArrayHasKey(1, $result->chunkFailures);
         self::assertStringContainsString('images_count', $result->chunkFailures[1]);
+        // The swallowed upstream exception is preserved on the result so the
+        // controller can classify a photo-shoot gate 422 into a friendly flash.
+        self::assertInstanceOf(ValidationException::class, $result->firstApiError);
     }
 
     public function testServerErrorLeavesDbUntouched(): void
