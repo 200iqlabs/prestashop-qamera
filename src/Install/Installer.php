@@ -162,6 +162,32 @@ final class Installer
                     REFERENCES `{$prefix}qamera_product_link` (`id_link`)
                     ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET={$charset};",
+
+            // Phase 4.4 (add-packshot-acceptance-flow, D1) — local voting
+            // state for stage-1 `job_type='packshot'` jobs. Keyed on
+            // `qamera_job_id` (the address the operator votes against via
+            // `POST /jobs/{id}/accept|reject`). Deliberately separate from
+            // `qamera_packshot_job` (job lifecycle) and carries NO FK to
+            // `qamera_product_link` — a review row is matched to a product
+            // through the parsed `product_ref`, and must survive even if the
+            // product link is later re-created. The `(product_ref, voting)`
+            // index backs the photo-shoot gate's accepted-packshot lookup.
+            "CREATE TABLE IF NOT EXISTS `{$prefix}qamera_packshot_review` (
+                `id_qamera_packshot_review` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                `qamera_job_id` CHAR(36) NOT NULL,
+                `id_shop` INT UNSIGNED NOT NULL,
+                `id_product` INT UNSIGNED NOT NULL,
+                `product_ref` VARCHAR(200) NOT NULL,
+                `asset_url` TEXT NULL,
+                `voting` ENUM('pending','accepted','rejected') NOT NULL DEFAULT 'pending',
+                `voting_at` DATETIME NULL,
+                `generated_at` DATETIME NOT NULL,
+                PRIMARY KEY (`id_qamera_packshot_review`),
+                UNIQUE KEY `qamera_packshot_review_job_id` (`qamera_job_id`),
+                KEY `qamera_packshot_review_product_ref` (`product_ref`, `voting`),
+                KEY `qamera_packshot_review_shop_product` (`id_shop`, `id_product`),
+                KEY `qamera_packshot_review_voting` (`voting`, `generated_at`)
+            ) ENGINE=InnoDB DEFAULT CHARSET={$charset};",
         ];
 
         foreach ($statements as $sql) {
@@ -272,6 +298,7 @@ final class Installer
         // strict-mode servers.
         return Db::getInstance()->execute(
             "DROP TABLE IF EXISTS "
+            . "`{$prefix}qamera_packshot_review`, "
             . "`{$prefix}qamera_packshot_job`, "
             . "`{$prefix}qamera_webhook_delivery`, "
             . "`{$prefix}qamera_packshot_link`, "

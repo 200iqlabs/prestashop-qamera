@@ -16,8 +16,8 @@
 
 ## 2. Schema (packshot-acceptance)
 
-- [ ] 2.1 `ps_qamera_packshot_review` table (`Installer::createTables()` + migration in the next `upgrade-1.x.0.php`); keyed on `qamera_job_id`, columns per design D1. No FK to `ps_qamera_product_image`.
-- [ ] 2.2 Review entity + lookup (`src/Packshot/Acceptance/`): insert-from-webhook, find-pending, set-voting, has-accepted-for-product_ref.
+- [x] 2.1 `ps_qamera_packshot_review` table (`Installer::createSchema()` + `dropSchema()` + idempotent `upgrade-1.7.0.php`); keyed on `qamera_job_id`, columns per design D1 (`asset_url` TEXT, `voting` ENUM default 'pending', `voting_at` NULL, `generated_at`). No FK — matched via parsed `product_ref`. `(product_ref, voting)` index backs the gate. Module bumped 1.6.0 → 1.7.0.
+- [x] 2.2 Review entity + lookup (`src/Packshot/Acceptance/`): `PackshotReviewRow` (voting consts) + `PackshotReviewRepository` — `upsertFromWebhook` (INSERT pending, ON DUP refreshes asset_url/generated_at only — never reverts voting), `listPending` (locale JOIN, newest-first), `setVoting`, `hasAcceptedForProductRef`, `findByJobId`. (PackshotReviewRepositoryTest 10/10; full unit 384/384; PHPCS clean.)
 
 ## 3. Submitter branch (packshot-jobs)
 
