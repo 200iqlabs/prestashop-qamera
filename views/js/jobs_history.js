@@ -1,0 +1,193 @@
+/* global window, document, fetch */
+/**
+ * add-jobs-history-refresh — Jobs history client poll. Vanilla JS, no build
+ * step (CLAUDE.md "no Node, no TypeScript, no React"). Mirrors the products
+ * grid poll semantics (5s, FIFO <=10/cycle, infinite-while-in-flight, drop a
+ * row after 5 consecutive failures) without sharing code — see design D4.
+ *
+ * The webhook is the primary updater; this poll is a fallback so in-flight
+ * rows (pending / in_progress) flip to completed/failed + render the output
+ * thumbnail without a manual page reload. Per-row Refresh forces a pull
+ * (TTL-bypass via ?force=1).
+ *
+ * Activation: the template injects
+ *   window.QameraAiJobsHistory = { statusUrlTemplate: '...' };
+ */
+(function () {
+  'use strict';
+
+  var POLL_INTERVAL_MS = 5000;
+  var ROWS_PER_CYCLE = 10;
+  var IN_FLIGHT_STATES = ['pending', 'in_progress'];
+  var MAX_CONSECUTIVE_FAILURES = 5;
+
+  function init() {
+    var config = window.QameraAiJobsHistory || {};
+    var statusUrlTemplate = config.statusUrlTemplate || '';
+    if (!statusUrlTemplate) { return; }
+
+    initRefreshButtons(statusUrlTemplate);
+    initPoll(statusUrlTemplate);
+  }
+
+  function initRefreshButtons(statusUrlTemplate) {
+    document.querySelectorAll('.js-qameraai-job-refresh').forEach(function (btn) {
+      btn.addEventListener('click', function (evt) {
+        evt.preventDefault();
+        var jobId = btn.getAttribute('data-job-id');
+        if (!jobId) { return; }
+        runRefresh(jobId, statusUrlTemplate, true, btn);
+      });
+    });
+  }
+
+  function initPoll(statusUrlTemplate) {
+    var queue = collectInFlightRows();
+    if (queue.length === 0) { return; }
+
+    var seen = {};
+    var failures = {};
+    queue.forEach(function (id) { seen[id] = true; });
+
+    var timer = window.setInterval(function () {
+      if (queue.length === 0) {
+        window.clearInterval(timer);
+        return;
+      }
+      var batch = queue.splice(0, ROWS_PER_CYCLE);
+      batch.forEach(function (jobId) {
+        delete seen[jobId];
+        runRefresh(jobId, statusUrlTemplate, false, null).then(function (payload) {
+          if (!payload) {
+            failures[jobId] = (failures[jobId] || 0) + 1;
+            if (failures[jobId] <= MAX_CONSECUTIVE_FAILURES && !seen[jobId]) {
+              seen[jobId] = true;
+              queue.push(jobId);
+            }
+            return;
+          }
+          failures[jobId] = 0;
+          if (payload.in_flight && !seen[jobId]) {
+            seen[jobId] = true;
+            queue.push(jobId);
+          }
+        });
+      });
+    }, POLL_INTERVAL_MS);
+  }
+
+  function collectInFlightRows() {
+    var ids = [];
+    IN_FLIGHT_STATES.forEach(function (state) {
+      document
+        .querySelectorAll('.js-qameraai-job-badge[data-job-status="' + state + '"]')
+        .forEach(function (badge) {
+          var row = badge.closest('tr[data-job-id]');
+          var jobId = row ? row.getAttribute('data-job-id') : null;
+          if (jobId && ids.indexOf(jobId) === -1) { ids.push(jobId); }
+        });
+    });
+    return ids;
+  }
+
+  function runRefresh(jobId, statusUrlTemplate, force, button) {
+    var url = statusUrlTemplate.replace('{jobId}', encodeURIComponent(jobId));
+    if (force) { url += (url.indexOf('?') === -1 ? '?' : '&') + 'force=1'; }
+
+    if (button) {
+      button.setAttribute('disabled', 'disabled');
+      button.classList.add('qameraai-spinner');
+    }
+
+    return fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+      .then(function (res) {
+        if (!res.ok) {
+          if (window.console) {
+            window.console.warn('[QameraAi] job status fetch failed for ' + jobId + ': HTTP ' + res.status);
+          }
+          return null;
+        }
+        return res.json().catch(function () { return null; });
+      })
+      .then(function (payload) {
+        if (payload && typeof payload.qamera_job_id !== 'undefined') {
+          applyJobToRow(jobId, payload);
+          return payload;
+        }
+        return null;
+      })
+      .catch(function () { return null; })
+      .then(function (result) {
+        if (button) {
+          button.removeAttribute('disabled');
+          button.classList.remove('qameraai-spinner');
+        }
+        return result;
+      });
+  }
+
+  function applyJobToRow(jobId, payload) {
+    var row = document.querySelector('tr[data-job-id="' + cssEscape(jobId) + '"]');
+    if (!row) { return; }
+
+    var badge = row.querySelector('.js-qameraai-job-badge');
+    if (badge) {
+      badge.className = (payload.badge_class || 'qameraai-badge') + ' js-qameraai-job-badge';
+      badge.setAttribute('data-job-status', payload.status || '');
+      badge.textContent = payload.badge_label || payload.status || '';
+    }
+
+    var err = row.querySelector('.js-qameraai-job-error');
+    if (err) {
+      err.textContent = payload.last_error_message ? String(payload.last_error_message).slice(0, 120) : '';
+    }
+
+    var outputCell = row.querySelector('.js-qameraai-job-output');
+    if (outputCell) {
+      renderOutput(outputCell, payload.output_url);
+    }
+
+    if (payload.refresh_error && window.console) {
+      window.console.warn('[QameraAi] job refresh warning for ' + jobId + ': ' + payload.refresh_error);
+    }
+  }
+
+  // Build the thumbnail via DOM nodes (NOT innerHTML string concat) so a
+  // hostile/odd output URL cannot break out of an attribute (XSS-safe).
+  function renderOutput(cell, outputUrl) {
+    while (cell.firstChild) { cell.removeChild(cell.firstChild); }
+
+    if (!outputUrl) {
+      var dash = document.createElement('span');
+      dash.className = 'text-muted';
+      dash.textContent = '—';
+      cell.appendChild(dash);
+      return;
+    }
+
+    var a = document.createElement('a');
+    a.setAttribute('href', outputUrl);
+    a.setAttribute('target', '_blank');
+    a.setAttribute('rel', 'noopener');
+    var img = document.createElement('img');
+    img.setAttribute('src', outputUrl);
+    img.setAttribute('alt', '');
+    img.style.maxWidth = '64px';
+    img.style.maxHeight = '64px';
+    a.appendChild(img);
+    cell.appendChild(a);
+  }
+
+  function cssEscape(value) {
+    if (window.CSS && typeof window.CSS.escape === 'function') {
+      return window.CSS.escape(value);
+    }
+    return String(value).replace(/["\\\]]/g, '\\$&');
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();

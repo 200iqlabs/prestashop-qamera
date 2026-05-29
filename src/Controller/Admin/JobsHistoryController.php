@@ -55,6 +55,20 @@ final class JobsHistoryController extends FrameworkBundleAdminController
                 'total_pages' => $totalPages,
                 'page_size' => self::PAGE_SIZE,
                 'products_url' => $this->generateUrl('_qameraai_admin_products_grid'),
+                // Per-row status endpoint; JS substitutes {jobId} at runtime.
+                // A placeholder job id keeps generateUrl happy, then the
+                // trailing `/__JOBID__/status` segment is rewritten (anchored
+                // so it cannot collide with an earlier substring).
+                'status_url_template' => preg_replace(
+                    '#/__JOBID__/status(?=\?|$)#',
+                    '/{jobId}/status',
+                    $this->generateUrl('_qameraai_admin_job_status', ['jobId' => '__JOBID__']),
+                    1
+                ),
+                // Twig asset() resolves to /admin-dev/... which 404s for module
+                // JS — build the public path from __PS_BASE_URI__ (see commit
+                // d1c9c18 in products_grid).
+                'js_asset_url' => rtrim(__PS_BASE_URI__, '/') . '/modules/qameraai/views/js/jobs_history.js',
             ]
         );
     }

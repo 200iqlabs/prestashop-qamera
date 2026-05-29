@@ -44,11 +44,12 @@
               <th>{{ 'AI model'|trans({}, 'Modules.Qameraai.Admin') }}</th>
               <th>{{ 'Aspect'|trans({}, 'Modules.Qameraai.Admin') }}</th>
               <th>{{ 'Output'|trans({}, 'Modules.Qameraai.Admin') }}</th>
+              <th style="width:48px;"></th>
             </tr>
           </thead>
           <tbody>
             {% for row in rows %}
-              <tr>
+              <tr data-job-id="{{ row.qamera_job_id }}">
                 <td>{{ row.submitted_at }}</td>
                 <td>
                   {{ row.product_name|default('—') }}
@@ -56,17 +57,15 @@
                   <small class="text-muted">#{{ row.id_product }} · job <code>{{ row.qamera_job_id }}</code></small>
                 </td>
                 <td>
-                  <span class="qameraai-badge qameraai-badge-{{ row.status }}">
+                  <span class="qameraai-badge qameraai-badge-{{ row.status }} js-qameraai-job-badge"
+                        data-job-status="{{ row.status }}">
                     {{ row.status|trans({}, 'Modules.Qameraai.Admin') }}
                   </span>
-                  {% if row.last_error_message %}
-                    <br>
-                    <small class="text-danger">{{ row.last_error_message|slice(0, 120) }}</small>
-                  {% endif %}
+                  <small class="text-danger d-block js-qameraai-job-error">{% if row.last_error_message %}{{ row.last_error_message|slice(0, 120) }}{% endif %}</small>
                 </td>
                 <td>{{ row.ai_model }}</td>
                 <td>{{ row.aspect_ratio }}</td>
-                <td>
+                <td class="js-qameraai-job-output">
                   {% if row.output_url %}
                     <a href="{{ row.output_url }}" target="_blank" rel="noopener">
                       <img src="{{ row.output_url }}" alt="" style="max-width:64px; max-height:64px;">
@@ -74,6 +73,14 @@
                   {% else %}
                     <span class="text-muted">—</span>
                   {% endif %}
+                </td>
+                <td>
+                  <button type="button"
+                          class="btn btn-outline-secondary btn-sm js-qameraai-job-refresh"
+                          data-job-id="{{ row.qamera_job_id }}"
+                          title="{{ 'Refresh job status'|trans({}, 'Modules.Qameraai.Admin') }}">
+                    <i class="material-icons">refresh</i>
+                  </button>
                 </td>
               </tr>
             {% endfor %}
@@ -97,4 +104,11 @@
       {% endif %}
     </div>
   </div>
+
+  <script>
+    window.QameraAiJobsHistory = {
+      statusUrlTemplate: {{ status_url_template|json_encode|raw }}
+    };
+  </script>
+  <script src="{{ js_asset_url }}"></script>
 {% endblock %}
