@@ -203,6 +203,16 @@ services:
       $reviewRepository: '@QameraAi\Module\Packshot\Acceptance\PackshotReviewRepository'
       $logger: '@QameraAi\Module\Sync\PrestaShopLoggerWrapper'
 
+  # add-jobs-history-refresh — pull-based job reconciliation. All deps are
+  # services (no scalars), but kept public + explicit for controller
+  # action-argument resolution, mirroring AnalysisStatusRefresher.
+  QameraAi\Module\Packshot\JobsStatusRefresher:
+    public: true
+    arguments:
+      $repository: '@QameraAi\Module\Packshot\PackshotJobRepository'
+      $client: '@QameraAi\Module\Api\QameraApiClient'
+      $logger: '@QameraAi\Module\Sync\PrestaShopLoggerWrapper'
+
   # ReferenceCache needs an explicit cache directory; the rest of the
   # Phase-4.3 reference-cache graph is autowire-friendly via the factory.
   QameraAi\Module\Api\Cache\ReferenceCache:

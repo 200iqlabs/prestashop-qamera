@@ -56,6 +56,17 @@ _qameraai_admin_jobs_history:
     _legacy_controller: AdminQameraAiJobs
     _legacy_link: AdminQameraAiJobs
 
+# add-jobs-history-refresh — per-row job status pull (JS poll + Refresh button)
+_qameraai_admin_job_status:
+  path: /qameraai/jobs/{jobId}/status
+  methods: [GET]
+  requirements:
+    jobId: '[A-Za-z0-9._-]+'
+  defaults:
+    _controller: 'QameraAi\Module\Controller\Admin\JobStatusController::statusAction'
+    _legacy_controller: AdminQameraAiJobs
+    _legacy_link: AdminQameraAiJobs
+
 # --- Phase 4.4: packshot acceptance flow ---
 
 _qameraai_admin_packshot_review:
