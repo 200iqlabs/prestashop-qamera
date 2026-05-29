@@ -18,7 +18,6 @@ use QameraAi\Module\Sync\PrestaShopLoggerWrapper;
 use QameraAi\Module\Tests\Support\FakePackshotJobRepository;
 use QameraAi\Module\Tests\Support\FakeSyncedProductLinkLookup;
 use QameraAi\Module\Tests\Support\SpyLogger;
-use QameraAi\Module\Webhook\Event\PackshotExternalRefParser;
 
 /**
  * End-to-end wiring: form submit → upstream call → local row pending →
@@ -26,14 +25,8 @@ use QameraAi\Module\Webhook\Event\PackshotExternalRefParser;
  *
  * Composes the real submitter + updater over the in-memory
  * {@see FakePackshotJobRepository} so a single persistent map is shared
- * across both write paths. Demonstrates the spec scenario from
- * `packshot-jobs` (insert one row per returned job_id) and from
- * `webhook-handler` (update existing row on `job.completed`).
- *
- * This is the integration coverage promised by tasks.md §13.1 — the
- * larger PS-bootstrap-required variant (with Db / Configuration etc.)
- * lives in `tests/Integration/Webhook/WebhookDispatchIntegrationTest.php`
- * and is marked incomplete pending a docker harness.
+ * across both write paths. The webhook side feeds the real wire fields
+ * (`job.product_ref`, `job.id`) rather than the submit-side packshot ref.
  */
 final class SubmitWebhookEndToEndTest extends TestCase
 {
@@ -83,16 +76,12 @@ final class SubmitWebhookEndToEndTest extends TestCase
         self::assertSame('job-uuid-1', $pending->qameraJobId);
         self::assertSame(PackshotJobRow::STATUS_PENDING, $pending->status);
         self::assertNull($pending->outputUrl);
+        // The submitter still mints a packshot_external_ref of the documented shape.
         self::assertNotNull($capturedRef);
+        self::assertSame(1, preg_match('/^ps:1:42:packshot:[0-9a-f-]{36}$/', $capturedRef));
 
-        // Verify the generated ref matches the spec shape, then feed it
-        // back as if the webhook upstream echoed it on the delivery.
-        $parsed = PackshotExternalRefParser::parse($capturedRef);
-        self::assertSame(1, $parsed->shopId);
-        self::assertSame(42, $parsed->productId);
-
-        // Now exercise the webhook upsert path. The updater finds the
-        // existing row by qamera_job_id and flips it to completed.
+        // Webhook job.completed carries job.product_ref + job.id; the row
+        // exists so the updater takes the UPDATE path.
         $logger = new SpyLogger();
         $updater = new PackshotJobUpdater($repo, $lookup, $logger);
         $updater->upsert(
@@ -102,13 +91,10 @@ final class SubmitWebhookEndToEndTest extends TestCase
             outputUrl: 'https://cdn.example.com/out.jpg',
             outputUrlExpiresAt: '2026-06-01 00:00:00',
             lastErrorMessage: null,
-            payloadExternalRef: $capturedRef,
-            payloadOrderId: 'ord-1',
+            productRef: 'ps:1:42',
+            orderId: 'ord-1',
         );
 
-        // The fake repository records webhook upserts separately from
-        // the submitter's batch inserts; assert the upsert landed with
-        // the right status mapping.
         self::assertCount(1, $repo->webhookUpserts);
         $upsert = $repo->webhookUpserts[0];
         self::assertSame('job-uuid-1', $upsert->qameraJobId);
@@ -157,8 +143,8 @@ final class SubmitWebhookEndToEndTest extends TestCase
             outputUrl: null,
             outputUrlExpiresAt: null,
             lastErrorMessage: 'quota exceeded',
-            payloadExternalRef: null,
-            payloadOrderId: null,
+            productRef: null,
+            orderId: null,
         );
 
         self::assertCount(1, $repo->webhookUpserts);
@@ -181,9 +167,8 @@ final class SubmitWebhookEndToEndTest extends TestCase
             analysisStatus: SyncedProductLink::ANALYSIS_STATUS_DESCRIBED,
         );
 
-        // Webhook arrives BEFORE the submitter has persisted anything —
-        // the updater should recover the FK from the external_ref and
-        // insert a stub.
+        // Webhook arrives BEFORE the submitter persisted anything — the
+        // updater recovers the FK from job.product_ref and inserts a stub.
         $logger = new SpyLogger();
         $updater = new PackshotJobUpdater($repo, $lookup, $logger);
         $updater->upsert(
@@ -193,8 +178,8 @@ final class SubmitWebhookEndToEndTest extends TestCase
             outputUrl: 'https://cdn.example.com/out.jpg',
             outputUrlExpiresAt: '2026-06-01 00:00:00',
             lastErrorMessage: null,
-            payloadExternalRef: 'ps:1:42:packshot:11111111-2222-3333-4444-555555555555',
-            payloadOrderId: 'ord-orphan',
+            productRef: 'ps:1:42',
+            orderId: 'ord-orphan',
         );
 
         self::assertCount(1, $repo->webhookUpserts);

@@ -10,7 +10,6 @@ use QameraAi\Module\Webhook\Event\Handler\JobCancelledHandler;
 use QameraAi\Module\Webhook\Event\Handler\JobCompletedHandler;
 use QameraAi\Module\Webhook\Event\Handler\JobFailedHandler;
 use QameraAi\Module\Webhook\Event\Handler\JobRetriedHandler;
-use QameraAi\Module\Webhook\Event\PackshotLinkUpdater;
 use QameraAi\Module\Webhook\Event\ProductLinkHeartbeat;
 use QameraAi\Module\Webhook\HmacVerifier;
 use QameraAi\Module\Webhook\Log\PrestaShopLoggerAdapter;
@@ -109,12 +108,12 @@ class QameraaiWebhookModuleFrontController extends ModuleFrontController
     private function buildDispatcher(WebhookLogger $logger): EventDispatcher
     {
         $db = Db::getInstance();
-        $packshot = new PackshotLinkUpdater($db, _DB_PREFIX_);
         $heartbeat = new ProductLinkHeartbeat($db, _DB_PREFIX_);
 
-        // Phase 4.3 — per-job mirror into ps_qamera_packshot_job. The
-        // updater owns the status-mapping table + pre-submit-race
-        // recovery path; handlers below all call into it.
+        // Per-job mirror into ps_qamera_packshot_job. The updater owns the
+        // status-mapping table + pre-submit-race recovery (FK from
+        // job.product_ref); handlers below all call into it. The webhook no
+        // longer writes ps_qamera_packshot_link (table removed).
         $packshotJob = new PackshotJobUpdater(
             new PackshotJobRepository($db, _DB_PREFIX_),
             new SyncedProductLinkLookup($db, _DB_PREFIX_),
@@ -123,10 +122,10 @@ class QameraaiWebhookModuleFrontController extends ModuleFrontController
 
         return new EventDispatcher(
             [
-                'job.completed' => new JobCompletedHandler($packshot, $heartbeat, $logger, $packshotJob),
-                'job.failed' => new JobFailedHandler($packshot, $heartbeat, $logger, $packshotJob),
-                'job.cancelled' => new JobCancelledHandler($packshot, $heartbeat, $logger, $packshotJob),
-                'job.retried' => new JobRetriedHandler($db, _DB_PREFIX_, $heartbeat, $logger, $packshotJob),
+                'job.completed' => new JobCompletedHandler($heartbeat, $logger, $packshotJob),
+                'job.failed' => new JobFailedHandler($heartbeat, $logger, $packshotJob),
+                'job.cancelled' => new JobCancelledHandler($heartbeat, $logger, $packshotJob),
+                'job.retried' => new JobRetriedHandler($heartbeat, $logger, $packshotJob),
             ],
             $logger
         );

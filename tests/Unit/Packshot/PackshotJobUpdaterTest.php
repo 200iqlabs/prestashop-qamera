@@ -6,9 +6,7 @@ namespace QameraAi\Module\Tests\Unit\Packshot;
 
 use PHPUnit\Framework\TestCase;
 use QameraAi\Module\Packshot\PackshotJobRepository;
-use QameraAi\Module\Packshot\PackshotJobRow;
 use QameraAi\Module\Packshot\PackshotJobUpdater;
-use QameraAi\Module\Packshot\PackshotJobWebhookUpdate;
 use QameraAi\Module\Packshot\SyncedProductLinkLookup;
 use QameraAi\Module\Tests\Support\RecordingDb;
 use QameraAi\Module\Tests\Support\SpyLogger;
@@ -33,7 +31,6 @@ final class PackshotJobUpdaterTest extends TestCase
 
     public function testCompletedEventOnExistingRowIssuesUpdateNotInsert(): void
     {
-        // The findByJobId probe returns a row → updater takes UPDATE path.
         $this->db->getRowScript = [$this->fakeRowArray('j1', 'pending')];
         $this->db->affectedRowsScript = [1];
 
@@ -44,12 +41,10 @@ final class PackshotJobUpdaterTest extends TestCase
             outputUrl: 'https://cdn.example.com/out.jpg',
             outputUrlExpiresAt: '2026-06-01 00:00:00',
             lastErrorMessage: null,
-            payloadExternalRef: null,
-            payloadOrderId: null,
+            productRef: null,
+            orderId: null,
         );
 
-        // Two SQL statements: 1) SELECT probe, 2) UPDATE (the UPSERT path
-        // for an existing row produces UPDATE-only, not INSERT).
         self::assertCount(2, $this->db->executed);
         self::assertStringContainsString('FROM `ps_qamera_packshot_job`', $this->db->executed[0]);
         self::assertStringStartsWith('SELECT ', $this->db->executed[0]);
@@ -70,8 +65,8 @@ final class PackshotJobUpdaterTest extends TestCase
             outputUrl: null,
             outputUrlExpiresAt: null,
             lastErrorMessage: 'quota exceeded',
-            payloadExternalRef: null,
-            payloadOrderId: null,
+            productRef: null,
+            orderId: null,
         );
 
         self::assertStringContainsString("`status` = 'failed'", $this->db->executed[1]);
@@ -90,8 +85,8 @@ final class PackshotJobUpdaterTest extends TestCase
             outputUrl: null,
             outputUrlExpiresAt: null,
             lastErrorMessage: null,
-            payloadExternalRef: null,
-            payloadOrderId: null,
+            productRef: null,
+            orderId: null,
         );
 
         self::assertStringContainsString("`status` = 'in_progress'", $this->db->executed[1]);
@@ -109,8 +104,8 @@ final class PackshotJobUpdaterTest extends TestCase
             outputUrl: null,
             outputUrlExpiresAt: null,
             lastErrorMessage: null,
-            payloadExternalRef: null,
-            payloadOrderId: null,
+            productRef: null,
+            orderId: null,
         );
 
         self::assertStringContainsString("`status` = 'pending'", $this->db->executed[1]);
@@ -136,12 +131,10 @@ final class PackshotJobUpdaterTest extends TestCase
             outputUrl: 'https://cdn.example.com/out.jpg',
             outputUrlExpiresAt: '2026-06-01 00:00:00',
             lastErrorMessage: null,
-            payloadExternalRef: 'ps:1:42:packshot:11111111-2222-3333-4444-555555555555',
-            payloadOrderId: 'ord-123',
+            productRef: 'ps:1:42',
+            orderId: 'ord-123',
         );
 
-        // Three statements now: 1) SELECT job probe, 2) SELECT link probe,
-        // 3) INSERT … ON DUPLICATE KEY UPDATE
         self::assertCount(3, $this->db->executed);
         self::assertStringContainsString('INSERT INTO `ps_qamera_packshot_job`', $this->db->executed[2]);
         self::assertStringContainsString("'ord-123'", $this->db->executed[2]);
@@ -151,9 +144,9 @@ final class PackshotJobUpdaterTest extends TestCase
         self::assertContains('pre_submit_webhook_upsert', $messages);
     }
 
-    public function testMissingExternalRefLogsAndNoOps(): void
+    public function testMissingProductRefLogsAndNoOps(): void
     {
-        // Row not found AND no payload_external_ref → log INFO + noop.
+        // Row not found AND no product_ref → log INFO + noop.
         $this->db->getRowScript = [false];
 
         $this->updater->upsert(
@@ -163,18 +156,17 @@ final class PackshotJobUpdaterTest extends TestCase
             outputUrl: null,
             outputUrlExpiresAt: null,
             lastErrorMessage: null,
-            payloadExternalRef: null,
-            payloadOrderId: null,
+            productRef: null,
+            orderId: null,
         );
 
-        // Only one SQL: the initial findByJobId probe. No INSERT issued.
         self::assertCount(1, $this->db->executed);
         $info = $this->logger->entriesAtLevel('info');
         $messages = array_column($info, 'message');
         self::assertContains('webhook_skipped_no_recoverable_fk', $messages);
     }
 
-    public function testMalformedExternalRefLogsWarningAndNoOps(): void
+    public function testMalformedProductRefLogsWarningAndNoOps(): void
     {
         $this->db->getRowScript = [false];
 
@@ -185,21 +177,17 @@ final class PackshotJobUpdaterTest extends TestCase
             outputUrl: null,
             outputUrlExpiresAt: null,
             lastErrorMessage: null,
-            payloadExternalRef: 'totally-not-a-ref',
-            payloadOrderId: 'ord-1',
+            productRef: 'totally-not-a-ref',
+            orderId: 'ord-1',
         );
 
         self::assertCount(1, $this->db->executed);
         $warnings = $this->logger->entriesAtLevel('warning');
         $messages = array_column($warnings, 'message');
-        self::assertContains('webhook_malformed_packshot_external_ref', $messages);
+        self::assertContains('webhook_malformed_product_ref', $messages);
     }
 
     /**
-     * Repository.findByJobId reads with SELECT * — the test stub must
-     * supply at least the columns the hydrator reads. Spec ENUM-status
-     * defaults to 'pending' so a sentinel row keeps the hydrator happy.
-     *
      * @return array<string, mixed>
      */
     private function fakeRowArray(string $jobId, string $status): array

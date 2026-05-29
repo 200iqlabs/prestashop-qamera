@@ -17,7 +17,7 @@ use Throwable;
  *   2. server-side secret is configured (non-empty)
  *   3. X-Qamera-Signature header present
  *   4. signature header parses
- *   5. X-Qamera-Delivery-Id header present
+ *   5. X-Qamera-Request-Id header present
  *   6. body non-empty + within size cap + decodes as a JSON object
  *   7. body's delivery_id matches the header
  *   8. body's event_type matches `^[a-z][a-z0-9_.-]{0,63}$`
@@ -83,7 +83,7 @@ final class WebhookRequestHandler
         // bad-actor-supplied id here is never persisted (rejection path);
         // it just helps operator correlation if the upstream id happens
         // to be present.
-        $deliveryId = $this->header($headers, 'x-qamera-delivery-id');
+        $deliveryId = $this->header($headers, 'x-qamera-request-id');
 
         $signatureHeader = $this->header($headers, 'x-qamera-signature');
         if ($signatureHeader === null) {
@@ -107,7 +107,7 @@ final class WebhookRequestHandler
         }
 
         if ($deliveryId === null) {
-            $this->logger->error('rejected', ['reason' => RejectionReason::MISSING_DELIVERY_ID]);
+            $this->logger->error('rejected', ['reason' => RejectionReason::MISSING_REQUEST_ID]);
 
             return WebhookResponse::badRequest();
         }
@@ -154,20 +154,11 @@ final class WebhookRequestHandler
             return WebhookResponse::badRequest();
         }
 
-        $bodyDeliveryId = isset($decoded['delivery_id']) && is_string($decoded['delivery_id'])
-            ? $decoded['delivery_id']
-            : null;
-        if ($bodyDeliveryId === null || $bodyDeliveryId !== $deliveryId) {
-            $this->logger->error(
-                'rejected',
-                ['reason' => RejectionReason::DELIVERY_ID_MISMATCH, 'delivery_id' => $deliveryId]
-            );
-
-            return WebhookResponse::badRequest();
-        }
-
-        $eventType = isset($decoded['event_type']) && is_string($decoded['event_type'])
-            ? $decoded['event_type']
+        // The wire body identifies the event via `event` (not `event_type`)
+        // and carries NO `delivery_id` — the id lives in X-Qamera-Request-Id,
+        // captured above. So there is nothing to cross-check here.
+        $eventType = isset($decoded['event']) && is_string($decoded['event'])
+            ? $decoded['event']
             : null;
         if ($eventType === null || preg_match(self::EVENT_TYPE_RE, $eventType) !== 1) {
             $this->logger->error(
@@ -248,13 +239,16 @@ final class WebhookRequestHandler
         // "Dispatch never blocks or alters the HTTP ACK" requirement.
         if ($this->dispatcher !== null) {
             try {
+                // payload = the entire decoded wire body; handlers read
+                // `payload['job']` and `payload['outputs']`. installation_id
+                // is absent from the contract → null.
                 $this->dispatcher->dispatch(new WebhookEvent(
                     $eventType,
                     $deliveryId,
                     isset($decoded['installation_id']) && is_string($decoded['installation_id'])
                         ? $decoded['installation_id']
                         : null,
-                    isset($decoded['payload']) && is_array($decoded['payload']) ? $decoded['payload'] : []
+                    $decoded
                 ));
             } catch (Throwable $e) {
                 $this->logger->error('dispatch_uncaught', [

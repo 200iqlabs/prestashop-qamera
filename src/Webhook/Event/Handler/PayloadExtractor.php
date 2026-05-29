@@ -62,4 +62,80 @@ final class PayloadExtractor
         }
         return $raw;
     }
+
+    /**
+     * Read a non-empty string field from the nested `job` object of the real
+     * webhook wire body (`{ event, job:{…}, outputs:[…] }`). Returns null if
+     * `job` is absent/not-an-object or the field is missing/empty/non-string.
+     *
+     * @param array<string, mixed> $payload
+     */
+    public static function jobString(array $payload, string $field): ?string
+    {
+        $job = $payload['job'] ?? null;
+        if (!is_array($job)) {
+            return null;
+        }
+        return self::string($job, $field);
+    }
+
+    /**
+     * The presigned URL of the first output, http(s)-validated (the BO renders
+     * it into img/href). Null when there are no outputs or the first output's
+     * URL is absent / a non-http scheme.
+     *
+     * @param array<string, mixed> $payload
+     */
+    public static function firstOutputUrl(array $payload): ?string
+    {
+        $outputs = $payload['outputs'] ?? null;
+        if (!is_array($outputs) || !isset($outputs[0]) || !is_array($outputs[0])) {
+            return null;
+        }
+        return self::nullableHttpUrl($outputs[0], 'url');
+    }
+
+    /**
+     * Extract a human message from the nested `job.error` object
+     * (`{ code, message_i18n, retryable }`): prefer the requested locale, then
+     * `en`, then any available message, finally the error `code`. Null when
+     * there is no error object.
+     *
+     * @param array<string, mixed> $payload
+     */
+    public static function jobErrorMessage(array $payload, string $locale): ?string
+    {
+        $job = $payload['job'] ?? null;
+        if (!is_array($job)) {
+            return null;
+        }
+        $error = $job['error'] ?? null;
+        if (!is_array($error)) {
+            return null;
+        }
+
+        $messages = $error['message_i18n'] ?? null;
+        if (is_array($messages)) {
+            foreach ([$locale, 'en'] as $preferred) {
+                if (isset($messages[$preferred]) && is_string($messages[$preferred]) && $messages[$preferred] !== '') {
+                    return $messages[$preferred];
+                }
+            }
+            foreach ($messages as $message) {
+                if (is_string($message) && $message !== '') {
+                    return $message;
+                }
+            }
+        }
+
+        // Some providers shape `job.error` as `{code, message}` (no i18n
+        // map). Prefer a non-empty plain message before the bare code.
+        $plain = $error['message'] ?? null;
+        if (is_string($plain) && $plain !== '') {
+            return $plain;
+        }
+
+        $code = $error['code'] ?? null;
+        return is_string($code) && $code !== '' ? $code : null;
+    }
 }

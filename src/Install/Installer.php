@@ -99,30 +99,10 @@ final class Installer
                 UNIQUE KEY `qamera_product_link_ref` (`qamera_product_ref`)
             ) ENGINE=InnoDB DEFAULT CHARSET={$charset};",
 
-            "CREATE TABLE IF NOT EXISTS `{$prefix}qamera_packshot_link` (
-                `id_link` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-                `id_product` INT UNSIGNED NOT NULL,
-                `id_shop` INT UNSIGNED NOT NULL,
-                `qamera_packshot_id` CHAR(36) NOT NULL,
-                `qamera_packshot_ref` VARCHAR(200) NOT NULL,
-                `qamera_job_id` CHAR(36) NULL,
-                `status` ENUM('pending','ready','failed','cancelled','archived') NOT NULL DEFAULT 'pending',
-                `last_error_message` TEXT NULL,
-                `last_synced_at` DATETIME NULL,
-                `created_at` DATETIME NOT NULL,
-                -- DEFAULT CURRENT_TIMESTAMP mirrors what migratePackshotLinkSchema()
-                -- emits on the ALTER path, so fresh installs and upgraded
-                -- installs share an identical schema (no INSERT-without-
-                -- updated_at divergence between the two install paths).
-                `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (`id_link`),
-                UNIQUE KEY `qamera_packshot_link_ref` (`qamera_packshot_ref`),
-                UNIQUE KEY `qamera_packshot_link_qamera_packshot_id` (`qamera_packshot_id`)
-            ) ENGINE=InnoDB DEFAULT CHARSET={$charset};",
-
             // Phase 4.1 — inbound webhook delivery log. PK is the upstream
-            // `X-Qamera-Delivery-Id` so concurrent duplicate inserts serialise
-            // on the index instead of needing application-level locking.
+            // delivery id (the `X-Qamera-Request-Id` header) so concurrent
+            // duplicate inserts serialise on the index instead of needing
+            // application-level locking.
             "CREATE TABLE IF NOT EXISTS `{$prefix}qamera_webhook_delivery` (
                 `delivery_id` VARCHAR(64) NOT NULL,
                 `received_at` DATETIME NOT NULL,
@@ -190,107 +170,7 @@ final class Installer
             }
         }
 
-        if (!$this->migrateProductLinkSchema($prefix)) {
-            return false;
-        }
-
-        return $this->migratePackshotLinkSchema($prefix);
-    }
-
-    /**
-     * Brings an existing pre-4.2 `qamera_packshot_link` table up to the
-     * Phase-4.2 column set: widens the status ENUM additively, adds
-     * `last_synced_at` / `last_error_message` / `updated_at`, and adds
-     * the unique index on `qamera_packshot_id` that the webhook
-     * event-dispatch UPSERT serialises on. Idempotent — re-running on a
-     * fresh-install schema is a no-op (every change is `INFORMATION_SCHEMA`
-     * guarded). Existing rows survive untouched.
-     */
-    private function migratePackshotLinkSchema(string $prefix): bool
-    {
-        $db = Db::getInstance();
-        $table = $prefix . 'qamera_packshot_link';
-        $dbName = _DB_NAME_;
-
-        $columns = $db->executeS(sprintf(
-            "SELECT COLUMN_NAME, COLUMN_TYPE
-             FROM INFORMATION_SCHEMA.COLUMNS
-             WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s'",
-            pSQL($dbName),
-            pSQL($table)
-        ));
-
-        if (!is_array($columns)) {
-            return false;
-        }
-
-        $byName = [];
-        foreach ($columns as $row) {
-            $byName[$row['COLUMN_NAME']] = $row;
-        }
-
-        $alters = [];
-
-        $additions = [
-            'last_error_message' => '`last_error_message` TEXT NULL',
-            'last_synced_at' => '`last_synced_at` DATETIME NULL',
-            // `DEFAULT CURRENT_TIMESTAMP` so adding the column to an
-            // existing pre-4.2 table with rows succeeds under strict SQL
-            // modes — without a default, MySQL would reject the ALTER (or
-            // back-fill the zero-date `'0000-00-00 00:00:00'`, which
-            // fails NO_ZERO_DATE). Fresh inserts from the dispatch layer
-            // still supply an explicit timestamp.
-            'updated_at' => '`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
-        ];
-
-        foreach ($additions as $name => $definition) {
-            if (!isset($byName[$name])) {
-                $alters[] = "ALTER TABLE `{$table}` ADD COLUMN {$definition};";
-            }
-        }
-
-        // Widen the status ENUM additively if any of the new lifecycle
-        // values is missing. `COLUMN_TYPE` carries the literal ENUM
-        // signature ("enum('pending','ready','archived')"), so a substring
-        // probe for the new values is sufficient.
-        if (isset($byName['status'])) {
-            $columnType = (string) $byName['status']['COLUMN_TYPE'];
-            if (
-                stripos($columnType, "'failed'") === false
-                || stripos($columnType, "'cancelled'") === false
-            ) {
-                $alters[] = "ALTER TABLE `{$table}` "
-                    . "MODIFY COLUMN `status` "
-                    . "ENUM('pending','ready','failed','cancelled','archived') "
-                    . "NOT NULL DEFAULT 'pending';";
-            }
-        }
-
-        $indexes = $db->executeS(sprintf(
-            "SELECT INDEX_NAME
-             FROM INFORMATION_SCHEMA.STATISTICS
-             WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s'",
-            pSQL($dbName),
-            pSQL($table)
-        ));
-
-        if (!is_array($indexes)) {
-            return false;
-        }
-
-        $indexNames = array_map(static fn (array $row): string => (string) $row['INDEX_NAME'], $indexes);
-        if (!in_array('qamera_packshot_link_qamera_packshot_id', $indexNames, true)) {
-            $alters[] = "ALTER TABLE `{$table}` "
-                . "ADD UNIQUE KEY `qamera_packshot_link_qamera_packshot_id` (`qamera_packshot_id`);";
-        }
-
-        foreach ($alters as $sql) {
-            if (!$db->execute($sql)) {
-                return false;
-            }
-        }
-
-        return true;
+        return $this->migrateProductLinkSchema($prefix);
     }
 
     /**

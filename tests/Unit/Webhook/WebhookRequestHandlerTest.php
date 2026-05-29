@@ -51,6 +51,9 @@ final class WebhookRequestHandlerTest extends TestCase
         self::assertSame('{"status":"ok"}', $resp->body);
         self::assertSame('application/json', $resp->contentType);
         self::assertCount(1, $this->db->rows);
+        // Persisted under the X-Qamera-Request-Id value, with event_type from body `event`.
+        self::assertArrayHasKey(WebhookFixtures::DELIVERY_ID, $this->db->rows);
+        self::assertSame('job.completed', $this->db->rows[WebhookFixtures::DELIVERY_ID]['event_type']);
         self::assertNotEmpty($this->logger->entriesAtLevel('info'));
     }
 
@@ -66,8 +69,6 @@ final class WebhookRequestHandlerTest extends TestCase
         self::assertSame('{"status":"duplicate"}', $resp->body);
         $warnings = $this->logger->entriesAtLevel('warning');
         self::assertNotEmpty($warnings);
-        // Spec "Operator-visible logging → Duplicate" requires the
-        // original received_at in the warning log context.
         self::assertArrayHasKey('received_at', $warnings[0]['context']);
         self::assertSame(gmdate('Y-m-d H:i:s', self::NOW), $warnings[0]['context']['received_at']);
     }
@@ -83,7 +84,7 @@ final class WebhookRequestHandlerTest extends TestCase
     public function testMissingSignatureHeaderReturns401(): void
     {
         $body = WebhookFixtures::body();
-        $resp = $this->handler->handle('POST', $body, ['x-qamera-delivery-id' => 'd1'], WebhookFixtures::SECRET);
+        $resp = $this->handler->handle('POST', $body, ['x-qamera-request-id' => 'd1'], WebhookFixtures::SECRET);
 
         self::assertSame(401, $resp->statusCode);
     }
@@ -94,7 +95,7 @@ final class WebhookRequestHandlerTest extends TestCase
         $resp = $this->handler->handle(
             'POST',
             $body,
-            ['x-qamera-signature' => 'gibberish', 'x-qamera-delivery-id' => 'd1'],
+            ['x-qamera-signature' => 'gibberish', 'x-qamera-request-id' => 'd1'],
             WebhookFixtures::SECRET
         );
 
@@ -102,7 +103,7 @@ final class WebhookRequestHandlerTest extends TestCase
         self::assertCount(0, $this->db->rows);
     }
 
-    public function testMissingDeliveryIdHeaderReturns400(): void
+    public function testMissingRequestIdHeaderReturns400(): void
     {
         $body = WebhookFixtures::body();
         $resp = $this->handler->handle(
@@ -113,6 +114,8 @@ final class WebhookRequestHandlerTest extends TestCase
         );
 
         self::assertSame(400, $resp->statusCode);
+        $errors = $this->logger->entriesAtLevel('error');
+        self::assertSame('missing_request_id', $errors[0]['context']['reason']);
     }
 
     public function testEmptyBodyReturns400(): void
@@ -142,23 +145,9 @@ final class WebhookRequestHandlerTest extends TestCase
         self::assertSame(400, $resp->statusCode);
     }
 
-    public function testDeliveryIdMismatchReturns400(): void
+    public function testMalformedEventReturns400(): void
     {
-        $body = WebhookFixtures::body(['delivery_id' => 'body-says-A']);
-        $headers = [
-            'x-qamera-signature' => WebhookFixtures::signatureHeader(self::NOW, $body),
-            'x-qamera-delivery-id' => 'header-says-B',
-        ];
-
-        $resp = $this->handler->handle('POST', $body, $headers, WebhookFixtures::SECRET);
-
-        self::assertSame(400, $resp->statusCode);
-        self::assertCount(0, $this->db->rows);
-    }
-
-    public function testMalformedEventTypeReturns400(): void
-    {
-        $body = WebhookFixtures::body(['event_type' => 'CAPITAL!']);
+        $body = WebhookFixtures::body(['event' => 'CAPITAL!']);
         $headers = WebhookFixtures::headers(self::NOW, $body);
 
         $resp = $this->handler->handle('POST', $body, $headers, WebhookFixtures::SECRET);
@@ -166,9 +155,9 @@ final class WebhookRequestHandlerTest extends TestCase
         self::assertSame(400, $resp->statusCode);
     }
 
-    public function testMissingEventTypeReturns400(): void
+    public function testMissingEventReturns400(): void
     {
-        $body = json_encode(['delivery_id' => WebhookFixtures::DELIVERY_ID]);
+        $body = json_encode(['job' => ['id' => 'j1']], JSON_UNESCAPED_SLASHES);
         self::assertIsString($body);
         $headers = WebhookFixtures::headers(self::NOW, $body);
 
@@ -177,9 +166,9 @@ final class WebhookRequestHandlerTest extends TestCase
         self::assertSame(400, $resp->statusCode);
     }
 
-    public function testUnknownButWellFormedEventTypeAccepted(): void
+    public function testUnknownButWellFormedEventAccepted(): void
     {
-        $body = WebhookFixtures::body(['event_type' => 'job.future_kind']);
+        $body = WebhookFixtures::body(['event' => 'job.future_kind']);
         $headers = WebhookFixtures::headers(self::NOW, $body);
 
         $resp = $this->handler->handle('POST', $body, $headers, WebhookFixtures::SECRET);
@@ -244,7 +233,7 @@ final class WebhookRequestHandlerTest extends TestCase
             $body,
             [
                 'x-qamera-signature' => $header,
-                'x-qamera-delivery-id' => WebhookFixtures::DELIVERY_ID,
+                'x-qamera-request-id' => WebhookFixtures::DELIVERY_ID,
             ],
             WebhookFixtures::SECRET
         );
@@ -269,7 +258,6 @@ final class WebhookRequestHandlerTest extends TestCase
         $body = WebhookFixtures::body();
         $secret = WebhookFixtures::SECRET;
 
-        // Run through several rejection paths.
         $this->handler->handle('GET', '', [], $secret);
         $this->handler->handle('POST', $body, [], $secret);
         $this->handler->handle('POST', $body, ['x-qamera-signature' => 'bad'], $secret);
@@ -279,22 +267,11 @@ final class WebhookRequestHandlerTest extends TestCase
         $dump = $this->logger->dumpAsText();
         self::assertStringNotContainsString($secret, $dump);
         self::assertStringNotContainsString($body, $dump);
-        // No 64-hex HMAC digest in logs.
         self::assertSame(0, preg_match('/[0-9a-f]{64}/i', $dump), 'logs must not contain hex HMAC');
     }
 
     public function testEmptyServerSecretIsRejectedBeforeVerification(): void
     {
-        // Regression: a fresh install seeds QAMERAAI_WEBHOOK_SECRET=''. The
-        // handler must refuse to authenticate ANY delivery against the empty
-        // key, otherwise an attacker can forge `v1 = hash_hmac('sha256',
-        // "t.body", '')` and the verifier would accept it.
-        //
-        // 401 (not 500): an empty server-side secret is a permanent operator
-        // gap, not a transient repository failure. 500 would burn upstream's
-        // retry budget against an endpoint that cannot recover until human
-        // action; 401 lets upstream park it until the operator pastes the
-        // secret, at which point the next delivery succeeds normally.
         $body = WebhookFixtures::body();
         $headers = WebhookFixtures::headers(self::NOW, $body, '');
 
@@ -309,13 +286,10 @@ final class WebhookRequestHandlerTest extends TestCase
 
     public function testEmptySignatureHeaderIsRoutedTo401NotMalformed(): void
     {
-        // Regression: an X-Qamera-Signature header sent with an empty value
-        // is semantically "missing" (e.g. proxy stripped it). It must hit the
-        // 401 MISSING_SIGNATURE branch, not the 400 MALFORMED_SIGNATURE path.
         $body = WebhookFixtures::body();
         $headers = [
             'x-qamera-signature' => '',
-            'x-qamera-delivery-id' => WebhookFixtures::DELIVERY_ID,
+            'x-qamera-request-id' => WebhookFixtures::DELIVERY_ID,
         ];
 
         $resp = $this->handler->handle('POST', $body, $headers, WebhookFixtures::SECRET);
@@ -327,14 +301,11 @@ final class WebhookRequestHandlerTest extends TestCase
 
     public function testBodyOverSizeCapIsRejectedBeforeDecode(): void
     {
-        // Regression: an unbounded body could OOM PHP-FPM via json_decode.
-        // The handler caps at WebhookRequestHandler::MAX_BODY_BYTES and emits
-        // a BODY_TOO_LARGE reason BEFORE attempting to parse JSON.
-        $deliveryId = 'd-oversize';
-        $oversized = str_repeat('A', \QameraAi\Module\Webhook\WebhookRequestHandler::MAX_BODY_BYTES + 1);
+        $requestId = 'd-oversize';
+        $oversized = str_repeat('A', WebhookRequestHandler::MAX_BODY_BYTES + 1);
         $headers = [
             'x-qamera-signature' => WebhookFixtures::signatureHeader(self::NOW, $oversized),
-            'x-qamera-delivery-id' => $deliveryId,
+            'x-qamera-request-id' => $requestId,
         ];
 
         $resp = $this->handler->handle('POST', $oversized, $headers, WebhookFixtures::SECRET);
@@ -348,9 +319,6 @@ final class WebhookRequestHandlerTest extends TestCase
 
     public function testIdenticalPayloadRetryReportsDuplicate(): void
     {
-        // Regression: identical payload retries (the normal at-least-once
-        // delivery case) must report DUPLICATE on the second call, not two
-        // ACCEPTEDs. Fixed by switching the repository to Affected_Rows().
         $body = WebhookFixtures::body();
         $headers = WebhookFixtures::headers(self::NOW, $body);
 
