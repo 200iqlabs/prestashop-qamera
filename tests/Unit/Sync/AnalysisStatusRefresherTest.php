@@ -109,6 +109,59 @@ final class AnalysisStatusRefresherTest extends TestCase
         self::assertSame(date('Y-m-d H:i:s', self::FROZEN_TS), $result->refreshedAt);
     }
 
+    public function testReconcilesDivergedAssetIdFromCatalog(): void
+    {
+        // Local qamera_asset_id is an orphaned re-upload; catalog asset differs.
+        $link = new SyncedProductLink(
+            idLink: 1,
+            idShop: 1,
+            idProduct: 42,
+            qameraAssetId: 'old-orphaned-asset',
+            qameraProductRef: 'ps:1:42',
+            displayNameSnapshot: 'Widget',
+            analysisStatus: 'processing',
+            analysisDescribedCount: 0,
+            analysisTotalCount: 1,
+            analysisRefreshedAt: date('Y-m-d H:i:s', self::FROZEN_TS - 90),
+        );
+        $this->client->expects(self::once())
+            ->method('getProduct')
+            ->with('ps:1:42')
+            ->willReturn($this->makeDetail([$this->makeImage('described')])); // assetId 'asset-uuid'
+        $this->db->expects(self::once())
+            ->method('execute')
+            ->with(self::callback(function ($sql): bool {
+                self::assertStringContainsString("`qamera_asset_id` = 'asset-uuid'", $sql);
+                return true;
+            }))
+            ->willReturn(true);
+
+        $this->refresher->refresh($link, force: false);
+    }
+
+    public function testEmptyImagesLeavesAssetIdIntact(): void
+    {
+        $link = $this->makeLink(
+            analysisStatus: 'processing',
+            analysisDescribedCount: 0,
+            analysisTotalCount: 1,
+            analysisRefreshedAtTsOffset: -90,
+        );
+        $this->client->expects(self::once())
+            ->method('getProduct')
+            ->with('ps:1:42')
+            ->willReturn($this->makeDetail([])); // no images
+        $this->db->expects(self::once())
+            ->method('execute')
+            ->with(self::callback(function ($sql): bool {
+                self::assertStringNotContainsString('qamera_asset_id', $sql);
+                return true;
+            }))
+            ->willReturn(true);
+
+        $this->refresher->refresh($link, force: false);
+    }
+
     public function testForceBypassesTtlOnFreshDescribedRow(): void
     {
         $link = $this->makeLink(

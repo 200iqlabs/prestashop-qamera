@@ -107,7 +107,19 @@ class AnalysisStatusRefresher
         $agg = self::aggregate($product->images);
         $refreshedAt = $this->now();
 
-        if (!$this->persist($link->idLink, $agg, $refreshedAt)) {
+        // Reconcile qamera_asset_id to the authoritative catalog asset
+        // (flattened single-image model → images[0].asset_id). Heals rows
+        // orphaned by the pre-fix re-upload behaviour at no extra round-trip.
+        // Only when present AND different; empty images[] leaves it intact.
+        $catalogAssetId = null;
+        if (isset($product->images[0])) {
+            $candidate = $product->images[0]->assetId;
+            if ($candidate !== '' && $candidate !== $link->qameraAssetId) {
+                $catalogAssetId = $candidate;
+            }
+        }
+
+        if (!$this->persist($link->idLink, $agg, $refreshedAt, $catalogAssetId)) {
             // Persist failed (transient DB error, lock contention, etc.).
             // Surface the fresh aggregate to the operator but keep the
             // prior `analysis_refreshed_at` so the TTL gate still treats
@@ -256,10 +268,17 @@ class AnalysisStatusRefresher
      * Returns the boolean signal from `Db::execute()` so the caller can
      * distinguish a successful UPDATE from a silent transient failure.
      */
-    private function persist(int $idLink, array $agg, string $refreshedAt): bool
+    private function persist(int $idLink, array $agg, string $refreshedAt, ?string $catalogAssetId = null): bool
     {
+        // Optional catalog-asset reconcile (D2b). Empty/unchanged → omitted,
+        // so the UPDATE never nulls a working qamera_asset_id.
+        $assetClause = ($catalogAssetId !== null && $catalogAssetId !== '')
+            ? sprintf("`qamera_asset_id` = '%s', ", $this->escape($catalogAssetId))
+            : '';
+
         $sql = sprintf(
             'UPDATE `%sqamera_product_link` SET '
+            . '%s'
             . '`analysis_status` = %s, '
             . '`analysis_described_count` = %d, '
             . '`analysis_total_count` = %d, '
@@ -267,6 +286,7 @@ class AnalysisStatusRefresher
             . '`updated_at` = NOW() '
             . 'WHERE `id_link` = %d',
             $this->tablePrefix,
+            $assetClause,
             $agg['status'] === null ? 'NULL' : "'" . $this->escape($agg['status']) . "'",
             $agg['described'],
             $agg['total'],

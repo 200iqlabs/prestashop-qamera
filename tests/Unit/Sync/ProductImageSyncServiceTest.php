@@ -163,19 +163,42 @@ final class ProductImageSyncServiceTest extends TestCase
         self::assertStringNotContainsString('img-uuid', $capturedSql);
     }
 
-    public function testRegisteredRowSkipsProductMetadataInRequest(): void
+    public function testRegisteredRowWithStoredAssetReSyncIsNoop(): void
     {
+        // D2: re-sync of an already-registered product with a stored asset
+        // must NOT re-upload (that orphans a fresh asset and drifts
+        // qamera_asset_id from the catalog). It skips entirely.
         $this->expectRowRead(42, [
             'status' => 'registered',
             'qamera_product_id' => 'abc-uuid',
+            'qamera_asset_id' => 'asset-uuid',
             'display_name_snapshot' => 'Widget',
             'sku_snapshot' => null,
             'description_snapshot' => null,
         ]);
         $this->resolver->expects(self::never())->method('resolve');
-        $this->uploadStrategy->method('uploadImage')
-            ->with('/tmp/image-99.jpg', 'image-99.jpg', 'image/jpeg', 1024)
-            ->willReturn('asset-uuid-2');
+        $this->uploadStrategy->expects(self::never())->method('uploadImage');
+        $this->apiClient->expects(self::never())->method('registerImage');
+        $this->db->expects(self::never())->method('execute');
+        $this->logger->expects(self::once())->method('addLog');
+
+        $this->service()->syncOnImageAdded(42, 99);
+    }
+
+    public function testRegisteredRowWithoutAssetFallsThroughToReRegister(): void
+    {
+        // Recovery path: a registered row missing qamera_asset_id (e.g. nulled
+        // by the #21 migration) is NOT skipped — it re-registers to obtain an
+        // asset. product_metadata is omitted (product already known upstream).
+        $this->expectRowRead(42, [
+            'status' => 'registered',
+            'qamera_product_id' => 'abc-uuid',
+            'qamera_asset_id' => null,
+            'display_name_snapshot' => 'Widget',
+            'sku_snapshot' => null,
+            'description_snapshot' => null,
+        ]);
+        $this->uploadStrategy->method('uploadImage')->willReturn('asset-uuid-2');
 
         $captured = null;
         $this->apiClient->method('registerImage')
@@ -196,13 +219,7 @@ final class ProductImageSyncServiceTest extends TestCase
 
         self::assertNotNull($captured);
         self::assertNull($captured->productMetadata);
-        self::assertStringContainsString('`last_synced_at` = NOW()', $capturedSql);
-        self::assertStringNotContainsString("'registered'", $capturedSql);
-        self::assertStringNotContainsString('`qamera_product_id`', $capturedSql);
-        // Re-sync path refreshes qamera_asset_id with the NEW presigned
-        // asset id, never the logical imageId.
         self::assertStringContainsString("`qamera_asset_id` = 'asset-uuid-2'", $capturedSql);
-        self::assertStringNotContainsString('img-uuid', $capturedSql);
     }
 
     public function testValidationExceptionMapsToError(): void

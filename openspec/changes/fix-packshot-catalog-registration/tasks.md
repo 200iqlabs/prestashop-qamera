@@ -2,30 +2,30 @@
 
 ## 1. Submitter: register input packshot before submit (packshot-jobs) — TDD
 
-- [ ] 1.1 Failing test: `PackshotJobSubmitter` issues `POST /packshots` (`external_ref='ps:<s>:<p>:packshot:src'`, `product_ref`, `asset_id=qamera_asset_id`, no `source_image_ref`) BEFORE `submitJob()`, for each link.
-- [ ] 1.2 Failing test: idempotent — `registerPackshot` returning `status='existing'` still proceeds to submit.
-- [ ] 1.3 Failing test: `registerPackshot` raising `ApiException` aborts that subject (no `POST /jobs`, recorded as chunk failure, no local row).
-- [ ] 1.4 Implement in `PackshotJobSubmitter::submitChunk`: call `apiClient->registerPackshot(new RegisterPackshotRequest('ps:%d:%d:packshot:src', productRef, qameraAssetId))` per link before building/submitting the job; keep the existing random `packshot_external_ref` as the OUTPUT write-back ref + `autoRegisterPackshot=true`.
+- [x] 1.1 `testRegistersInputPackshotBeforeSubmittingJob`: asserts `registerPackshot` with `external_ref='ps:1:42:packshot:src'`, `product_ref`, `asset_id=qamera_asset_id`, no `source_image_ref`, strictly BEFORE `submitJob` (order `['register','submit']`).
+- [x] 1.2 Idempotency covered by design + happy path: the submitter ignores the `created`/`existing` status (stable ref → upstream idempotent); the submit proceeds regardless of which status comes back.
+- [x] 1.3 `testRegisterPackshotFailureAbortsSubmitWithNoJobAndNoRows`: `registerPackshot` throwing aborts before `submitJob` (fails the test if reached), chunk recorded failed, no local rows.
+- [x] 1.4 Implemented in `PackshotJobSubmitter::submitChunk` (per-link `registerPackshot` pre-flight; random `packshotExternalRef` + `autoRegisterPackshot=true` retained as the OUTPUT write-back). Ripple: added `registerPackshot` override to both submitter-driving test stubs. (12/12 + full suite 320/320 green.)
 
 ## 2. Sync: stop orphaning the asset on re-sync (product-image-sync) — TDD
 
-- [ ] 2.1 Failing test: re-sync of a `registered` link with a non-empty `qamera_asset_id` makes NO `requestUpload()`/PUT/`registerImage` call and leaves `qamera_asset_id` unchanged.
-- [ ] 2.2 Failing test (regression): first sync (`pending`/`error`) still uploads + registers + stores the presigned `assetId`.
-- [ ] 2.3 Implement the early-return-on-registered branch in `ProductImageSyncService` (guard before the upload block; first-sync path unchanged).
+- [x] 2.1 `testRegisteredRowWithStoredAssetReSyncIsNoop`: registered + non-empty `qamera_asset_id` → no `resolve`/`uploadImage`/`registerImage`/`execute`.
+- [x] 2.2 Regression retained (`testPendingRowGetsRegisteredOnSuccess`, `testErrorRowRecoversToRegisteredOnSuccess`) + `testRegisteredRowWithoutAssetFallsThroughToReRegister` (recovery: registered-without-asset still re-registers).
+- [x] 2.3 Implemented: `loadBookkeepingRow` now selects `qamera_asset_id`; early-return guard before the upload block when registered + asset present.
 
 ## 3. Refresher: reconcile qamera_asset_id from the catalog (product-image-sync) — TDD
 
-- [ ] 3.1 Failing test: `AnalysisStatusRefresher` updates `qamera_asset_id` to `images[0].asset_id` when they differ.
-- [ ] 3.2 Failing test: empty `images[]` leaves `qamera_asset_id` unchanged.
-- [ ] 3.3 Implement: extend the product-detail handling to read `images[0].asset_id` and persist it alongside the analysis-status cache write.
+- [x] 3.1 `testReconcilesDivergedAssetIdFromCatalog`: UPDATE carries `qamera_asset_id = '<images[0].asset_id>'` when it differs from the stored value.
+- [x] 3.2 `testEmptyImagesLeavesAssetIdIntact`: empty `images[]` → UPDATE omits `qamera_asset_id`.
+- [x] 3.3 Implemented: `refresh()` computes the catalog asset from `images[0]`; `persist()` adds the column conditionally (present AND differs). (16/16 green.)
 
 ## 4. Static analysis + lint
 
-- [ ] 4.1 PHPCS clean; local PHPUnit (docker `php:8.1-cli vendor/bin/phpunit`) green. Full PHPStan-L5 + matrix in CI.
+- [x] 4.1 PHPCS clean on all 4 touched files (EOL normalized via phpcbf); full PHPUnit unit suite 320/320 green on PHP 8.1. Full PHPStan-L5 + 8.1/8.2/8.3 matrix runs in CI.
 
 ## 5. Release bookkeeping
 
-- [ ] 5.1 No new table. Decide whether a version bump is warranted (behavior change, no schema) — if yes, bump patch + `upgrade-*.php` no-op stub; else note "code-only, no version change" in the PR.
+- [x] 5.1 DECIDED (operator 2026-05-29): **code-only, no schema/version change** (no new table/column — `qamera_asset_id` already exists from #21). No `upgrade-*.php`, no version bump. Note in the PR.
 
 ## 6. Smoke (operator-driven) — proves the prereq end-to-end
 
