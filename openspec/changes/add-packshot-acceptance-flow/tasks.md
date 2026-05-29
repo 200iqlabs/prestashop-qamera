@@ -21,8 +21,8 @@
 
 ## 3. Submitter branch (packshot-jobs)
 
-- [ ] 3.1 Branch the submit path: packshot (job_type='packshot', auto_register=true, source asset_id) vs photo_shoot (job_type='photo_shoot', omit asset_id + auto_register). **Scope the `registerPackshot('…:packshot:src')` pre-flight added by #25 to the packshot branch ONLY** — photo_shoot must NOT register an input packshot (it relies on the upstream accepted-packshot resolution). Update `PackshotJobSubmitterTest` accordingly.
-- [ ] 3.2 Photo-shoot eligibility = has a local `voting='accepted'` review row for the product_ref.
+- [x] 3.1 Branched the submit path on `SubmitFormInput.jobType` (new field, validated `packshot`|`photo_shoot`, default `packshot`): packshot sends `job_type='packshot'` + `packshot_asset_id` + `auto_register_packshot=true` + the `:packshot:src` pre-flight register; photo_shoot sends `job_type='photo_shoot'` and OMITS all three (Subject asset_id/auto_register null → dropped by `toPayload()`; no input register). Local mirror row gets a stage-tagged `:photoshoot:`/`:packshot:` external_ref. Wired `PackshotReviewRepository` into the submitter via services.yml + new `FakePackshotReviewRepository`; updated `PackshotJobSubmitterTest` (+2 photo_shoot tests, job_type assert) and `SubmitWebhookEndToEndTest` ctor.
+- [x] 3.2 Photo-shoot eligibility = `reviewRepository->hasAcceptedForProductRef($productRef)` (replaces `canGenerate()` on that branch); DB failure surfaces as a structured `SubmitResult`, not a 500. (Submitter+e2e 17/17; full unit 386/386; PHPCS clean.)
 
 ## 4. Webhook branch (webhook-event-dispatch / packshot-acceptance)
 

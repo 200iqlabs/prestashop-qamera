@@ -151,6 +151,15 @@ services:
       $db: '@qameraai.db'
       $tablePrefix: !php/const _DB_PREFIX_
 
+  # Phase 4.4 (add-packshot-acceptance-flow) — local voting store. Same
+  # raw-SQL repository shape as PackshotJobRepository; Symfony cannot
+  # autowire the Db + prefix scalars, so they are wired explicitly.
+  QameraAi\Module\Packshot\Acceptance\PackshotReviewRepository:
+    public: true
+    arguments:
+      $db: '@qameraai.db'
+      $tablePrefix: !php/const _DB_PREFIX_
+
   QameraAi\Module\Packshot\SyncedProductLinkLookup:
     public: true
     arguments:
@@ -181,6 +190,7 @@ services:
       $apiClient: '@QameraAi\Module\Api\QameraApiClient'
       $repository: '@QameraAi\Module\Packshot\PackshotJobRepository'
       $linkLookup: '@QameraAi\Module\Packshot\SyncedProductLinkLookup'
+      $reviewRepository: '@QameraAi\Module\Packshot\Acceptance\PackshotReviewRepository'
       $logger: '@QameraAi\Module\Sync\PrestaShopLoggerWrapper'
 
   # ReferenceCache needs an explicit cache directory; the rest of the

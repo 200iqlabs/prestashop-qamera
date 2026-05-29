@@ -18,6 +18,7 @@ use QameraAi\Module\Packshot\SubmitFormInput;
 use QameraAi\Module\Packshot\SyncedProductLink;
 use QameraAi\Module\Sync\PrestaShopLoggerWrapper;
 use QameraAi\Module\Tests\Support\FakePackshotJobRepository;
+use QameraAi\Module\Tests\Support\FakePackshotReviewRepository;
 use QameraAi\Module\Tests\Support\FakeSyncedProductLinkLookup;
 use QameraAi\Module\Tests\Support\SpyLogger;
 
@@ -60,6 +61,7 @@ final class SubmitWebhookEndToEndTest extends TestCase
             $apiClient,
             $repo,
             $lookup,
+            new FakePackshotReviewRepository(),
             $this->silentLogger(),
         );
 
@@ -128,7 +130,13 @@ final class SubmitWebhookEndToEndTest extends TestCase
                 new SubmitJobResponseSubject('ps:1:42', ['job-X']),
             ]);
         });
-        $submitter = new PackshotJobSubmitter($apiClient, $repo, $lookup, $this->silentLogger());
+        $submitter = new PackshotJobSubmitter(
+            $apiClient,
+            $repo,
+            $lookup,
+            new FakePackshotReviewRepository(),
+            $this->silentLogger()
+        );
         $submitter->submit(new SubmitFormInput(
             idShop: 1,
             productIds: [42],

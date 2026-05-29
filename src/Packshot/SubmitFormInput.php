@@ -13,6 +13,18 @@ namespace QameraAi\Module\Packshot;
 final class SubmitFormInput
 {
     /**
+     * Stage-1 (default): generate a packshot of the synced source image.
+     * Stage-4: generate a photo-shoot, gated on a locally-accepted packshot.
+     */
+    public const JOB_TYPE_PACKSHOT = 'packshot';
+    public const JOB_TYPE_PHOTO_SHOOT = 'photo_shoot';
+
+    public const JOB_TYPES = [
+        self::JOB_TYPE_PACKSHOT,
+        self::JOB_TYPE_PHOTO_SHOOT,
+    ];
+
+    /**
      * @param int[] $productIds   ps_product.id_product ids the operator selected
      */
     public function __construct(
@@ -25,9 +37,13 @@ final class SubmitFormInput
         public readonly ?string $mannequinModelId = null,
         public readonly ?string $presetId = null,
         public readonly ?string $suggestions = null,
+        public readonly string $jobType = self::JOB_TYPE_PACKSHOT,
     ) {
         if ($productIds === []) {
             throw new \InvalidArgumentException('productIds must contain at least one id');
+        }
+        if (!in_array($jobType, self::JOB_TYPES, true)) {
+            throw new \InvalidArgumentException('jobType must be one of: ' . implode(', ', self::JOB_TYPES));
         }
         foreach ($productIds as $id) {
             if (!is_int($id) || $id < 1) {

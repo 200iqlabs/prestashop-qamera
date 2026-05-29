@@ -11,6 +11,7 @@ use QameraAi\Module\Api\Dto\SubmitJobRequest;
 use QameraAi\Module\Api\Dto\SubmitJobResponse;
 use QameraAi\Module\Api\Exception\ApiException;
 use QameraAi\Module\Api\QameraApiClient;
+use QameraAi\Module\Packshot\Acceptance\PackshotReviewRepository;
 use QameraAi\Module\Sync\PrestaShopLoggerWrapper;
 use QameraAi\Module\Webhook\Event\QameraDbException;
 use Ramsey\Uuid\Uuid;
@@ -40,6 +41,7 @@ final class PackshotJobSubmitter
         private readonly QameraApiClient $apiClient,
         private readonly PackshotJobRepository $repository,
         private readonly SyncedProductLinkLookup $linkLookup,
+        private readonly PackshotReviewRepository $reviewRepository,
         private readonly PrestaShopLoggerWrapper $logger,
     ) {
     }
@@ -79,15 +81,49 @@ final class PackshotJobSubmitter
             );
         }
 
+        // Stage-1 (packshot) eligibility is the local synced+described gate
+        // (`canGenerate()`). Stage-4 (photo_shoot) eligibility is instead a
+        // locally-accepted packshot review row for the product_ref — the
+        // source asset/analysis no longer matter, the backend resolves the
+        // accepted packshot per product_ref. The review lookup hits the DB,
+        // so a failure surfaces as the same structured SubmitResult as the
+        // link lookup above rather than a 500.
+        $isPhotoShoot = $input->jobType === SubmitFormInput::JOB_TYPE_PHOTO_SHOOT;
         $generable = [];
         $skipped = 0;
-        foreach ($productIds as $idProduct) {
-            $link = $links[$idProduct] ?? null;
-            if ($link === null || !$link->canGenerate()) {
-                $skipped++;
-                continue;
+        try {
+            foreach ($productIds as $idProduct) {
+                $link = $links[$idProduct] ?? null;
+                if ($link === null) {
+                    $skipped++;
+                    continue;
+                }
+                $eligible = $isPhotoShoot
+                    ? $this->reviewRepository->hasAcceptedForProductRef($link->qameraProductRef)
+                    : $link->canGenerate();
+                if (!$eligible) {
+                    $skipped++;
+                    continue;
+                }
+                $generable[] = $link;
             }
-            $generable[] = $link;
+        } catch (QameraDbException $e) {
+            $this->logEvent(
+                3,
+                'submit_eligibility_db_failed',
+                [
+                    'id_shop' => $input->idShop,
+                    'job_type' => $input->jobType,
+                    'message' => $e->getMessage(),
+                ]
+            );
+            return new SubmitResult(
+                0,
+                1,
+                0,
+                [],
+                [1 => 'Eligibility check failed: ' . $e->getMessage()],
+            );
         }
 
         if ($generable === []) {
@@ -173,15 +209,17 @@ final class PackshotJobSubmitter
      */
     private function submitChunk(SubmitFormInput $input, array $chunk): array
     {
+        $isPhotoShoot = $input->jobType === SubmitFormInput::JOB_TYPE_PHOTO_SHOOT;
+
         $subjects = [];
         /** @var array<string, array{link: SyncedProductLink, packshot_external_ref: string}> $refIndex */
         $refIndex = [];
 
         foreach ($chunk as $link) {
-            // Register the source image as an INPUT packshot before the job.
-            // Upstream `resolveCatalogMetadata` requires `packshot_asset_id`
-            // to resolve to a `product_packshots` row (for packshot AND
-            // photo_shoot); without this every job fails
+            // PACKSHOT branch only: register the source image as an INPUT
+            // packshot before the job. Upstream `resolveCatalogMetadata`
+            // requires `packshot_asset_id` to resolve to a `product_packshots`
+            // row for a packshot job; without this it fails
             // `PLUGIN_JOB_MISSING_CATALOG_ENTRY`. Stable external_ref →
             // idempotent on repeat submits (created → existing). No
             // `source_image_ref`: the asset is already a registered, analyzed
@@ -191,28 +229,46 @@ final class PackshotJobSubmitter
             // INPUT packshot is distinct from the OUTPUT packshot that
             // `autoRegisterPackshot=true` + the random `packshotExternalRef`
             // register from the job result.
-            $this->apiClient->registerPackshot(new RegisterPackshotRequest(
-                externalRef: sprintf('ps:%d:%d:packshot:src', $link->idShop, $link->idProduct),
-                productRef: $link->qameraProductRef,
-                assetId: (string) $link->qameraAssetId,
-            ));
+            //
+            // PHOTO_SHOOT branch SKIPS this: it carries no `packshot_asset_id`
+            // and relies on the upstream resolution of the latest *accepted*
+            // packshot for the product_ref. Registering a fresh input packshot
+            // here would be wrong (and there is no source asset to register).
+            if (!$isPhotoShoot) {
+                $this->apiClient->registerPackshot(new RegisterPackshotRequest(
+                    externalRef: sprintf('ps:%d:%d:packshot:src', $link->idShop, $link->idProduct),
+                    productRef: $link->qameraProductRef,
+                    assetId: (string) $link->qameraAssetId,
+                ));
+            }
 
             $uuid = Uuid::uuid4()->toString();
-            $packshotRef = sprintf('ps:%d:%d:packshot:%s', $link->idShop, $link->idProduct, $uuid);
+            // Local job-row identifier. For photo_shoot it is NOT sent
+            // upstream (no auto-register), but the `packshot_external_ref`
+            // column is NOT NULL, so we still mint a stage-tagged local ref.
+            $localRef = sprintf(
+                'ps:%d:%d:%s:%s',
+                $link->idShop,
+                $link->idProduct,
+                $isPhotoShoot ? 'photoshoot' : 'packshot',
+                $uuid
+            );
             $refIndex[$link->qameraProductRef] = [
                 'link' => $link,
-                'packshot_external_ref' => $packshotRef,
+                'packshot_external_ref' => $localRef,
             ];
 
             $subjects[] = new Subject(
-                packshotAssetId: (string) $link->qameraAssetId,
+                // photo_shoot omits the source asset + auto-register; packshot
+                // sends both. Subject::toPayload() drops null fields.
+                packshotAssetId: $isPhotoShoot ? null : (string) $link->qameraAssetId,
                 productLabel: $this->truncateLabel($link->displayNameSnapshot),
                 productRef: $link->qameraProductRef,
                 imagesCount: $input->imagesCount,
                 aiModel: $input->aiModel,
                 productName: $link->displayNameSnapshot !== '' ? $link->displayNameSnapshot : null,
-                autoRegisterPackshot: true,
-                packshotExternalRef: $packshotRef,
+                autoRegisterPackshot: $isPhotoShoot ? null : true,
+                packshotExternalRef: $isPhotoShoot ? null : $localRef,
             );
         }
 
@@ -224,7 +280,7 @@ final class PackshotJobSubmitter
             suggestions: $input->suggestions,
         );
 
-        $request = new SubmitJobRequest($sessionConfig, $subjects);
+        $request = new SubmitJobRequest($sessionConfig, $subjects, jobType: $input->jobType);
         $response = $this->apiClient->submitJob($request);
 
         $rows = $this->mapResponseToRows($input, $response, $refIndex);
