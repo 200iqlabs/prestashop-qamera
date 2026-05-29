@@ -198,6 +198,26 @@ class QameraApiClient
         return $this->send('GET', '/jobs/' . rawurlencode($id), null, JobDto::class);
     }
 
+    /**
+     * Record an accept vote on a completed job. Pure metadata: the endpoint
+     * returns `204 No Content`, so nothing is decoded — the caller updates
+     * its local review state on a non-error return. A `409` (`job_not_completed`)
+     * or other non-2xx surfaces as the typed {@see ApiException}.
+     */
+    public function acceptJob(string $id): void
+    {
+        $this->dispatch('POST', '/jobs/' . rawurlencode($id) . '/accept', null);
+    }
+
+    /**
+     * Record a reject vote on a completed job. See {@see acceptJob()} —
+     * `204 No Content`, no body decoded.
+     */
+    public function rejectJob(string $id): void
+    {
+        $this->dispatch('POST', '/jobs/' . rawurlencode($id) . '/reject', null);
+    }
+
     public function listJobs(JobsListFilters $filters): JobsListResponse
     {
         $query = http_build_query($filters->toQuery());

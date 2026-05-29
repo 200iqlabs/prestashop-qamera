@@ -19,7 +19,7 @@ final class Subject
      * @param array<string, mixed>|null $providerSettings
      */
     public function __construct(
-        public readonly string $packshotAssetId,
+        public readonly ?string $packshotAssetId,
         public readonly string $productLabel,
         public readonly string $productRef,
         public readonly int $imagesCount,
@@ -56,12 +56,14 @@ final class Subject
     public function toPayload(): array
     {
         $payload = [
-            'packshot_asset_id' => $this->packshotAssetId,
             'product_label' => $this->productLabel,
             'product_ref' => $this->productRef,
             'images_count' => $this->imagesCount,
             'ai_model' => $this->aiModel,
         ];
+        if ($this->packshotAssetId !== null) {
+            $payload['packshot_asset_id'] = $this->packshotAssetId;
+        }
         if ($this->referenceAssetIds !== null) {
             $payload['reference_asset_ids'] = $this->referenceAssetIds;
         }

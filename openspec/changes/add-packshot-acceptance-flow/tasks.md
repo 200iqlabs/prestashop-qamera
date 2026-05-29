@@ -10,9 +10,9 @@
 
 ## 1. API client (qamera-api-client)
 
-- [ ] 1.1 `SubmitJobRequest` + optional `?string $jobType`; `toPayload()` emits `job_type` when set.
-- [ ] 1.2 `Subject.packshotAssetId` nullable; `toPayload()` omits `packshot_asset_id` when null.
-- [ ] 1.3 `QameraApiClient::acceptJob(string $id): void` / `rejectJob(string $id): void` → `POST /jobs/{id}/accept|reject` (endpoints return **204 No Content**; no body to decode — return on 2xx). Map `409` to the typed `ApiException` (`job_not_completed`).
+- [x] 1.1 `SubmitJobRequest` + optional `?string $jobType` (last ctor param); `toPayload()` emits `job_type` when set.
+- [x] 1.2 `Subject.packshotAssetId` now `?string`; `toPayload()` omits `packshot_asset_id` when null.
+- [x] 1.3 `QameraApiClient::acceptJob/rejectJob(string $id): void` → `POST /jobs/{id}/accept|reject` via `dispatch` (204, no decode); `409` → `ValidationException` (the typed 400/409/422 mapping). Tests: accept/reject endpoints + 204 + 409 + job_type emit + null-asset omit. (QameraApiClientTest 50/50; full unit 328/328; PHPCS clean.)
 
 ## 2. Schema (packshot-acceptance)
 
