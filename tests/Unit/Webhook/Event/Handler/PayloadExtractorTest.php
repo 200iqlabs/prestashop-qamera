@@ -64,6 +64,22 @@ final class PayloadExtractorTest extends TestCase
         self::assertSame('No source upload found', PayloadExtractor::jobErrorMessage($payload, 'de'));
     }
 
+    public function testJobErrorMessagePrefersI18nThenPlainMessageThenCode(): void
+    {
+        // i18n wins when present.
+        $i18n = ['job' => ['error' => [
+            'code' => 'generation_failed',
+            'message_i18n' => ['en' => 'localized'],
+            'message' => 'plain',
+        ]]];
+        self::assertSame('localized', PayloadExtractor::jobErrorMessage($i18n, 'en'));
+
+        // Plain `message` is used when no i18n is available (some providers
+        // shape job.error as {code, message}), before falling back to code.
+        $plain = ['job' => ['error' => ['code' => 'generation_failed', 'message' => 'quota exceeded']]];
+        self::assertSame('quota exceeded', PayloadExtractor::jobErrorMessage($plain, 'en'));
+    }
+
     public function testJobErrorMessageFallsBackToCodeWhenNoMessages(): void
     {
         $payload = ['job' => ['error' => ['code' => 'generation_failed', 'message_i18n' => [], 'retryable' => false]]];

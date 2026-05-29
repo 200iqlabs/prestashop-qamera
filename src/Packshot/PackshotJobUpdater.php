@@ -147,8 +147,10 @@ class PackshotJobUpdater
         }
 
         // Stub insert with the minimum viable column set. The
-        // packshot_external_ref column is UNIQUE NOT NULL, so synthesise a
-        // deterministic value from the (globally unique) job id. ai_model /
+        // packshot_external_ref column is NOT NULL (but intentionally
+        // non-unique — see Installer's `qamera_packshot_job_external_ref`
+        // KEY), so synthesise a non-null value from the (globally unique)
+        // job id. ai_model /
         // aspect_ratio / images_count are unknown from the webhook payload —
         // fill with sentinels the operator can recognise as race recoveries.
         $this->repository->upsertFromWebhook(new PackshotJobWebhookUpdate(

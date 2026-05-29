@@ -128,6 +128,13 @@ final class PayloadExtractor
             }
         }
 
+        // Some providers shape `job.error` as `{code, message}` (no i18n
+        // map). Prefer a non-empty plain message before the bare code.
+        $plain = $error['message'] ?? null;
+        if (is_string($plain) && $plain !== '') {
+            return $plain;
+        }
+
         $code = $error['code'] ?? null;
         return is_string($code) && $code !== '' ? $code : null;
     }
