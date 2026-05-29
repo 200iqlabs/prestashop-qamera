@@ -6,6 +6,7 @@ namespace QameraAi\Module\Controller\Admin;
 
 use Context;
 use PrestaShopBundle\Controller\Admin\FrameworkBundleAdminController;
+use PrestaShopLogger;
 use QameraAi\Module\Api\Exception\ApiException;
 use QameraAi\Module\Packshot\Acceptance\PackshotReviewRepository;
 use QameraAi\Module\Packshot\Acceptance\PackshotReviewRow;
@@ -81,7 +82,18 @@ final class PackshotReviewController extends FrameworkBundleAdminController
             );
         } catch (QameraDbException $e) {
             // The vote landed upstream but the local flip failed — the
-            // webhook/refresh path will not self-heal voting, so log-worthy.
+            // webhook/refresh path will not self-heal voting, so this drift
+            // is invisible unless we record it. Log loudly, then surface.
+            PrestaShopLogger::addLog(
+                '[QameraAi][packshot-review] vote cascaded upstream but local flip failed '
+                . '(local voting stuck pending) job_id=' . $jobId . ' decision=' . $decision
+                . ': ' . $e->getMessage(),
+                3,
+                null,
+                'QameraAiModule',
+                null,
+                true
+            );
             return $this->json(
                 ['ok' => false, 'error' => 'db_error'],
                 Response::HTTP_INTERNAL_SERVER_ERROR

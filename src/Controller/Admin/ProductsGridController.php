@@ -6,9 +6,11 @@ namespace QameraAi\Module\Controller\Admin;
 
 use Context;
 use PrestaShopBundle\Controller\Admin\FrameworkBundleAdminController;
+use PrestaShopLogger;
 use QameraAi\Module\Packshot\Acceptance\PackshotReviewRepository;
 use QameraAi\Module\Packshot\SyncedProductLink;
 use QameraAi\Module\Packshot\SyncedProductLinkLookup;
+use QameraAi\Module\Webhook\Event\QameraDbException;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -43,10 +45,25 @@ final class ProductsGridController extends FrameworkBundleAdminController
 
         // Photo-shoot gate (D3): a product is photo-shoot-eligible iff its
         // product_ref has a locally-accepted packshot review row. One batch
-        // query for the visible page (avoids N+1).
-        $acceptedRefs = $reviewRepository->acceptedRefsIn(
-            array_map(static fn (SyncedProductLink $r): string => $r->qameraProductRef, $rows)
-        );
+        // query for the visible page (avoids N+1). A DB failure here MUST NOT
+        // 500 the operator's main grid — degrade to "nothing photo-shoot
+        // eligible" (every photo-shoot action renders disabled) and log it.
+        try {
+            $acceptedRefs = $reviewRepository->acceptedRefsIn(
+                array_map(static fn (SyncedProductLink $r): string => $r->qameraProductRef, $rows)
+            );
+        } catch (QameraDbException $e) {
+            $acceptedRefs = [];
+            PrestaShopLogger::addLog(
+                '[QameraAi][packshot-review] products grid acceptedRefsIn failed; '
+                . 'photo-shoot gate degraded to disabled: ' . $e->getMessage(),
+                3,
+                null,
+                'QameraAiModule',
+                null,
+                true
+            );
+        }
 
         return $this->render(
             '@Modules/qameraai/views/templates/admin/products_grid.html.twig',

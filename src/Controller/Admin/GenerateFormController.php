@@ -6,6 +6,7 @@ namespace QameraAi\Module\Controller\Admin;
 
 use Context;
 use PrestaShopBundle\Controller\Admin\FrameworkBundleAdminController;
+use PrestaShopLogger;
 use QameraAi\Module\Api\Cache\CachedReferenceClient;
 use QameraAi\Module\Api\Cache\CachedReferenceClientFactory;
 use QameraAi\Module\Api\Dto\AspectRatio;
@@ -20,6 +21,7 @@ use QameraAi\Module\Packshot\SubmitFormInput;
 use QameraAi\Module\Packshot\SubmitResult;
 use QameraAi\Module\Packshot\SyncedProductLink;
 use QameraAi\Module\Packshot\SyncedProductLinkLookup;
+use QameraAi\Module\Webhook\Event\QameraDbException;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -440,7 +442,22 @@ final class GenerateFormController extends FrameworkBundleAdminController
         foreach ($links as $link) {
             $refs[] = $link->qameraProductRef;
         }
-        $acceptedRefs = $reviewRepository->acceptedRefsIn($refs);
+        // A DB failure on the eligibility lookup must degrade (treat nothing
+        // as eligible → all rows excluded with the existing flash) rather
+        // than 500 the form.
+        try {
+            $acceptedRefs = $reviewRepository->acceptedRefsIn($refs);
+        } catch (QameraDbException $e) {
+            PrestaShopLogger::addLog(
+                '[QameraAi][packshot-review] photo-shoot eligibility lookup failed: ' . $e->getMessage(),
+                3,
+                null,
+                'QameraAiModule',
+                null,
+                true
+            );
+            $acceptedRefs = [];
+        }
 
         $eligible = [];
         $excluded = 0;
