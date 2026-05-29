@@ -3,9 +3,7 @@
 ## Purpose
 
 Defines how the module receives, authenticates, and persists inbound webhook deliveries from `qamera.ai`. This is the receive-and-verify layer only: HMAC-SHA256 signature verification (with multi-`v1=` tolerance for the upstream 48 h dual-sign rotation grace window), timestamp-based replay protection (±300 s past / +60 s future), delivery-id idempotency via the new `qamera_webhook_delivery` table primary key, an ACK contract that minimises upstream retries (200 on accept/duplicate, 400 on malformed input, 401 on missing signature, 405 on wrong method, 500 only on internal repository or server-config failure), forward-compatible event-type tolerance (unknown but well-formed types are recorded with `status='accepted'` for Phase 4.2 dispatch), and operator-visible logging through PrestaShop's `QameraAiModule` channel where rejection log lines carry structured reason codes but NEVER the secret, computed HMAC, or full raw body. Rejection paths NEVER persist a row (anti-DoS — the endpoint is unauthenticated and the table is otherwise an attacker fill target). Dispatching verified deliveries into product/image state is deliberately out of scope and is owned by Phase 4.2 (`add-webhook-event-dispatch`), which consumes the rows persisted here as its input queue.
-
 ## Requirements
-
 ### Requirement: Storefront webhook endpoint
 
 The module SHALL expose a storefront HTTP endpoint that accepts inbound webhook deliveries from `qamera.ai`. The endpoint MUST be reachable without admin authentication, MUST be exempt from CSRF token validation, and MUST accept `POST` requests with a JSON body.
@@ -118,31 +116,27 @@ The module SHALL reject deliveries whose signed timestamp lies outside the windo
 
 ### Requirement: Delivery-id idempotency
 
-The module SHALL deduplicate accepted deliveries by the value of the `X-Qamera-Delivery-Id` request header, persisted as the primary key of the `qamera_webhook_delivery` table. The header value SHALL also be cross-checked against the body's `delivery_id` field; a mismatch SHALL be treated as a malformed delivery.
+The module SHALL deduplicate accepted deliveries by the value of the `X-Qamera-Request-Id` request header (the server's stable `webhook_deliveries` id, reused across retries), persisted as the primary key of the `qamera_webhook_delivery` table. There is NO body `delivery_id` field and NO `X-Qamera-Delivery-Id` header in the contract; the module SHALL NOT require or cross-check either.
 
-#### Scenario: Missing X-Qamera-Delivery-Id header
-- **WHEN** the request omits `X-Qamera-Delivery-Id`
-- **THEN** the module SHALL respond with HTTP `400 Bad Request`
-
-#### Scenario: Header and body delivery_id mismatch
-- **WHEN** `X-Qamera-Delivery-Id: A` is present but the JSON body's `delivery_id` is `B`
-- **THEN** the module SHALL respond with HTTP `400 Bad Request`
+#### Scenario: Missing X-Qamera-Request-Id header
+- **WHEN** the request omits `X-Qamera-Request-Id`
+- **THEN** the module SHALL respond with HTTP `400 Bad Request` and SHALL NOT insert a row
 
 #### Scenario: First delivery is accepted and persisted
-- **WHEN** an authentic delivery with id `D1` is received and no row with `delivery_id = D1` exists
+- **WHEN** an authentic delivery with `X-Qamera-Request-Id: D1` is received and no row with `delivery_id = D1` exists
 - **THEN** the module SHALL insert a new row with `status = 'accepted'` and respond with HTTP `200 OK`
 
 #### Scenario: Duplicate delivery is acknowledged without reprocessing
-- **WHEN** an authentic delivery with id `D1` is received and a row with `delivery_id = D1` already exists
-- **THEN** the module SHALL NOT insert a new row
-- **AND** the module SHALL NOT mutate the existing row's `event_type` or `raw_payload`
-- **AND** the module SHALL respond with HTTP `200 OK`
-- **AND** the module SHALL log the duplicate at level `warning` with the delivery id
+- **WHEN** an authentic delivery with `X-Qamera-Request-Id: D1` is received and a row with `delivery_id = D1` already exists
+- **THEN** the module SHALL NOT insert a new row, SHALL NOT mutate the existing row, SHALL respond with HTTP `200 OK`, and SHALL log the duplicate at level `warning` with the id
 
-#### Scenario: Concurrent duplicate inserts are serialised by the database
-- **WHEN** two requests with the same `delivery_id` are processed concurrently
-- **THEN** exactly one row SHALL exist for that `delivery_id` after both complete
-- **AND** both requests SHALL respond with HTTP `200 OK`
+#### Scenario: Retry of the same delivery reuses the id and dedups
+- **WHEN** the server retries a previously-delivered row (same `webhook_deliveries.id` → same `X-Qamera-Request-Id`)
+- **THEN** the module SHALL treat it as a duplicate of the original and respond `200 OK` without reprocessing
+
+#### Scenario: Concurrent duplicates are serialised by the database
+- **WHEN** two requests with the same `X-Qamera-Request-Id` are processed concurrently
+- **THEN** exactly one row SHALL exist for that id after both complete, and both SHALL respond `200 OK`
 
 ### Requirement: Persisted delivery log
 
@@ -166,19 +160,18 @@ The module SHALL persist each accepted (and each duplicate-acknowledged) deliver
 
 ### Requirement: Event-type tolerance
 
-The module SHALL accept deliveries for any value of `event_type` whose shape matches `^[a-z][a-z0-9_.-]{0,63}$`. Unknown event types SHALL be recorded with `status = 'accepted'` and SHALL NOT cause an error response — the recorded row is the dispatch substrate for Phase 4.2.
+The module SHALL read the event type from the body `event` field and accept any value whose shape matches `^[a-z][a-z0-9_.-]{0,63}$`. Unknown well-formed events SHALL be recorded with `status = 'accepted'` and SHALL NOT cause an error response — the recorded row is the dispatch substrate.
 
-#### Scenario: Known event types are accepted
-- **WHEN** the body's `event_type` is one of `job.completed`, `job.failed`, `job.cancelled`, `job.retried`
+#### Scenario: Known events are accepted
+- **WHEN** the body's `event` is one of `job.completed`, `job.failed`, `job.cancelled`, `job.retried`
 - **THEN** the module SHALL persist the row with `status = 'accepted'`
 
-#### Scenario: Unknown but well-formed event type is accepted
-- **WHEN** the body's `event_type` is `job.future_kind` and signature and timestamp are valid
-- **THEN** the module SHALL persist the row with `status = 'accepted'` and `event_type = 'job.future_kind'`
-- **AND** the module SHALL respond with HTTP `200 OK`
+#### Scenario: Unknown but well-formed event is accepted
+- **WHEN** the body's `event` is `job.future_kind` and signature and timestamp are valid
+- **THEN** the module SHALL persist the row with `status = 'accepted'` and `event_type = 'job.future_kind'` and respond `200 OK`
 
-#### Scenario: Malformed event type is rejected
-- **WHEN** the body's `event_type` is missing, empty, longer than 64 chars, or contains characters outside `[a-z0-9_.-]`
+#### Scenario: Missing or malformed event is rejected
+- **WHEN** the body's `event` is missing, empty, longer than 64 chars, or contains characters outside `[a-z0-9_.-]`
 - **THEN** the module SHALL respond with HTTP `400 Bad Request`
 
 ### Requirement: ACK response contract
@@ -202,111 +195,107 @@ The module SHALL respond with HTTP status codes that minimise upstream retries w
 
 ### Requirement: Operator-visible logging
 
-The module SHALL emit log lines through PrestaShop's `PrestaShopLogger` to the channel `QameraAiModule` for every webhook decision. Log lines SHALL NEVER include the value of `QAMERAAI_WEBHOOK_SECRET`, full request body, or computed HMAC bytes.
+The module SHALL emit log lines through `PrestaShopLogger` to the `QameraAiModule` channel for every webhook decision. Log lines SHALL NEVER include the `QAMERAAI_WEBHOOK_SECRET`, full request body, or computed HMAC bytes.
 
 #### Scenario: Accepted delivery is logged at info
 - **WHEN** a delivery is accepted
-- **THEN** the module SHALL emit a log line at level `info` containing the `delivery_id` and `event_type`
+- **THEN** the module SHALL emit an `info` line containing the `delivery_id` (from `X-Qamera-Request-Id`) and the event
 
 #### Scenario: Duplicate delivery is logged at warning
 - **WHEN** a duplicate delivery is acknowledged
-- **THEN** the module SHALL emit a log line at level `warning` containing the `delivery_id` and the original `received_at`
+- **THEN** the module SHALL emit a `warning` line containing the id and the original `received_at`
 
 #### Scenario: Rejection is logged at error with a structured reason code
 - **WHEN** a delivery is rejected
-- **THEN** the module SHALL emit a log line at level `error` containing the rejection reason code (one of `missing_signature`, `malformed_signature`, `signature_mismatch`, `replay_window`, `missing_delivery_id`, `delivery_id_mismatch`, `malformed_body`, `malformed_event_type`, `empty_body`, `method_not_allowed`) and, where available, the `delivery_id`
+- **THEN** the module SHALL emit an `error` line containing the rejection reason code (one of `missing_signature`, `malformed_signature`, `signature_mismatch`, `replay_window`, `missing_request_id`, `malformed_body`, `malformed_event_type`, `empty_body`, `method_not_allowed`) and, where available, the id
 
 #### Scenario: Secrets and HMACs never appear in logs
-- **WHEN** the module emits any log line for any decision
-- **THEN** the log line MUST NOT contain the configured `QAMERAAI_WEBHOOK_SECRET` value
-- **AND** MUST NOT contain any locally-computed HMAC hex digest
-- **AND** MUST NOT contain the full raw request body
+- **WHEN** the module emits any log line
+- **THEN** it MUST NOT contain the configured secret, any locally-computed HMAC hex, or the full raw body
 
 ### Requirement: Verified deliveries are dispatched after persistence
 
-After a delivery is recorded with `status='accepted'` in `qamera_webhook_delivery` (per the existing "Persisted delivery log" requirement), the module SHALL invoke the event dispatcher exactly once with a `WebhookEvent` value object built from the verified `event_type`, `delivery_id`, and parsed JSON payload. The HTTP response contract from the existing "ACK response contract" requirement SHALL remain unchanged — the dispatch outcome (success, error, no-op) SHALL NOT influence the response status code or body.
-
-The dispatcher invocation SHALL be wrapped so that any unhandled exception (including `\Throwable`) is caught at the controller layer and converted to an `error`-level log line containing the `delivery_id` and exception class — the controller MUST still return `200 OK` with body `{"status":"ok"}`.
+After a delivery is recorded with `status='accepted'`, the module SHALL invoke the event dispatcher exactly once with a `WebhookEvent` built from the body `event` (as `eventType`), the `X-Qamera-Request-Id` header (as `deliveryId`), `installationId=null`, and the entire decoded body (as `payload`). The HTTP response contract SHALL remain unchanged — the dispatch outcome SHALL NOT influence the status code or body. Any unhandled `\Throwable` from dispatch SHALL be caught at the controller layer, logged at `error` with the id and exception class, and the controller SHALL still return `200 OK` with `{"status":"ok"}`.
 
 #### Scenario: Accepted delivery triggers exactly one dispatch
-- **WHEN** a signature-valid, fresh, non-duplicate delivery is accepted and inserted into `qamera_webhook_delivery`
-- **THEN** the dispatcher SHALL be invoked exactly once with a `WebhookEvent` carrying the persisted `delivery_id`, the `event_type` from the body, and the decoded JSON payload
+- **WHEN** a signature-valid, fresh, non-duplicate delivery is accepted and persisted
+- **THEN** the dispatcher SHALL be invoked exactly once with a `WebhookEvent` carrying the id, the body `event`, and the whole decoded body as payload
 
 #### Scenario: Duplicate delivery does NOT trigger dispatch
-- **WHEN** an authentic delivery with id `D1` is received and a row with `delivery_id = D1` already exists
-- **THEN** the dispatcher SHALL NOT be invoked
-- **AND** the response SHALL remain `200 OK` with body `{"status":"duplicate"}` as specified by the existing "Duplicate delivery is acknowledged without reprocessing" scenario
+- **WHEN** a delivery with an id that already has a row is received
+- **THEN** the dispatcher SHALL NOT be invoked and the response SHALL be `200 OK` `{"status":"duplicate"}`
 
 #### Scenario: Rejected delivery does NOT trigger dispatch
-- **WHEN** the delivery is rejected by any path defined in the existing rejection scenarios (missing signature, malformed signature, signature mismatch, replay window, missing/mismatched delivery_id, malformed body, malformed event type, empty body, method not allowed)
+- **WHEN** the delivery is rejected by any path (missing signature, malformed signature, signature mismatch, replay window, missing request id, malformed body, malformed event, empty body, method not allowed)
 - **THEN** the dispatcher SHALL NOT be invoked
 
 #### Scenario: Dispatcher exception is caught and the response stays 200
-- **WHEN** a delivery is accepted and persisted, but the dispatcher invocation raises `\Throwable`
-- **THEN** the controller SHALL catch the exception
-- **AND** the controller SHALL emit a log line at `error` level containing the `delivery_id` and the exception's class name
-- **AND** the response SHALL be `200 OK` with body `{"status":"ok"}`
-
-#### Scenario: Unknown event_type still persists the row and still calls dispatch
-- **WHEN** the body's `event_type` matches `^[a-z][a-z0-9_.-]{0,63}$` but is not one of the known types (e.g. `job.future_kind`)
-- **THEN** the delivery row SHALL be persisted with `status='accepted'` (per the existing "Event-type tolerance" requirement)
-- **AND** the dispatcher SHALL still be invoked
-- **AND** the dispatcher SHALL emit an `info`-level log line for the unknown type and perform no DB writes (defined in the webhook-event-dispatch capability)
+- **WHEN** a delivery is accepted and persisted but dispatch raises `\Throwable`
+- **THEN** the controller SHALL catch it, log at `error` with the id and exception class, and respond `200 OK` `{"status":"ok"}`
 
 ### Requirement: Job-event handlers update the local packshot_job table by qamera_job_id
 
-The `JobCompletedHandler`, `JobFailedHandler`, `JobRetriedHandler`, and `JobCancelledHandler` SHALL each
-accept an additional dependency `PackshotJobUpdater` and, in addition to their existing side effects on
-`ps_qamera_packshot_link` and the product-link heartbeat, SHALL upsert a row in `ps_qamera_packshot_job`
-keyed on `qamera_job_id` extracted from the payload.
+The `JobCompletedHandler`, `JobFailedHandler`, `JobRetriedHandler`, and `JobCancelledHandler` SHALL each upsert a row in `ps_qamera_packshot_job` keyed on `qamera_job_id` taken from `payload.job.id`, and SHALL refresh the `ps_qamera_product_link` heartbeat for the `(shopId, productId)` parsed from `payload.job.product_ref`. Handlers SHALL NOT write to `ps_qamera_packshot_link` (that table is removed — see webhook-event-dispatch).
 
-Status mapping from event type to `ps_qamera_packshot_job.status`:
+Status mapping (unchanged):
 
-| Event type      | Status set       |
-|-----------------|------------------|
-| `job.completed` | `completed`      |
-| `job.failed`    | `failed`         |
-| `job.cancelled` | `cancelled`      |
-| `job.retried`   | `in_progress`    |
+| Event           | Status set    |
+|-----------------|---------------|
+| `job.completed` | `completed`   |
+| `job.failed`    | `failed`      |
+| `job.cancelled` | `cancelled`   |
+| `job.retried`   | `in_progress` |
 
 Additional payload-driven updates:
 
-- `output_url`, `output_url_expires_at` set when present on `job.completed`
-- `last_error_message` set when present on `job.failed`
+- `output_url` set from `payload.outputs[0].url` when present on `job.completed` (`output_url_expires_at` set when the output carries an expiry)
+- `last_error_message` set from `payload.job.error` (object → message string, truncated to TEXT capacity) on `job.failed`
 - `last_synced_at` set to `gmdate('Y-m-d H:i:s')` on every successful handle
 
-Unknown payload statuses (e.g. an unannounced upstream addition) SHALL be mapped to `pending` and logged at
-WARNING level with the unknown value, instead of throwing. The handler MUST continue to return success
-(ACK 200) so the webhook delivery is not retried indefinitely.
+Unknown payload `job.status` values SHALL map to `pending` and log at WARNING, not throw; the handler MUST still ACK 200.
 
 #### Scenario: job.completed updates an existing pending row to completed
+- **GIVEN** a `ps_qamera_packshot_job` row with `qamera_job_id='j1'`, `status='pending'`
+- **WHEN** a verified `job.completed` arrives with `payload.job.id='j1'` and `payload.outputs[0].url='https://…'`
+- **THEN** the row's `status='completed'`, `output_url` is populated from `outputs[0].url`, `last_synced_at` is set, `last_error_message` stays NULL
 
-- **GIVEN** a `ps_qamera_packshot_job` row exists with `qamera_job_id='j1'`, `status='pending'`
-- **WHEN** a verified `job.completed` delivery arrives with `payload.job_id='j1'`,
-  `payload.output_url='https://...'`, `payload.output_url_expires_at='2026-06-01T00:00:00Z'`
-- **THEN** the row's `status` is `'completed'`, `output_url` and `output_url_expires_at` are populated,
-  `last_synced_at` is set, `last_error_message` is left NULL
-
-#### Scenario: job.failed records error message and flips status
-
-- **GIVEN** a row exists with `status='pending'`
-- **WHEN** `job.failed` arrives with `payload.error.message='quota exceeded'`
-- **THEN** the row's `status` is `'failed'` and `last_error_message='quota exceeded'`
+#### Scenario: job.failed records error message from job.error and flips status
+- **GIVEN** a row with `status='pending'`
+- **WHEN** `job.failed` arrives with `payload.job.error.message='quota exceeded'`
+- **THEN** the row's `status='failed'` and `last_error_message='quota exceeded'`
 
 #### Scenario: Webhook arrives before submitter persisted (race condition)
-
 - **GIVEN** no row exists for `qamera_job_id='j1'`
-- **AND** the payload carries `payload.packshot_external_ref='ps:1:42:packshot:<uuid>'` and parseable
-  `external_ref='ps:1:42'`
+- **AND** the payload carries `payload.job.product_ref='ps:1:42'` and `payload.job.order_id='ord-1'`
 - **WHEN** the handler runs
-- **THEN** a new `ps_qamera_packshot_job` row is inserted with `qamera_job_id='j1'`, FK resolved by
-  looking up `(id_shop=1, id_product=42)` in `ps_qamera_product_link`, status set per the event type
-- **AND** the handler emits a log entry at INFO level noting `pre_submit_webhook_upsert`
+- **THEN** a new `ps_qamera_packshot_job` row is inserted with `qamera_job_id='j1'`, FK resolved by looking up `(id_shop=1, id_product=42)` in `ps_qamera_product_link`, status per the event
+- **AND** the handler emits an INFO log noting `pre_submit_webhook_upsert`
 
 #### Scenario: Unknown payload status is mapped to pending with a warning
+- **GIVEN** a `job.*` payload carries `job.status='paused'`
+- **THEN** the row's `status='pending'`, a WARNING records the unknown value, and the handler ACKs 200
 
-- **GIVEN** a `job.*` payload carries an unrecognised `status='paused'`
-- **WHEN** the handler updates the row
-- **THEN** the row's `status` is `'pending'`
-- **AND** a WARNING-level log entry records the unknown status value
-- **AND** the handler returns success (200 ACK)
+### Requirement: Inbound webhook envelope matches the server wire contract
+
+The module SHALL parse inbound deliveries against the actual server wire body and headers, NOT a wrapper envelope. The server posts (per `webhook-protocol.mdoc` / OpenAPI `WebhookPayload` / dispatcher `JSON.stringify(row.payload)`):
+
+```json
+{ "event": "job.completed",
+  "delivered_at": "2026-05-09T08:00:00.000Z",
+  "job": { "id":"…", "status":"completed", "job_type":"photo_shoot", "order_id":"…",
+           "completed_at":"…", "error": null, "product_ref":"ps:1:42",
+           "packshot_asset_id":"…", "product_label":"…", "voting":null, "voting_at":null },
+  "outputs": [ { "url":"https://…", "type":"image/png", "width":1024, "height":1024 } ],
+  "external_metadata": {…}, "callback_url":"…" }
+```
+
+with headers `X-Qamera-Signature: t=<unix>,v1=<hex>[,v1=<hex>]` and `X-Qamera-Request-Id: <delivery-uuid>`. There is NO top-level `delivery_id`, `event_type`, `installation_id`, or `payload` wrapper in the body. The `WebhookEvent` handed to the dispatcher SHALL carry: `eventType` = body `event`; `deliveryId` = `X-Qamera-Request-Id` header; `installationId` = null (absent from the contract); `payload` = the entire decoded body (so handlers read `payload['job']` and `payload['outputs']`).
+
+#### Scenario: Real wire body decodes into a WebhookEvent
+- **WHEN** a signature-valid `POST` arrives with the body above and `X-Qamera-Request-Id: D1`
+- **THEN** the module SHALL build a `WebhookEvent` with `eventType='job.completed'`, `deliveryId='D1'`, `installationId=null`, and `payload` equal to the whole decoded object (including the nested `job` and `outputs`)
+
+#### Scenario: Body with a legacy wrapper shape is not specially handled
+- **WHEN** a body carries a top-level `event_type`/`delivery_id`/`payload` wrapper (the old invented shape)
+- **THEN** the module SHALL read `event` (absent → 400 malformed event) and SHALL NOT treat the wrapper as authoritative — the wire contract is the nested `{event, job, outputs}` shape only
+

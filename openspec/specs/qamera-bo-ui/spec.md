@@ -11,8 +11,8 @@ of `ps_qamera_product_link` rows joined with `ps_product_lang` for the localised
 SHALL include: checkbox (bulk-select), thumbnail, product name, sync status, **analysis status badge**,
 last_synced_at, per-row "Generate" action button, per-row "Refresh analysis" action button.
 
-Rows whose `qamera_image_id IS NULL` SHALL render with the "Generate" action disabled and a hover hint
-"Sync this product first". Rows whose `qamera_image_id IS NOT NULL` but whose `analysis_status` is NOT
+Rows whose `qamera_asset_id IS NULL` SHALL render with the "Generate" action disabled and a hover hint
+"Sync this product first". Rows whose `qamera_asset_id IS NOT NULL` but whose `analysis_status` is NOT
 `described` (incl. NULL / `pending` / `processing` / `error`) SHALL render with the "Generate" action
 disabled and a hover hint matching the current analysis state (`"Waiting for image analysis…"` for
 `pending` / NULL, `"Image is being analysed…"` for `processing`, `"Image analysis failed — re-sync product"`
@@ -25,20 +25,20 @@ when only one reason contributes, the flash SHALL drop the parenthetical breakdo
 
 #### Scenario: Synced and analysed row shows enabled Generate button
 
-- **GIVEN** a `ps_qamera_product_link` row with non-NULL `qamera_image_id`, `status='registered'`, and `analysis_status='described'`
+- **GIVEN** a `ps_qamera_product_link` row with non-NULL `qamera_asset_id`, `status='registered'`, and `analysis_status='described'`
 - **WHEN** the grid renders
 - **THEN** the row's "Generate" button is enabled and links to the generate form pre-seeded with this product
 
 #### Scenario: Unsynced row shows disabled Generate button with hint
 
-- **GIVEN** a row with `qamera_image_id IS NULL`
+- **GIVEN** a row with `qamera_asset_id IS NULL`
 - **WHEN** the grid renders
 - **THEN** the "Generate" button is disabled
 - **AND** the row carries an accessible title attribute "Sync this product first"
 
 #### Scenario: Synced but not-described row disables Generate with analysis-specific hint
 
-- **GIVEN** a row with non-NULL `qamera_image_id` and `analysis_status='processing'`
+- **GIVEN** a row with non-NULL `qamera_asset_id` and `analysis_status='processing'`
 - **WHEN** the grid renders
 - **THEN** the "Generate" button is disabled
 - **AND** the row carries an accessible title attribute "Image is being analysed…"
