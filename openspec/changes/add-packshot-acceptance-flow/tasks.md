@@ -30,8 +30,8 @@
 
 ## 5. Vote + gate (packshot-acceptance)
 
-- [ ] 5.1 Vote service: accept/reject → `acceptJob`/`rejectJob`, update local `voting`/`voting_at` on 2xx; leave pending on `ApiException`.
-- [ ] 5.2 422 `packshot_not_approved` handling: detect via `ErrorEnvelope.code`, flash `messageFor(locale)` + "accept a packshot first".
+- [x] 5.1 `PackshotVoteService::accept/reject` — calls `acceptJob`/`rejectJob` FIRST, flips local `voting`/`voting_at` ONLY on 2xx; an `ApiException` (e.g. 409) propagates before the local write so the row stays `pending`. Wired in services.yml.
+- [x] 5.2 `PhotoShootSubmitErrorClassifier` (pure) → `PhotoShootSubmitError` discriminator: `packshot_not_approved`→`KIND_NOT_APPROVED`, `invalid_input`→`KIND_GATE_DISABLED` (flag-OFF cutover signal), else→`KIND_OTHER`; carries the server's `messageFor(locale)`. Controller (task 6) composes the localized flash. (Vote+classifier 7/7; full unit 396/396; PHPCS clean.)
 
 ## 6. BO UI (qamera-bo-ui)
 

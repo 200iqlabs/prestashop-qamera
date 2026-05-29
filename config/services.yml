@@ -160,6 +160,16 @@ services:
       $db: '@qameraai.db'
       $tablePrefix: !php/const _DB_PREFIX_
 
+  # Phase 4.4 — accept/reject vote service. API call first, local voting
+  # flip only on 2xx. Deps are all services; wired explicitly so the BO
+  # vote controller can fetch it from the container by id.
+  QameraAi\Module\Packshot\Acceptance\PackshotVoteService:
+    public: true
+    arguments:
+      $apiClient: '@QameraAi\Module\Api\QameraApiClient'
+      $repository: '@QameraAi\Module\Packshot\Acceptance\PackshotReviewRepository'
+      $logger: '@QameraAi\Module\Sync\PrestaShopLoggerWrapper'
+
   QameraAi\Module\Packshot\SyncedProductLinkLookup:
     public: true
     arguments:
