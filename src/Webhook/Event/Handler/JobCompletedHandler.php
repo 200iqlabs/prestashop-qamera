@@ -6,35 +6,32 @@ namespace QameraAi\Module\Webhook\Event\Handler;
 
 use QameraAi\Module\Packshot\PackshotJobUpdater;
 use QameraAi\Module\Webhook\Event\EventHandlerInterface;
-use QameraAi\Module\Webhook\Event\ExternalRef;
-use QameraAi\Module\Webhook\Event\ExternalRefParser;
-use QameraAi\Module\Webhook\Event\InvalidExternalRefException;
-use QameraAi\Module\Webhook\Event\PackshotLinkUpdater;
+use QameraAi\Module\Webhook\Event\InvalidProductRefException;
 use QameraAi\Module\Webhook\Event\ProductLinkHeartbeat;
+use QameraAi\Module\Webhook\Event\ProductRefParser;
 use QameraAi\Module\Webhook\Event\WebhookEvent;
 use QameraAi\Module\Webhook\WebhookLogger;
 
 /**
  * Handles `job.completed` deliveries.
  *
- * Side effects:
+ * Reads the real wire body: `payload.job.product_ref` (`ps:shop:product`),
+ * `payload.job.id`, `payload.outputs[0].url`. Side effects:
  *   1. Refreshes `ps_qamera_product_link.last_synced_at` for the parsed
  *      `(id_shop, id_product)` (heartbeat — never touches `status`).
- *   2. UPSERTs a `ps_qamera_packshot_link` row keyed on
- *      `qamera_packshot_id` with `status='ready'`,
- *      `last_error_message=NULL`.
+ *   2. UPSERTs the `ps_qamera_packshot_job` mirror keyed on `qamera_job_id`
+ *      with `status='completed'` and the output URL.
  *
  * Defensive guards (all terminate quietly with a log line — `200` ACK):
- *   - missing `external_ref` or `packshot_id`         → ERROR
- *   - malformed `external_ref`                        → WARNING
- *   - product not registered for this shop            → WARNING
+ *   - missing `job.product_ref` or `job.id`           → ERROR
+ *   - malformed `job.product_ref`                      → WARNING
+ *   - product not registered for this shop             → WARNING
  *
  * DB errors throw `QameraDbException`, which the dispatcher catches.
  */
 final class JobCompletedHandler implements EventHandlerInterface
 {
     public function __construct(
-        private readonly PackshotLinkUpdater $packshotUpdater,
         private readonly ProductLinkHeartbeat $productHeartbeat,
         private readonly WebhookLogger $logger,
         private readonly PackshotJobUpdater $packshotJobUpdater
@@ -43,73 +40,48 @@ final class JobCompletedHandler implements EventHandlerInterface
 
     public function handle(WebhookEvent $event): void
     {
-        $externalRefRaw = PayloadExtractor::string($event->payload, 'external_ref');
-        if ($externalRefRaw === null) {
-            $this->logMissing($event, 'external_ref');
+        $productRefRaw = PayloadExtractor::jobString($event->payload, 'product_ref');
+        if ($productRefRaw === null) {
+            $this->logMissing($event, 'job.product_ref');
             return;
         }
 
         try {
-            $externalRef = ExternalRefParser::parse($externalRefRaw);
-        } catch (InvalidExternalRefException $e) {
-            $this->logger->warning('malformed_external_ref', [
+            $productRef = ProductRefParser::parse($productRefRaw);
+        } catch (InvalidProductRefException $e) {
+            $this->logger->warning('malformed_product_ref', [
                 'delivery_id' => $event->deliveryId,
                 'event_type' => $event->eventType,
-                'external_ref' => $externalRefRaw,
+                'product_ref' => $productRefRaw,
             ]);
             return;
         }
 
-        $packshotId = PayloadExtractor::string($event->payload, 'packshot_id');
-        if ($packshotId === null) {
-            $this->logMissing($event, 'packshot_id');
+        $jobId = PayloadExtractor::jobString($event->payload, 'id');
+        if ($jobId === null) {
+            $this->logMissing($event, 'job.id');
             return;
         }
 
-        if (!$this->productHeartbeat->touch($externalRef->shopId, $externalRef->productId)) {
+        if (!$this->productHeartbeat->touch($productRef->shopId, $productRef->productId)) {
             $this->logger->warning('unknown_product_link', [
                 'delivery_id' => $event->deliveryId,
                 'event_type' => $event->eventType,
-                'external_ref' => $externalRefRaw,
+                'product_ref' => $productRefRaw,
             ]);
             return;
         }
 
-        $this->packshotUpdater->upsertByPackshotId([
-            'qamera_packshot_id' => $packshotId,
-            'qamera_packshot_ref' => self::packshotRef($externalRef, $packshotId),
-            'qamera_job_id' => PayloadExtractor::nullableString($event->payload, 'job_id'),
-            'id_shop' => $externalRef->shopId,
-            'id_product' => $externalRef->productId,
-            'status' => 'ready',
-            'last_error_message' => null,
-            'now' => gmdate('Y-m-d H:i:s'),
-        ]);
-
-        // Phase 4.3 — also mirror this delivery into ps_qamera_packshot_job
-        // (the per-job mirror used by the BO jobs-history grid). Distinct
-        // from the per-packshot ps_qamera_packshot_link upserted above:
-        // one packshot can have N jobs (imagesCount > 1).
-        $jobId = PayloadExtractor::string($event->payload, 'job_id');
-        if ($jobId !== null) {
-            $this->packshotJobUpdater->upsert(
-                eventType: $event->eventType,
-                deliveryId: $event->deliveryId,
-                qameraJobId: $jobId,
-                outputUrl: PayloadExtractor::nullableHttpUrl($event->payload, 'output_url'),
-                outputUrlExpiresAt: PayloadExtractor::nullableString($event->payload, 'output_url_expires_at'),
-                lastErrorMessage: null,
-                payloadExternalRef: PayloadExtractor::nullableString($event->payload, 'packshot_external_ref'),
-                payloadOrderId: PayloadExtractor::nullableString($event->payload, 'order_id'),
-            );
-        }
-    }
-
-    public static function packshotRef(ExternalRef $ref, string $packshotId): string
-    {
-        // Deterministic, <=200 chars: shopId+productId are tiny ints,
-        // packshot_id is at most CHAR(36) UUID. Total well under cap.
-        return sprintf('ps:%d:%d:packshot:%s', $ref->shopId, $ref->productId, $packshotId);
+        $this->packshotJobUpdater->upsert(
+            eventType: $event->eventType,
+            deliveryId: $event->deliveryId,
+            qameraJobId: $jobId,
+            outputUrl: PayloadExtractor::firstOutputUrl($event->payload),
+            outputUrlExpiresAt: null,
+            lastErrorMessage: null,
+            productRef: $productRefRaw,
+            orderId: PayloadExtractor::jobString($event->payload, 'order_id'),
+        );
     }
 
     private function logMissing(WebhookEvent $event, string $field): void

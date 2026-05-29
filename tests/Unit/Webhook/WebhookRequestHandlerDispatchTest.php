@@ -119,7 +119,7 @@ final class WebhookRequestHandlerDispatchTest extends TestCase
             $dispatcher
         );
 
-        $body = WebhookFixtures::body(['event_type' => 'job.future_kind']);
+        $body = WebhookFixtures::body(['event' => 'job.future_kind']);
         $headers = WebhookFixtures::headers(self::NOW, $body);
         $resp = $controller->handle('POST', $body, $headers, WebhookFixtures::SECRET);
 
@@ -139,20 +139,20 @@ final class WebhookRequestHandlerDispatchTest extends TestCase
         self::assertCount(0, $this->jobCompletedHandler->received);
     }
 
-    public function testDispatcherReceivesDecodedPayloadFromBody(): void
+    public function testDispatcherReceivesWholeDecodedBodyAsPayload(): void
     {
-        $body = WebhookFixtures::body([
-            'event_type' => 'job.completed',
-            'installation_id' => 'inst-xyz',
-            'payload' => ['external_ref' => 'ps:1:42:image:7', 'packshot_id' => 'pid'],
-        ]);
+        // installation_id is not part of the contract, but if present the
+        // handler surfaces it; payload is the ENTIRE decoded wire body so
+        // handlers can read job.* / outputs[].
+        $body = WebhookFixtures::body(['installation_id' => 'inst-xyz']);
         $headers = WebhookFixtures::headers(self::NOW, $body);
 
         $this->handler->handle('POST', $body, $headers, WebhookFixtures::SECRET);
 
         $received = $this->jobCompletedHandler->received[0];
         self::assertSame('inst-xyz', $received->installationId);
-        self::assertSame('ps:1:42:image:7', $received->payload['external_ref']);
-        self::assertSame('pid', $received->payload['packshot_id']);
+        self::assertSame('job.completed', $received->payload['event']);
+        self::assertSame('ps:1:42', $received->payload['job']['product_ref']);
+        self::assertSame('https://storage.example/out.png', $received->payload['outputs'][0]['url']);
     }
 }

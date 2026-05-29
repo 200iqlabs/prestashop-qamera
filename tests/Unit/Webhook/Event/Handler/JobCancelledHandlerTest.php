@@ -6,7 +6,6 @@ namespace QameraAi\Module\Tests\Unit\Webhook\Event\Handler;
 
 use PHPUnit\Framework\TestCase;
 use QameraAi\Module\Tests\Support\FakePackshotJobUpdater;
-use QameraAi\Module\Tests\Support\FakePackshotLinkUpdater;
 use QameraAi\Module\Tests\Support\FakeProductLinkHeartbeat;
 use QameraAi\Module\Tests\Support\SpyLogger;
 use QameraAi\Module\Webhook\Event\Handler\JobCancelledHandler;
@@ -14,7 +13,6 @@ use QameraAi\Module\Webhook\Event\WebhookEvent;
 
 final class JobCancelledHandlerTest extends TestCase
 {
-    private FakePackshotLinkUpdater $packshot;
     private FakeProductLinkHeartbeat $heartbeat;
     private SpyLogger $logger;
     private FakePackshotJobUpdater $packshotJob;
@@ -23,54 +21,47 @@ final class JobCancelledHandlerTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->packshot = new FakePackshotLinkUpdater();
         $this->heartbeat = new FakeProductLinkHeartbeat();
         $this->logger = new SpyLogger();
         $this->packshotJob = new FakePackshotJobUpdater();
-        $this->handler = new JobCancelledHandler(
-            $this->packshot,
-            $this->heartbeat,
-            $this->logger,
-            $this->packshotJob
-        );
+        $this->handler = new JobCancelledHandler($this->heartbeat, $this->logger, $this->packshotJob);
     }
 
-    public function testCancelledEventOverwritesReadyRow(): void
+    public function testCancelledEventMirrorsCancelledStatus(): void
     {
         $this->heartbeat->nextReturns = true;
-        // Simulate an existing row → update path.
-        $this->packshot->nextReturnsInsert = false;
 
         $this->handler->handle($this->event([
-            'external_ref' => 'ps:1:42:image:7',
-            'packshot_id' => 'packshot-uuid',
+            'job' => ['product_ref' => 'ps:1:42', 'id' => 'job-uuid'],
         ]));
 
-        $row = $this->packshot->upserts[0];
-        self::assertSame('cancelled', $row['status']);
-        self::assertNull($row['last_error_message']);
+        self::assertSame([['idShop' => 1, 'idProduct' => 42]], $this->heartbeat->touches);
+        $u = $this->packshotJob->upserts[0];
+        self::assertSame('job.cancelled', $u['event_type']);
+        self::assertSame('job-uuid', $u['qamera_job_id']);
+        self::assertNull($u['output_url']);
+        self::assertNull($u['last_error_message']);
     }
 
-    public function testCancelledEventForUnknownPackshotInsertsCancelledRow(): void
+    public function testMissingJobIdLogsError(): void
     {
-        $this->heartbeat->nextReturns = true;
-        // No existing row → insert path.
-        $this->packshot->nextReturnsInsert = true;
+        $this->handler->handle($this->event(['job' => ['product_ref' => 'ps:1:42']]));
+
+        $errors = $this->logger->entriesAtLevel('error');
+        self::assertSame('payload_missing_field', $errors[0]['message']);
+        self::assertSame('job.id', $errors[0]['context']['field']);
+    }
+
+    public function testUnknownProductSkipsMirror(): void
+    {
+        $this->heartbeat->nextReturns = false;
 
         $this->handler->handle($this->event([
-            'external_ref' => 'ps:1:42:image:7',
-            'packshot_id' => 'fresh-uuid',
+            'job' => ['product_ref' => 'ps:99:42', 'id' => 'job-uuid'],
         ]));
 
-        self::assertCount(1, $this->packshot->upserts);
-        self::assertSame('cancelled', $this->packshot->upserts[0]['status']);
-    }
-
-    public function testMissingPackshotIdLogsError(): void
-    {
-        $this->handler->handle($this->event(['external_ref' => 'ps:1:42:image:7']));
-
-        self::assertNotEmpty($this->logger->entriesAtLevel('error'));
+        self::assertCount(0, $this->packshotJob->upserts);
+        self::assertNotEmpty($this->logger->entriesAtLevel('warning'));
     }
 
     /**

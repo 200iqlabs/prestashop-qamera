@@ -6,7 +6,6 @@ namespace QameraAi\Module\Tests\Unit\Webhook\Event\Handler;
 
 use PHPUnit\Framework\TestCase;
 use QameraAi\Module\Tests\Support\FakePackshotJobUpdater;
-use QameraAi\Module\Tests\Support\FakePackshotLinkUpdater;
 use QameraAi\Module\Tests\Support\FakeProductLinkHeartbeat;
 use QameraAi\Module\Tests\Support\SpyLogger;
 use QameraAi\Module\Webhook\Event\Handler\JobFailedHandler;
@@ -14,7 +13,6 @@ use QameraAi\Module\Webhook\Event\WebhookEvent;
 
 final class JobFailedHandlerTest extends TestCase
 {
-    private FakePackshotLinkUpdater $packshot;
     private FakeProductLinkHeartbeat $heartbeat;
     private SpyLogger $logger;
     private FakePackshotJobUpdater $packshotJob;
@@ -23,61 +21,44 @@ final class JobFailedHandlerTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->packshot = new FakePackshotLinkUpdater();
         $this->heartbeat = new FakeProductLinkHeartbeat();
         $this->logger = new SpyLogger();
         $this->packshotJob = new FakePackshotJobUpdater();
-        $this->handler = new JobFailedHandler(
-            $this->packshot,
-            $this->heartbeat,
-            $this->logger,
-            $this->packshotJob
-        );
+        $this->handler = new JobFailedHandler($this->heartbeat, $this->logger, $this->packshotJob);
     }
 
-    public function testFailedEventPopulatesLastErrorMessageAndFlipsStatus(): void
+    public function testFailedEventMirrorsErrorMessageFromJobError(): void
     {
         $this->heartbeat->nextReturns = true;
 
         $this->handler->handle($this->event([
-            'external_ref' => 'ps:1:42:image:7',
-            'packshot_id' => 'packshot-uuid',
-            'job_id' => 'job-uuid',
-            'error_message' => 'upstream_validation_failed',
+            'job' => [
+                'product_ref' => 'ps:1:42',
+                'id' => 'job-uuid',
+                'error' => [
+                    'code' => 'generation_failed',
+                    'message_i18n' => ['en' => 'No source upload found'],
+                    'retryable' => false,
+                ],
+            ],
         ]));
 
-        self::assertCount(1, $this->packshot->upserts);
-        $row = $this->packshot->upserts[0];
-        self::assertSame('failed', $row['status']);
-        self::assertSame('upstream_validation_failed', $row['last_error_message']);
+        self::assertSame([['idShop' => 1, 'idProduct' => 42]], $this->heartbeat->touches);
+        $u = $this->packshotJob->upserts[0];
+        self::assertSame('job.failed', $u['event_type']);
+        self::assertSame('No source upload found', $u['last_error_message']);
+        self::assertNull($u['output_url']);
     }
 
-    public function testOversizedErrorMessageIsTruncatedToTextCapacity(): void
-    {
-        $this->heartbeat->nextReturns = true;
-        $oversize = str_repeat('A', 70000);
-
-        $this->handler->handle($this->event([
-            'external_ref' => 'ps:1:42:image:7',
-            'packshot_id' => 'packshot-uuid',
-            'error_message' => $oversize,
-        ]));
-
-        $row = $this->packshot->upserts[0];
-        self::assertLessThanOrEqual(65535, strlen((string) $row['last_error_message']));
-    }
-
-    public function testMissingErrorMessagePersistsAsNull(): void
+    public function testFailedEventWithNoErrorObjectMirrorsNullMessage(): void
     {
         $this->heartbeat->nextReturns = true;
 
         $this->handler->handle($this->event([
-            'external_ref' => 'ps:1:42:image:7',
-            'packshot_id' => 'packshot-uuid',
-            // error_message omitted
+            'job' => ['product_ref' => 'ps:1:42', 'id' => 'job-uuid', 'error' => null],
         ]));
 
-        self::assertNull($this->packshot->upserts[0]['last_error_message']);
+        self::assertNull($this->packshotJob->upserts[0]['last_error_message']);
     }
 
     public function testProductHeartbeatStillBumpedOnFailure(): void
@@ -85,29 +66,21 @@ final class JobFailedHandlerTest extends TestCase
         $this->heartbeat->nextReturns = true;
 
         $this->handler->handle($this->event([
-            'external_ref' => 'ps:1:42:image:7',
-            'packshot_id' => 'packshot-uuid',
-            'error_message' => 'boom',
+            'job' => ['product_ref' => 'ps:1:42', 'id' => 'job-uuid'],
         ]));
 
         self::assertCount(1, $this->heartbeat->touches);
-        // The handler must never write product_link.status — that's owned
-        // by Phase 3. The heartbeat fake records only the touch call; the
-        // unit test for ProductLinkHeartbeat itself proves the UPDATE
-        // statement does not include `status` in its SET clause.
     }
 
-    public function testUnknownProductSkipsUpsert(): void
+    public function testUnknownProductSkipsMirror(): void
     {
         $this->heartbeat->nextReturns = false;
 
         $this->handler->handle($this->event([
-            'external_ref' => 'ps:99:42:image:7',
-            'packshot_id' => 'packshot-uuid',
-            'error_message' => 'doesnt-matter',
+            'job' => ['product_ref' => 'ps:99:42', 'id' => 'job-uuid'],
         ]));
 
-        self::assertCount(0, $this->packshot->upserts);
+        self::assertCount(0, $this->packshotJob->upserts);
         self::assertNotEmpty($this->logger->entriesAtLevel('warning'));
     }
 

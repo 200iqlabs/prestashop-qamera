@@ -47,8 +47,7 @@ use QameraAi\Module\Packshot\SyncedProductLink;
  * a usable badge from the last-known-good state.
  *
  * Not `final` so unit tests can subclass the now() / Db / API client
- * dependencies; same precedent as {@see PrestaShopLoggerWrapper} and
- * {@see \QameraAi\Module\Webhook\Event\PackshotLinkUpdater}.
+ * dependencies; same precedent as {@see PrestaShopLoggerWrapper}.
  */
 class AnalysisStatusRefresher
 {

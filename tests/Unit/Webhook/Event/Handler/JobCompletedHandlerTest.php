@@ -6,7 +6,6 @@ namespace QameraAi\Module\Tests\Unit\Webhook\Event\Handler;
 
 use PHPUnit\Framework\TestCase;
 use QameraAi\Module\Tests\Support\FakePackshotJobUpdater;
-use QameraAi\Module\Tests\Support\FakePackshotLinkUpdater;
 use QameraAi\Module\Tests\Support\FakeProductLinkHeartbeat;
 use QameraAi\Module\Tests\Support\SpyLogger;
 use QameraAi\Module\Webhook\Event\Handler\JobCompletedHandler;
@@ -15,7 +14,6 @@ use QameraAi\Module\Webhook\Event\WebhookEvent;
 
 final class JobCompletedHandlerTest extends TestCase
 {
-    private FakePackshotLinkUpdater $packshot;
     private FakeProductLinkHeartbeat $heartbeat;
     private SpyLogger $logger;
     private FakePackshotJobUpdater $packshotJob;
@@ -24,131 +22,86 @@ final class JobCompletedHandlerTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->packshot = new FakePackshotLinkUpdater();
         $this->heartbeat = new FakeProductLinkHeartbeat();
         $this->logger = new SpyLogger();
         $this->packshotJob = new FakePackshotJobUpdater();
-        $this->handler = new JobCompletedHandler(
-            $this->packshot,
-            $this->heartbeat,
-            $this->logger,
-            $this->packshotJob
-        );
+        $this->handler = new JobCompletedHandler($this->heartbeat, $this->logger, $this->packshotJob);
     }
 
-    public function testHappyPathInsertsPackshotAndBumpsHeartbeat(): void
+    public function testHappyPathBumpsHeartbeatAndMirrorsJob(): void
     {
         $this->heartbeat->nextReturns = true;
 
         $this->handler->handle($this->event([
-            'external_ref' => 'ps:1:42:image:7',
-            'packshot_id' => 'packshot-uuid',
-            'job_id' => 'job-uuid',
+            'job' => ['product_ref' => 'ps:1:42', 'id' => 'job-uuid', 'order_id' => 'ord-1'],
+            'outputs' => [['url' => 'https://storage.example/o.png']],
         ]));
 
-        self::assertCount(1, $this->heartbeat->touches);
-        self::assertSame(['idShop' => 1, 'idProduct' => 42], $this->heartbeat->touches[0]);
-        self::assertCount(1, $this->packshot->upserts);
-        $row = $this->packshot->upserts[0];
-        self::assertSame('packshot-uuid', $row['qamera_packshot_id']);
-        self::assertSame('job-uuid', $row['qamera_job_id']);
-        self::assertSame('ready', $row['status']);
-        self::assertSame(1, $row['id_shop']);
-        self::assertSame(42, $row['id_product']);
-        self::assertNull($row['last_error_message']);
-        self::assertSame('ps:1:42:packshot:packshot-uuid', $row['qamera_packshot_ref']);
-        self::assertLessThanOrEqual(200, strlen($row['qamera_packshot_ref']));
+        self::assertSame([['idShop' => 1, 'idProduct' => 42]], $this->heartbeat->touches);
+        self::assertCount(1, $this->packshotJob->upserts);
+        $u = $this->packshotJob->upserts[0];
+        self::assertSame('job.completed', $u['event_type']);
+        self::assertSame('job-uuid', $u['qamera_job_id']);
+        self::assertSame('https://storage.example/o.png', $u['output_url']);
+        self::assertSame('ps:1:42', $u['product_ref']);
+        self::assertSame('ord-1', $u['order_id']);
+        self::assertNull($u['last_error_message']);
     }
 
-    public function testIdempotentRedeliveryStillUpserts(): void
-    {
-        $this->heartbeat->nextReturns = true;
-        $this->packshot->nextReturnsInsert = false;
-
-        $this->handler->handle($this->event([
-            'external_ref' => 'ps:1:42:image:7',
-            'packshot_id' => 'packshot-uuid',
-        ]));
-
-        // The upsert was still called — re-delivery semantics are owned by
-        // the unique index inside PackshotLinkUpdater::upsertByPackshotId().
-        self::assertCount(1, $this->packshot->upserts);
-        self::assertEmpty($this->logger->entriesAtLevel('error'));
-    }
-
-    public function testUnknownProductLogsWarningAndSkipsUpsert(): void
+    public function testUnknownProductLogsWarningAndSkipsMirror(): void
     {
         $this->heartbeat->nextReturns = false;
 
         $this->handler->handle($this->event([
-            'external_ref' => 'ps:99:42:image:7',
-            'packshot_id' => 'packshot-uuid',
+            'job' => ['product_ref' => 'ps:99:42', 'id' => 'job-uuid'],
         ]));
 
-        self::assertCount(0, $this->packshot->upserts);
+        self::assertCount(0, $this->packshotJob->upserts);
         $warnings = $this->logger->entriesAtLevel('warning');
-        self::assertNotEmpty($warnings);
         self::assertSame('unknown_product_link', $warnings[0]['message']);
-        self::assertSame('ps:99:42:image:7', $warnings[0]['context']['external_ref']);
+        self::assertSame('ps:99:42', $warnings[0]['context']['product_ref']);
     }
 
-    public function testMalformedExternalRefLogsWarningAndSkips(): void
+    public function testMalformedProductRefLogsWarningAndSkips(): void
     {
         $this->handler->handle($this->event([
-            'external_ref' => 'not-a-ref',
-            'packshot_id' => 'packshot-uuid',
+            'job' => ['product_ref' => 'not-a-ref', 'id' => 'job-uuid'],
         ]));
 
         self::assertCount(0, $this->heartbeat->touches);
-        self::assertCount(0, $this->packshot->upserts);
-        $warnings = $this->logger->entriesAtLevel('warning');
-        self::assertNotEmpty($warnings);
-        self::assertSame('malformed_external_ref', $warnings[0]['message']);
+        self::assertCount(0, $this->packshotJob->upserts);
+        self::assertSame('malformed_product_ref', $this->logger->entriesAtLevel('warning')[0]['message']);
     }
 
-    public function testMissingExternalRefLogsErrorAndSkips(): void
+    public function testMissingProductRefLogsErrorAndSkips(): void
     {
-        $this->handler->handle($this->event(['packshot_id' => 'packshot-uuid']));
+        $this->handler->handle($this->event(['job' => ['id' => 'job-uuid']]));
 
         $errors = $this->logger->entriesAtLevel('error');
-        self::assertNotEmpty($errors);
         self::assertSame('payload_missing_field', $errors[0]['message']);
-        self::assertSame('external_ref', $errors[0]['context']['field']);
-        self::assertCount(0, $this->packshot->upserts);
+        self::assertSame('job.product_ref', $errors[0]['context']['field']);
+        self::assertCount(0, $this->packshotJob->upserts);
     }
 
-    public function testMissingPackshotIdLogsErrorAndSkips(): void
+    public function testMissingJobIdLogsErrorAndSkips(): void
     {
-        $this->handler->handle($this->event(['external_ref' => 'ps:1:42:image:7']));
+        $this->handler->handle($this->event(['job' => ['product_ref' => 'ps:1:42']]));
 
         $errors = $this->logger->entriesAtLevel('error');
-        self::assertNotEmpty($errors);
         self::assertSame('payload_missing_field', $errors[0]['message']);
-        self::assertSame('packshot_id', $errors[0]['context']['field']);
+        self::assertSame('job.id', $errors[0]['context']['field']);
+        self::assertCount(0, $this->heartbeat->touches);
     }
 
-    public function testDbExceptionDuringUpsertPropagatesToDispatcher(): void
+    public function testDbExceptionDuringMirrorPropagatesToDispatcher(): void
     {
         $this->heartbeat->nextReturns = true;
-        $this->packshot->throwNext = new QameraDbException('boom');
+        $this->packshotJob->throwOnNext = new QameraDbException('boom');
 
         $this->expectException(QameraDbException::class);
         $this->handler->handle($this->event([
-            'external_ref' => 'ps:1:42:image:7',
-            'packshot_id' => 'packshot-uuid',
+            'job' => ['product_ref' => 'ps:1:42', 'id' => 'job-uuid'],
         ]));
-    }
-
-    public function testNullableJobIdSurvivesAsNull(): void
-    {
-        $this->heartbeat->nextReturns = true;
-        $this->handler->handle($this->event([
-            'external_ref' => 'ps:1:42:image:7',
-            'packshot_id' => 'packshot-uuid',
-            // job_id intentionally absent
-        ]));
-        self::assertCount(1, $this->packshot->upserts);
-        self::assertNull($this->packshot->upserts[0]['qamera_job_id']);
     }
 
     /**
@@ -156,6 +109,6 @@ final class JobCompletedHandlerTest extends TestCase
      */
     private function event(array $payload): WebhookEvent
     {
-        return new WebhookEvent('job.completed', 'D1', 'inst-1', $payload);
+        return new WebhookEvent('job.completed', 'D1', null, $payload);
     }
 }

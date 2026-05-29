@@ -10,8 +10,10 @@ final class RejectionReason
     public const MALFORMED_SIGNATURE = 'malformed_signature';
     public const SIGNATURE_MISMATCH = 'signature_mismatch';
     public const REPLAY_WINDOW = 'replay_window';
-    public const MISSING_DELIVERY_ID = 'missing_delivery_id';
-    public const DELIVERY_ID_MISMATCH = 'delivery_id_mismatch';
+    // The server identifies a delivery via the X-Qamera-Request-Id header
+    // (the stable webhook_deliveries.id). There is no body `delivery_id`
+    // and no X-Qamera-Delivery-Id header in the wire contract.
+    public const MISSING_REQUEST_ID = 'missing_request_id';
     public const MALFORMED_BODY = 'malformed_body';
     public const MALFORMED_EVENT_TYPE = 'malformed_event_type';
     public const EMPTY_BODY = 'empty_body';

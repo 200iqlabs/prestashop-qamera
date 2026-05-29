@@ -7,15 +7,12 @@ namespace QameraAi\Module\Tests\Unit\Webhook\Event\Handler;
 use PHPUnit\Framework\TestCase;
 use QameraAi\Module\Tests\Support\FakePackshotJobUpdater;
 use QameraAi\Module\Tests\Support\FakeProductLinkHeartbeat;
-use QameraAi\Module\Tests\Support\RecordingDb;
 use QameraAi\Module\Tests\Support\SpyLogger;
 use QameraAi\Module\Webhook\Event\Handler\JobRetriedHandler;
-use QameraAi\Module\Webhook\Event\QameraDbException;
 use QameraAi\Module\Webhook\Event\WebhookEvent;
 
 final class JobRetriedHandlerTest extends TestCase
 {
-    private RecordingDb $db;
     private FakeProductLinkHeartbeat $heartbeat;
     private SpyLogger $logger;
     private FakePackshotJobUpdater $packshotJob;
@@ -24,82 +21,49 @@ final class JobRetriedHandlerTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->db = new RecordingDb();
         $this->heartbeat = new FakeProductLinkHeartbeat();
         $this->logger = new SpyLogger();
         $this->packshotJob = new FakePackshotJobUpdater();
-        $this->handler = new JobRetriedHandler(
-            $this->db,
-            'ps_',
-            $this->heartbeat,
-            $this->logger,
-            $this->packshotJob
-        );
+        $this->handler = new JobRetriedHandler($this->heartbeat, $this->logger, $this->packshotJob);
     }
 
-    public function testRetriedEventBumpsLastSyncedAtWithoutChangingStatus(): void
+    public function testRetriedEventBumpsHeartbeatAndMirrorsInProgress(): void
     {
         $this->heartbeat->nextReturns = true;
-        $this->db->affectedRowsScript = [1];
 
         $this->handler->handle($this->event([
-            'external_ref' => 'ps:1:42:image:7',
-            'packshot_id' => 'packshot-uuid',
+            'job' => ['product_ref' => 'ps:1:42', 'id' => 'job-uuid'],
         ]));
 
-        self::assertCount(1, $this->heartbeat->touches);
-        self::assertNotEmpty($this->db->executed);
-        $sql = $this->db->lastExecuted();
-        self::assertStringContainsString('UPDATE `ps_qamera_packshot_link`', $sql);
-        self::assertStringContainsString('SET `last_synced_at`', $sql);
-        self::assertStringContainsString('`updated_at`', $sql);
-        // The packshot UPDATE must NOT touch `status` — upstream is still
-        // working, the terminal event will own the status transition.
-        self::assertStringNotContainsString('`status`', $sql);
-        // Scoped by qamera_packshot_id (UPSERT-equivalent UPDATE).
-        self::assertStringContainsString("WHERE `qamera_packshot_id` = 'packshot-uuid'", $sql);
+        self::assertSame([['idShop' => 1, 'idProduct' => 42]], $this->heartbeat->touches);
+        $u = $this->packshotJob->upserts[0];
+        // Status mapping (job.retried → in_progress) is owned by
+        // PackshotJobUpdater; the handler passes the event type through.
+        self::assertSame('job.retried', $u['event_type']);
+        self::assertSame('job-uuid', $u['qamera_job_id']);
+        self::assertNull($u['output_url']);
+        self::assertNull($u['last_error_message']);
     }
 
-    public function testRetriedForUnknownPackshotIsNoOpForPackshotTable(): void
-    {
-        $this->heartbeat->nextReturns = true;
-        // No matching row → affected_rows == 0, no error.
-        $this->db->affectedRowsScript = [0];
-
-        $this->handler->handle($this->event([
-            'external_ref' => 'ps:1:42:image:7',
-            'packshot_id' => 'never-seen-uuid',
-        ]));
-
-        // The UPDATE statement still ran (it's a no-op at MySQL level),
-        // but no error is logged and no exception propagates.
-        self::assertEmpty($this->logger->entriesAtLevel('error'));
-    }
-
-    public function testUnknownProductSkipsPackshotUpdate(): void
+    public function testUnknownProductSkipsMirror(): void
     {
         $this->heartbeat->nextReturns = false;
 
         $this->handler->handle($this->event([
-            'external_ref' => 'ps:99:42:image:7',
-            'packshot_id' => 'packshot-uuid',
+            'job' => ['product_ref' => 'ps:99:42', 'id' => 'job-uuid'],
         ]));
 
-        // The packshot UPDATE was never even attempted.
-        self::assertEmpty($this->db->executed);
+        self::assertCount(0, $this->packshotJob->upserts);
         self::assertNotEmpty($this->logger->entriesAtLevel('warning'));
     }
 
-    public function testDbFailureDuringPackshotUpdateThrows(): void
+    public function testMissingProductRefLogsError(): void
     {
-        $this->heartbeat->nextReturns = true;
-        $this->db->failNextExecute = true;
+        $this->handler->handle($this->event(['job' => ['id' => 'job-uuid']]));
 
-        $this->expectException(QameraDbException::class);
-        $this->handler->handle($this->event([
-            'external_ref' => 'ps:1:42:image:7',
-            'packshot_id' => 'packshot-uuid',
-        ]));
+        $errors = $this->logger->entriesAtLevel('error');
+        self::assertSame('payload_missing_field', $errors[0]['message']);
+        self::assertSame('job.product_ref', $errors[0]['context']['field']);
     }
 
     /**

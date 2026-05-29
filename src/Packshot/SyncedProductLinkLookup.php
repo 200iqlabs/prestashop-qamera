@@ -19,7 +19,7 @@ use QameraAi\Module\Webhook\Event\QameraDbException;
 /**
  * NOT `final` so tests can substitute an in-memory fake — see
  * `tests/Support/FakeSyncedProductLinkLookup.php`. Same pattern as
- * {@see PackshotJobUpdater} / {@see \QameraAi\Module\Webhook\Event\PackshotLinkUpdater}.
+ * {@see PackshotJobUpdater}.
  */
 class SyncedProductLinkLookup
 {

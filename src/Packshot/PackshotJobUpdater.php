@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace QameraAi\Module\Packshot;
 
-use QameraAi\Module\Webhook\Event\InvalidExternalRefException;
-use QameraAi\Module\Webhook\Event\PackshotExternalRefParser;
+use QameraAi\Module\Webhook\Event\InvalidProductRefException;
+use QameraAi\Module\Webhook\Event\ProductRefParser;
 use QameraAi\Module\Webhook\Event\QameraDbException;
 use QameraAi\Module\Webhook\WebhookLogger;
 
 /**
- * Routes a webhook delivery into a `ps_qamera_packshot_job` UPSERT.
- * Owns the payload-status → row-status mapping and the pre-submit race
- * recovery path.
+ * Routes a webhook delivery into a `ps_qamera_packshot_job` UPSERT, keyed
+ * on `qamera_job_id` (= the wire body's `job.id`). Owns the event-type →
+ * row-status mapping and the pre-submit race recovery path.
  *
- * Status mapping (from `webhook-handler` delta spec):
+ * Status mapping (from `webhook-handler` spec):
  *
  *   job.completed → completed
  *   job.failed    → failed
@@ -22,20 +22,19 @@ use QameraAi\Module\Webhook\WebhookLogger;
  *   job.retried   → in_progress
  *
  * Unknown event types are mapped to `pending` with a WARNING log line
- * (per spec: do not throw, do not break the webhook ACK).
+ * (do not throw, do not break the webhook ACK).
  *
  * Pre-submit race: when the webhook arrives before the submitter has
- * persisted the local row, the handler can pass `payloadExternalRef`
- * (the `ps:<shop>:<product>:packshot:<uuid>` echoed back by upstream).
- * We parse that, recover the FK via {@see SyncedProductLinkLookup}, and
- * insert a stub row. If the ref is missing or unparseable, we update the
- * row IF it exists (most cases) and silently no-op IF it doesn't (the
- * row's eventual submitter-side insert will carry the right data).
+ * persisted the local row, we recover the FK from the payload's
+ * `job.product_ref` (`ps:<shop>:<product>`) via {@see ProductRefParser}
+ * and {@see SyncedProductLinkLookup}, then insert a stub row. If the ref
+ * or order id is missing/unparseable, we update the row IF it exists and
+ * silently no-op IF it doesn't (the submitter's later insert carries the
+ * right data).
  */
 /**
- * NOT `final` because the existing test pattern (mirrored from
- * {@see \QameraAi\Module\Webhook\Event\PackshotLinkUpdater}) subclasses
- * for fakes — see `tests/Support/FakePackshotJobUpdater.php`.
+ * NOT `final` because the existing test pattern subclasses for fakes —
+ * see `tests/Support/FakePackshotJobUpdater.php`.
  */
 class PackshotJobUpdater
 {
@@ -65,8 +64,8 @@ class PackshotJobUpdater
         ?string $outputUrl,
         ?string $outputUrlExpiresAt,
         ?string $lastErrorMessage,
-        ?string $payloadExternalRef,
-        ?string $payloadOrderId
+        ?string $productRef,
+        ?string $orderId
     ): void {
         $status = self::STATUS_MAP[$eventType] ?? null;
         if ($status === null) {
@@ -82,11 +81,6 @@ class PackshotJobUpdater
         }
 
         if ($lastErrorMessage !== null && strlen($lastErrorMessage) > self::TEXT_CAPACITY_BYTES) {
-            // Use mb_strcut so we trim at a byte boundary that does NOT cut
-            // mid-UTF-8-sequence; the DB column is bounded by bytes (TEXT =
-            // 65535 bytes under utf8mb4), not characters. Fall back to
-            // substr only when mbstring is absent, accepting the risk of
-            // an invalid trailing sequence in that environment.
             $lastErrorMessage = function_exists('mb_strcut')
                 ? mb_strcut($lastErrorMessage, 0, self::TEXT_CAPACITY_BYTES, 'UTF-8')
                 : substr($lastErrorMessage, 0, self::TEXT_CAPACITY_BYTES);
@@ -94,10 +88,8 @@ class PackshotJobUpdater
 
         $now = gmdate('Y-m-d H:i:s');
 
-        // Try the row-exists path first via a cheap probe — that lets us
-        // skip the FK lookup entirely on the common UPDATE path.
+        // Common path: the submitter already persisted the row — UPDATE in place.
         $existing = $this->repository->findByJobId($qameraJobId);
-
         if ($existing !== null) {
             $this->repository->upsertFromWebhook(new PackshotJobWebhookUpdate(
                 qameraJobId: $qameraJobId,
@@ -110,32 +102,30 @@ class PackshotJobUpdater
             return;
         }
 
-        // Pre-submit race: try to recover the FK from payloadExternalRef.
-        // If we can't, log INFO and no-op — the submitter's later insert
-        // will pick up this job's history.
-        if ($payloadExternalRef === null || $payloadOrderId === null) {
+        // Pre-submit race: recover the FK from job.product_ref.
+        if ($productRef === null || $orderId === null) {
             $this->logger->info(
                 'webhook_skipped_no_recoverable_fk',
                 [
                     'delivery_id' => $deliveryId,
                     'event_type' => $eventType,
                     'qamera_job_id' => $qameraJobId,
-                    'reason' => $payloadExternalRef === null ? 'no_external_ref' : 'no_order_id',
+                    'reason' => $productRef === null ? 'no_product_ref' : 'no_order_id',
                 ]
             );
             return;
         }
 
         try {
-            $parsed = PackshotExternalRefParser::parse($payloadExternalRef);
-        } catch (InvalidExternalRefException $e) {
+            $parsed = ProductRefParser::parse($productRef);
+        } catch (InvalidProductRefException $e) {
             $this->logger->warning(
-                'webhook_malformed_packshot_external_ref',
+                'webhook_malformed_product_ref',
                 [
                     'delivery_id' => $deliveryId,
                     'event_type' => $eventType,
                     'qamera_job_id' => $qameraJobId,
-                    'external_ref' => $payloadExternalRef,
+                    'product_ref' => $productRef,
                 ]
             );
             return;
@@ -144,7 +134,7 @@ class PackshotJobUpdater
         $idLink = $this->linkLookup->findIdLink($parsed->shopId, $parsed->productId);
         if ($idLink === null) {
             $this->logger->warning(
-                'webhook_no_product_link_for_packshot_ref',
+                'webhook_no_product_link_for_product_ref',
                 [
                     'delivery_id' => $deliveryId,
                     'event_type' => $eventType,
@@ -156,10 +146,11 @@ class PackshotJobUpdater
             return;
         }
 
-        // Stub insert with the minimum viable column set. ai_model /
-        // aspect_ratio / images_count are unknown from the payload — fill
-        // with sentinel values that the operator can recognise as
-        // pre-submit-race recoveries. session_config_json is empty.
+        // Stub insert with the minimum viable column set. The
+        // packshot_external_ref column is UNIQUE NOT NULL, so synthesise a
+        // deterministic value from the (globally unique) job id. ai_model /
+        // aspect_ratio / images_count are unknown from the webhook payload —
+        // fill with sentinels the operator can recognise as race recoveries.
         $this->repository->upsertFromWebhook(new PackshotJobWebhookUpdate(
             qameraJobId: $qameraJobId,
             status: $status,
@@ -167,11 +158,11 @@ class PackshotJobUpdater
             outputUrlExpiresAt: $outputUrlExpiresAt,
             lastErrorMessage: $lastErrorMessage,
             now: $now,
-            fallbackQameraOrderId: $payloadOrderId,
+            fallbackQameraOrderId: $orderId,
             fallbackIdQameraProductLink: $idLink,
             fallbackIdShop: $parsed->shopId,
             fallbackIdProduct: $parsed->productId,
-            fallbackPackshotExternalRef: $payloadExternalRef,
+            fallbackPackshotExternalRef: $productRef . ':packshot:job-' . $qameraJobId,
             fallbackAiModel: '(unknown)',
             fallbackAspectRatio: '1:1',
             fallbackImagesCount: 1,

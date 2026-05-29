@@ -38,8 +38,8 @@ final class FakePackshotJobUpdater extends PackshotJobUpdater
         ?string $outputUrl,
         ?string $outputUrlExpiresAt,
         ?string $lastErrorMessage,
-        ?string $payloadExternalRef,
-        ?string $payloadOrderId
+        ?string $productRef,
+        ?string $orderId
     ): void {
         if ($this->throwOnNext !== null) {
             $e = $this->throwOnNext;
@@ -54,8 +54,8 @@ final class FakePackshotJobUpdater extends PackshotJobUpdater
             'output_url' => $outputUrl,
             'output_url_expires_at' => $outputUrlExpiresAt,
             'last_error_message' => $lastErrorMessage,
-            'payload_external_ref' => $payloadExternalRef,
-            'payload_order_id' => $payloadOrderId,
+            'product_ref' => $productRef,
+            'order_id' => $orderId,
         ];
     }
 }
