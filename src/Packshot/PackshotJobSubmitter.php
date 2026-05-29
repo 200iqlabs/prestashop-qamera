@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace QameraAi\Module\Packshot;
 
+use QameraAi\Module\Api\Dto\RegisterPackshotRequest;
 use QameraAi\Module\Api\Dto\SessionConfig;
 use QameraAi\Module\Api\Dto\Subject;
 use QameraAi\Module\Api\Dto\SubmitJobRequest;
@@ -177,6 +178,25 @@ final class PackshotJobSubmitter
         $refIndex = [];
 
         foreach ($chunk as $link) {
+            // Register the source image as an INPUT packshot before the job.
+            // Upstream `resolveCatalogMetadata` requires `packshot_asset_id`
+            // to resolve to a `product_packshots` row (for packshot AND
+            // photo_shoot); without this every job fails
+            // `PLUGIN_JOB_MISSING_CATALOG_ENTRY`. Stable external_ref →
+            // idempotent on repeat submits (created → existing). No
+            // `source_image_ref`: the asset is already a registered, analyzed
+            // image, from which the backend resolves source_image_id. An
+            // ApiException here propagates and the chunk is recorded failed
+            // (no job is submitted that would fail catalog resolution). This
+            // INPUT packshot is distinct from the OUTPUT packshot that
+            // `autoRegisterPackshot=true` + the random `packshotExternalRef`
+            // register from the job result.
+            $this->apiClient->registerPackshot(new RegisterPackshotRequest(
+                externalRef: sprintf('ps:%d:%d:packshot:src', $link->idShop, $link->idProduct),
+                productRef: $link->qameraProductRef,
+                assetId: (string) $link->qameraAssetId,
+            ));
+
             $uuid = Uuid::uuid4()->toString();
             $packshotRef = sprintf('ps:%d:%d:packshot:%s', $link->idShop, $link->idProduct, $uuid);
             $refIndex[$link->qameraProductRef] = [
