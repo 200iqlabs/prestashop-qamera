@@ -35,8 +35,8 @@
 
 ## 6. BO UI (qamera-bo-ui)
 
-- [ ] 6.1 Dedicated "Packshots — review" controller + Twig + JS (thumbnail grid, ✓/✗, AJAX vote).
-- [ ] 6.2 Products grid: relabel Generate → "Generate packshot"; add "Generate photo-shoot" action gated on accepted-packshot JOIN; disabled hint.
+- [x] 6.1 `PackshotReviewController` (`indexAction` lists pending via `listPending`; `voteAction` POST/AJAX → `PackshotVoteService`, CSRF-guarded, JSON `{ok,voting}` / 400 / 502 / 500) + `packshot_review.html.twig` (thumbnail cards, ✓/✗) + `packshot_review.js` (AJAX vote, removes card on 2xx). Routes added; new `AdminQameraAiPackshotReview` tab in `Installer` + idempotent tab creation in `upgrade-1.7.0.php`.
+- [x] 6.2 Products grid: relabeled Generate → "Generate packshot"; added gated "Generate photo-shoot" action (enabled iff `acceptedRefsIn` batch-JOIN says the product_ref has an accepted review row; disabled with hint otherwise). `GenerateFormController` carries `job_type` through show/submit, uses photo-shoot eligibility filter on show, and on a photo_shoot 422 runs `PhotoShootSubmitErrorClassifier` → friendly flash. `generate_form.twig` adaptive heading + hidden `job_type`; grid JS click-guard extended. (Full unit 398/398; PHPCS clean.)
 
 ## 7. Tests
 

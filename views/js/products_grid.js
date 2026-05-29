@@ -48,7 +48,8 @@
    */
   function initGenerateGuard() {
     document.addEventListener('click', function (evt) {
-      var anchor = evt.target.closest && evt.target.closest('.js-qameraai-generate');
+      var anchor = evt.target.closest
+        && evt.target.closest('.js-qameraai-generate, .js-qameraai-photoshoot');
       if (anchor && anchor.getAttribute('aria-disabled') === 'true') {
         evt.preventDefault();
       }

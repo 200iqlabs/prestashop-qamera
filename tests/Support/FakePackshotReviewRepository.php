@@ -40,6 +40,17 @@ final class FakePackshotReviewRepository extends PackshotReviewRepository
         return isset($this->acceptedRefs[$productRef]);
     }
 
+    public function acceptedRefsIn(array $productRefs): array
+    {
+        $out = [];
+        foreach ($productRefs as $ref) {
+            if (isset($this->acceptedRefs[(string) $ref])) {
+                $out[(string) $ref] = true;
+            }
+        }
+        return $out;
+    }
+
     public function upsertFromWebhook(PackshotReviewRow $row): void
     {
         $this->upserts[] = $row;

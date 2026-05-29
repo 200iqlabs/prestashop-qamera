@@ -172,6 +172,54 @@ class PackshotReviewRepository
     }
 
     /**
+     * Batch variant of {@see hasAcceptedForProductRef} for the BO products
+     * grid — one query instead of N. Returns the subset of the given
+     * `product_ref`s that have at least one `voting='accepted'` row, as a
+     * set keyed by ref for O(1) per-row lookup in the controller.
+     *
+     * @param string[] $productRefs
+     *
+     * @return array<string, true>
+     *
+     * @throws QameraDbException on DB error
+     */
+    public function acceptedRefsIn(array $productRefs): array
+    {
+        if ($productRefs === []) {
+            return [];
+        }
+
+        $escaped = [];
+        foreach (array_unique($productRefs) as $ref) {
+            $escaped[] = "'" . $this->escape((string) $ref) . "'";
+        }
+
+        $sql = sprintf(
+            'SELECT DISTINCT `product_ref` FROM `%sqamera_packshot_review` '
+            . "WHERE `voting` = '%s' AND `product_ref` IN (%s)",
+            $this->tablePrefix,
+            $this->escape(PackshotReviewRow::VOTING_ACCEPTED),
+            implode(', ', $escaped)
+        );
+
+        $rows = $this->db->executeS($sql);
+        if ($rows === false) {
+            throw new QameraDbException('packshot_review acceptedRefsIn failed');
+        }
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($rows as $row) {
+            if (isset($row['product_ref'])) {
+                $out[(string) $row['product_ref']] = true;
+            }
+        }
+        return $out;
+    }
+
+    /**
      * @param array<string, mixed>|false|null $row
      */
     private function hydrateOrNull($row): ?PackshotReviewRow

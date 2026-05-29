@@ -43,19 +43,53 @@ function upgrade_module_1_7_0(/* @phpstan-ignore-line */ $module): bool
         KEY `qamera_packshot_review_voting` (`voting`, `generated_at`)
     ) ENGINE=InnoDB DEFAULT CHARSET={$charset};";
 
-    if ($db->execute($sql)) {
-        return true;
+    if (!$db->execute($sql)) {
+        $error = method_exists($db, 'getMsgError') ? (string) $db->getMsgError() : '';
+        PrestaShopLogger::addLog(
+            '[QameraAi] upgrade-1.7.0 CREATE TABLE qamera_packshot_review failed: ' . $error,
+            3,
+            null,
+            'QameraAiModule',
+            null,
+            true
+        );
+        return false;
     }
 
-    $error = method_exists($db, 'getMsgError') ? (string) $db->getMsgError() : '';
-    PrestaShopLogger::addLog(
-        '[QameraAi] upgrade-1.7.0 CREATE TABLE qamera_packshot_review failed: ' . $error,
-        3,
-        null,
-        'QameraAiModule',
-        null,
-        true
-    );
+    // Existing installs won't re-run Installer::installAdminTabs(), so create
+    // the new "Packshots" review tab here. Idempotent: reuse the row if the
+    // class already exists. A missing parent (AdminQameraAi) is non-fatal —
+    // the table migration is the load-bearing part of this upgrade.
+    qameraai_upgrade_1_7_0_install_review_tab();
 
-    return false;
+    return true;
+}
+
+/**
+ * Idempotently create the `AdminQameraAiPackshotReview` child tab under the
+ * existing `AdminQameraAi` parent. Mirrors Installer::upsertTab().
+ */
+function qameraai_upgrade_1_7_0_install_review_tab(): void
+{
+    $parentId = (int) Tab::getIdFromClassName('AdminQameraAi');
+    if ($parentId <= 0) {
+        return;
+    }
+
+    $existingId = (int) Tab::getIdFromClassName('AdminQameraAiPackshotReview');
+    $tab = $existingId > 0 ? new Tab($existingId) : new Tab();
+    $tab->active = 1;
+    $tab->class_name = 'AdminQameraAiPackshotReview';
+    $tab->module = 'qameraai';
+    $tab->id_parent = $parentId;
+    $tab->name = [];
+    foreach (Language::getLanguages(true) as $language) {
+        $tab->name[$language['id_lang']] = 'Packshots';
+    }
+
+    if ($existingId > 0) {
+        $tab->update();
+    } else {
+        $tab->add();
+    }
 }

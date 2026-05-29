@@ -373,6 +373,8 @@ final class Installer
         $children = [
             'AdminQameraAiProducts' => 'Products',
             'AdminQameraAiJobs' => 'Jobs',
+            // Phase 4.4 (add-packshot-acceptance-flow) — the review queue.
+            'AdminQameraAiPackshotReview' => 'Packshots',
             'AdminQameraAiConfiguration' => 'Configuration',
         ];
         foreach ($children as $className => $label) {
@@ -418,6 +420,7 @@ final class Installer
         $children = [
             'AdminQameraAiProducts',
             'AdminQameraAiJobs',
+            'AdminQameraAiPackshotReview',
             'AdminQameraAiConfiguration',
         ];
         foreach ($children as $className) {

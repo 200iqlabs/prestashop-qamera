@@ -1,0 +1,88 @@
+{% extends '@PrestaShop/Admin/layout.html.twig' %}
+
+{% block content %}
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-header-title">
+        <i class="material-icons">rate_review</i>
+        {{ 'Qamera AI — Packshots review'|trans({}, 'Modules.Qameraai.Admin') }}
+      </h3>
+      <div class="card-header-actions">
+        <a href="{{ products_url }}" class="btn btn-outline-secondary">
+          <i class="material-icons">photo_library</i>
+          {{ 'Products'|trans({}, 'Modules.Qameraai.Admin') }}
+        </a>
+      </div>
+    </div>
+
+    <div class="card-body">
+      {% if rows is empty %}
+        <div class="alert alert-info" role="alert">
+          {{ 'No packshots awaiting review. Generate a packshot from the Products page, then approve it here to unlock photo-shoots.'|trans({}, 'Modules.Qameraai.Admin') }}
+        </div>
+      {% else %}
+        <p class="text-muted">
+          {{ 'Approve a packshot to unlock its “Generate photo-shoot” action on the Products page. Rejecting removes it from the queue.'|trans({}, 'Modules.Qameraai.Admin') }}
+        </p>
+        <div class="row" id="qameraai-review-grid">
+          {% for row in rows %}
+            <div class="col-md-3 col-sm-6 mb-4 qameraai-review-card" data-job-id="{{ row.qamera_job_id }}">
+              <div class="card h-100">
+                {% if row.asset_url %}
+                  <a href="{{ row.asset_url }}" target="_blank" rel="noopener noreferrer">
+                    <img src="{{ row.asset_url }}"
+                         class="card-img-top"
+                         alt="{{ 'Packshot preview'|trans({}, 'Modules.Qameraai.Admin') }}"
+                         style="object-fit:cover;max-height:220px;">
+                  </a>
+                {% else %}
+                  <div class="card-img-top d-flex align-items-center justify-content-center bg-light"
+                       style="height:220px;">
+                    <span class="text-muted">{{ 'No preview'|trans({}, 'Modules.Qameraai.Admin') }}</span>
+                  </div>
+                {% endif %}
+                <div class="card-body">
+                  <strong>{{ row.product_name|default('#' ~ row.id_product) }}</strong>
+                  <br>
+                  <small class="text-muted">#{{ row.id_product }} · {{ row.product_ref }}</small>
+                  <br>
+                  <small class="text-muted">{{ 'Generated'|trans({}, 'Modules.Qameraai.Admin') }}: {{ row.generated_at|default('—') }}</small>
+                </div>
+                <div class="card-footer d-flex justify-content-between align-items-center">
+                  <button type="button"
+                          class="btn btn-success btn-sm js-qameraai-vote"
+                          data-job-id="{{ row.qamera_job_id }}"
+                          data-decision="accept">
+                    <i class="material-icons">check</i>
+                    {{ 'Approve'|trans({}, 'Modules.Qameraai.Admin') }}
+                  </button>
+                  <button type="button"
+                          class="btn btn-outline-danger btn-sm js-qameraai-vote"
+                          data-job-id="{{ row.qamera_job_id }}"
+                          data-decision="reject">
+                    <i class="material-icons">close</i>
+                    {{ 'Reject'|trans({}, 'Modules.Qameraai.Admin') }}
+                  </button>
+                </div>
+                <div class="qameraai-vote-feedback small px-3 pb-2" role="status"></div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <script>
+    window.QameraAiPackshotReview = {
+      voteUrl: {{ vote_url|json_encode|raw }},
+      csrfToken: {{ csrf_token('qamera_packshot_vote')|json_encode|raw }},
+      i18n: {
+        accepted: {{ 'Approved'|trans({}, 'Modules.Qameraai.Admin')|json_encode|raw }},
+        rejected: {{ 'Rejected'|trans({}, 'Modules.Qameraai.Admin')|json_encode|raw }},
+        error: {{ 'Vote failed'|trans({}, 'Modules.Qameraai.Admin')|json_encode|raw }}
+      }
+    };
+  </script>
+  <script src="{{ js_asset_url }}"></script>
+{% endblock %}

@@ -6,6 +6,7 @@ namespace QameraAi\Module\Controller\Admin;
 
 use Context;
 use PrestaShopBundle\Controller\Admin\FrameworkBundleAdminController;
+use QameraAi\Module\Packshot\Acceptance\PackshotReviewRepository;
 use QameraAi\Module\Packshot\SyncedProductLink;
 use QameraAi\Module\Packshot\SyncedProductLinkLookup;
 use Symfony\Component\HttpFoundation\Request;
@@ -29,7 +30,8 @@ final class ProductsGridController extends FrameworkBundleAdminController
 
     public function indexAction(
         Request $request,
-        SyncedProductLinkLookup $lookup
+        SyncedProductLinkLookup $lookup,
+        PackshotReviewRepository $reviewRepository
     ): Response {
         $idShop = $this->resolveShopId();
         $page = max(1, (int) $request->query->get('page', 1));
@@ -38,6 +40,13 @@ final class ProductsGridController extends FrameworkBundleAdminController
         $rows = $lookup->listForGrid($idShop, self::PAGE_SIZE, $offset);
         $total = $lookup->countForShop($idShop);
         $totalPages = (int) ceil(max(1, $total) / self::PAGE_SIZE);
+
+        // Photo-shoot gate (D3): a product is photo-shoot-eligible iff its
+        // product_ref has a locally-accepted packshot review row. One batch
+        // query for the visible page (avoids N+1).
+        $acceptedRefs = $reviewRepository->acceptedRefsIn(
+            array_map(static fn (SyncedProductLink $r): string => $r->qameraProductRef, $rows)
+        );
 
         return $this->render(
             '@Modules/qameraai/views/templates/admin/products_grid.html.twig',
@@ -52,6 +61,7 @@ final class ProductsGridController extends FrameworkBundleAdminController
                     'last_synced_at' => $r->lastSyncedAt,
                     'can_generate' => $r->canGenerate(),
                     'disabled_hint' => $r->getDisabledHint(),
+                    'can_photo_shoot' => isset($acceptedRefs[$r->qameraProductRef]),
                     'analysis_status' => $r->analysisStatus,
                     'analysis_described_count' => $r->analysisDescribedCount,
                     'analysis_total_count' => $r->analysisTotalCount,

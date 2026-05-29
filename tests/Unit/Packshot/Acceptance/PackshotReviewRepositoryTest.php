@@ -170,4 +170,24 @@ final class PackshotReviewRepositoryTest extends TestCase
     {
         self::assertNull($this->repo->findByJobId('missing'));
     }
+
+    public function testAcceptedRefsInEmitsDistinctInQueryFilteredOnAccepted(): void
+    {
+        // RecordingDb::executeS returns [] → an empty accepted set; we assert
+        // the dedup of inputs and the SQL shape (accepted filter + IN list).
+        $result = $this->repo->acceptedRefsIn(['ps:1:42', 'ps:1:7', 'ps:1:42']);
+
+        self::assertSame([], $result);
+        $sql = $this->db->executed[0];
+        self::assertStringContainsString("`voting` = 'accepted'", $sql);
+        self::assertStringContainsString("'ps:1:42'", $sql);
+        self::assertStringContainsString("'ps:1:7'", $sql);
+        self::assertStringContainsString('DISTINCT `product_ref`', $sql);
+    }
+
+    public function testAcceptedRefsInEmptyInputIsNoQuery(): void
+    {
+        self::assertSame([], $this->repo->acceptedRefsIn([]));
+        self::assertSame([], $this->db->executed);
+    }
 }

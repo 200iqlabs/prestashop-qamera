@@ -84,7 +84,14 @@
                        data-id-product="{{ row.id_product }}"
                        {% if not row.can_generate %}aria-disabled="true" tabindex="-1" title="{{ row.disabled_hint|default('Sync this product first')|trans({}, 'Modules.Qameraai.Admin') }}"{% endif %}>
                       <i class="material-icons">{% if row.can_generate %}auto_fix_high{% else %}block{% endif %}</i>
-                      {{ 'Generate'|trans({}, 'Modules.Qameraai.Admin') }}
+                      {{ 'Generate packshot'|trans({}, 'Modules.Qameraai.Admin') }}
+                    </a>
+                    <a href="{{ path('_qameraai_admin_generate_form', {'products': row.id_product, 'job_type': 'photo_shoot'}) }}"
+                       class="btn btn-sm js-qameraai-photoshoot {% if row.can_photo_shoot %}btn-info{% else %}btn-secondary disabled{% endif %}"
+                       data-id-product="{{ row.id_product }}"
+                       {% if not row.can_photo_shoot %}aria-disabled="true" tabindex="-1" title="{{ 'Generate and approve a packshot first to unlock photo-shoots.'|trans({}, 'Modules.Qameraai.Admin') }}"{% endif %}>
+                      <i class="material-icons">{% if row.can_photo_shoot %}camera{% else %}lock{% endif %}</i>
+                      {{ 'Generate photo-shoot'|trans({}, 'Modules.Qameraai.Admin') }}
                     </a>
                     <button type="button"
                             class="btn btn-outline-secondary btn-sm js-qameraai-refresh-analysis"

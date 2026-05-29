@@ -12,6 +12,9 @@ use QameraAi\Module\Api\Dto\AspectRatio;
 use QameraAi\Module\Api\Exception\ApiException;
 use QameraAi\Module\Api\Exception\ValidationException;
 use QameraAi\Module\Api\Factory\MissingConfigurationException;
+use QameraAi\Module\Packshot\Acceptance\PackshotReviewRepository;
+use QameraAi\Module\Packshot\Acceptance\PhotoShootSubmitError;
+use QameraAi\Module\Packshot\Acceptance\PhotoShootSubmitErrorClassifier;
 use QameraAi\Module\Packshot\CalculatorBridge;
 use QameraAi\Module\Packshot\PackshotJobSubmitter;
 use QameraAi\Module\Packshot\SubmitFormInput;
@@ -41,10 +44,14 @@ final class GenerateFormController extends FrameworkBundleAdminController
     public function showAction(
         Request $request,
         CachedReferenceClientFactory $referenceFactory,
-        SyncedProductLinkLookup $linkLookup
+        SyncedProductLinkLookup $linkLookup,
+        PackshotReviewRepository $reviewRepository
     ): Response {
+        $jobType = $this->normalizeJobType($request->query->get('job_type'));
         $rawProductIds = $this->parseProductIds($request->query->get('products', ''));
-        $productIds = $this->filterGeneratableAndFlash($rawProductIds, $linkLookup);
+        $productIds = $jobType === SubmitFormInput::JOB_TYPE_PHOTO_SHOOT
+            ? $this->filterPhotoShootEligibleAndFlash($rawProductIds, $linkLookup, $reviewRepository)
+            : $this->filterGeneratableAndFlash($rawProductIds, $linkLookup);
 
         try {
             $reference = $referenceFactory->create();
@@ -68,6 +75,7 @@ final class GenerateFormController extends FrameworkBundleAdminController
             '@Modules/qameraai/views/templates/admin/generate_form.html.twig',
             $context + [
                 'product_ids' => $productIds,
+                'job_type' => $jobType,
                 'default_aspect_ratio' => $this->resolveDefaultAspectRatio($context['aspect_ratios']),
                 'default_images_count' => 4,
                 'errors' => [],
@@ -176,6 +184,7 @@ final class GenerateFormController extends FrameworkBundleAdminController
         $presetId = $this->emptyToNull($request->request->get('preset_id'));
         $suggestions = $this->emptyToNull($request->request->get('suggestions'));
         $productIds = $this->parseProductIds($request->request->get('product_ids', ''));
+        $jobType = $this->normalizeJobType($request->request->get('job_type'));
 
         // Reference data is needed for both aspect-ratio validation (we
         // only accept values that came from /aspect-ratios) and the
@@ -214,6 +223,7 @@ final class GenerateFormController extends FrameworkBundleAdminController
                 mannequinModelId: $mannequinModelId,
                 presetId: $presetId,
                 suggestions: $suggestions,
+                jobType: $jobType,
             );
         } catch (\InvalidArgumentException $e) {
             $errors['general'] = $e->getMessage();
@@ -223,6 +233,13 @@ final class GenerateFormController extends FrameworkBundleAdminController
         try {
             $result = $submitter->submit($input);
         } catch (ValidationException $e) {
+            // A photo_shoot 422 carries an actionable ErrorEnvelope.code
+            // (packshot_not_approved / invalid_input) — translate it into a
+            // friendly flash + redirect rather than a raw field error.
+            if ($jobType === SubmitFormInput::JOB_TYPE_PHOTO_SHOOT) {
+                $this->flashPhotoShootError($e);
+                return $this->redirectToRoute('_qameraai_admin_products_grid');
+            }
             $errors['ai_model'] = $e->getMessage();
             return $this->renderWithErrors($referenceFactory, $request, $errors);
         }
@@ -345,6 +362,7 @@ final class GenerateFormController extends FrameworkBundleAdminController
             '@Modules/qameraai/views/templates/admin/generate_form.html.twig',
             $context + [
                 'product_ids' => $this->parseProductIds($request->request->get('product_ids', '')),
+                'job_type' => $this->normalizeJobType($request->request->get('job_type')),
                 'default_aspect_ratio' => trim((string) $request->request->get('aspect_ratio', '1:1')),
                 'default_images_count' => (int) $request->request->get('images_count', 4),
                 'errors' => $errors,
@@ -354,6 +372,103 @@ final class GenerateFormController extends FrameworkBundleAdminController
                 'js_asset_url' => rtrim(__PS_BASE_URI__, '/') . '/modules/qameraai/views/js/generate_form.js',
             ]
         );
+    }
+
+    /**
+     * Photo-shoot eligibility (D3): only products whose `product_ref` has a
+     * locally-accepted packshot review row may be photo-shot. Excluded rows
+     * are reported in a single flash. Mirrors {@see filterGeneratableAndFlash}.
+     *
+     * @param int[] $rawProductIds
+     * @return int[] eligible subset, in original order
+     */
+    private function filterPhotoShootEligibleAndFlash(
+        array $rawProductIds,
+        SyncedProductLinkLookup $lookup,
+        PackshotReviewRepository $reviewRepository
+    ): array {
+        if ($rawProductIds === []) {
+            return [];
+        }
+
+        $links = $lookup->loadByProductIds($this->resolveShopId(), $rawProductIds);
+        $refs = [];
+        foreach ($links as $link) {
+            $refs[] = $link->qameraProductRef;
+        }
+        $acceptedRefs = $reviewRepository->acceptedRefsIn($refs);
+
+        $eligible = [];
+        $excluded = 0;
+        foreach ($rawProductIds as $idProduct) {
+            $link = $links[$idProduct] ?? null;
+            if ($link !== null && isset($acceptedRefs[$link->qameraProductRef])) {
+                $eligible[] = $idProduct;
+            } else {
+                $excluded++;
+            }
+        }
+
+        if ($excluded > 0) {
+            $this->addFlash('info', $this->trans(
+                '%count% product(s) excluded — generate and approve a packshot first.',
+                'Modules.Qameraai.Admin',
+                ['%count%' => $excluded]
+            ));
+        }
+
+        return $eligible;
+    }
+
+    /**
+     * Translate a photo-shoot submit 422 into a friendly, actionable flash
+     * (add-packshot-acceptance-flow, "Photo-shoot is gated" requirement).
+     */
+    private function flashPhotoShootError(ValidationException $e): void
+    {
+        $locale = $this->resolveLocale();
+        $classified = (new PhotoShootSubmitErrorClassifier())->classify($e, $locale);
+
+        switch ($classified->kind) {
+            case PhotoShootSubmitError::KIND_NOT_APPROVED:
+                $this->addFlash('error', $this->trans(
+                    'No approved packshot for this product yet. Approve a packshot in “Packshots review” first.',
+                    'Modules.Qameraai.Admin'
+                ));
+                return;
+            case PhotoShootSubmitError::KIND_GATE_DISABLED:
+                $this->addFlash('error', $this->trans(
+                    'The photo-shoot gate is not yet enabled upstream. Please retry after the cutover or contact support.',
+                    'Modules.Qameraai.Admin'
+                ));
+                return;
+            default:
+                $this->addFlash('error', $this->trans(
+                    'Photo-shoot submission failed: %message%',
+                    'Modules.Qameraai.Admin',
+                    ['%message%' => $classified->serverMessage ?? $e->getMessage()]
+                ));
+        }
+    }
+
+    /**
+     * @param mixed $raw
+     */
+    private function normalizeJobType($raw): string
+    {
+        return ((string) $raw) === SubmitFormInput::JOB_TYPE_PHOTO_SHOOT
+            ? SubmitFormInput::JOB_TYPE_PHOTO_SHOOT
+            : SubmitFormInput::JOB_TYPE_PACKSHOT;
+    }
+
+    private function resolveLocale(): string
+    {
+        $context = Context::getContext();
+        $language = $context->language ?? null;
+        if (is_object($language) && isset($language->iso_code) && is_string($language->iso_code)) {
+            return $language->iso_code;
+        }
+        return 'en';
     }
 
     private function flashResult(SubmitResult $result): void
