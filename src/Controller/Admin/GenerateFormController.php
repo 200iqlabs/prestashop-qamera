@@ -177,14 +177,20 @@ final class GenerateFormController extends FrameworkBundleAdminController
         }
 
         $aiModel = trim((string) $request->request->get('ai_model'));
-        $aspectRatio = trim((string) $request->request->get('aspect_ratio', '1:1'));
         $imagesCount = (int) $request->request->get('images_count', 4);
+        $jobTypeEarly = $this->normalizeJobType($request->request->get('job_type'));
+        // Packshot (stage 1) is a clean 1:1 cutout — aspect ratio is not
+        // operator-selectable on that form, so force it server-side rather
+        // than trust/require the (hidden) field.
+        $aspectRatio = $jobTypeEarly === SubmitFormInput::JOB_TYPE_PACKSHOT
+            ? '1:1'
+            : trim((string) $request->request->get('aspect_ratio', '1:1'));
         $sceneryId = $this->emptyToNull($request->request->get('scenery_id'));
         $mannequinModelId = $this->emptyToNull($request->request->get('mannequin_model_id'));
         $presetId = $this->emptyToNull($request->request->get('preset_id'));
         $suggestions = $this->emptyToNull($request->request->get('suggestions'));
         $productIds = $this->parseProductIds($request->request->get('product_ids', ''));
-        $jobType = $this->normalizeJobType($request->request->get('job_type'));
+        $jobType = $jobTypeEarly;
 
         // Reference data is needed for both aspect-ratio validation (we
         // only accept values that came from /aspect-ratios) and the
@@ -205,7 +211,10 @@ final class GenerateFormController extends FrameworkBundleAdminController
             $aspectRatio,
             $imagesCount,
             $productIds,
-            $referenceContext['aspect_ratios']
+            $referenceContext['aspect_ratios'],
+            // Packshot forces 1:1 server-side (field hidden) — don't validate
+            // it against the catalog; only the photo-shoot form exposes it.
+            $jobType === SubmitFormInput::JOB_TYPE_PHOTO_SHOOT
         );
         if ($errors !== []) {
             return $this->renderWithErrors($referenceFactory, $request, $errors);
@@ -311,7 +320,8 @@ final class GenerateFormController extends FrameworkBundleAdminController
         string $aspectRatio,
         int $imagesCount,
         array $productIds,
-        array $aspectRatios
+        array $aspectRatios,
+        bool $validateAspectRatio = true
     ): array {
         $errors = [];
         if ($aiModel === '') {
@@ -331,12 +341,14 @@ final class GenerateFormController extends FrameworkBundleAdminController
         // crafted POST with an arbitrary string slipping through to the
         // upstream submitter, and gives the operator a clear field-level
         // error instead of an opaque API failure.
-        $allowed = array_map(static fn (AspectRatio $ar): string => $ar->value, $aspectRatios);
-        if ($aspectRatio === '' || !in_array($aspectRatio, $allowed, true)) {
-            $errors['aspect_ratio'] = $this->trans(
-                'Aspect ratio is not in the upstream catalog.',
-                'Modules.Qameraai.Admin'
-            );
+        if ($validateAspectRatio) {
+            $allowed = array_map(static fn (AspectRatio $ar): string => $ar->value, $aspectRatios);
+            if ($aspectRatio === '' || !in_array($aspectRatio, $allowed, true)) {
+                $errors['aspect_ratio'] = $this->trans(
+                    'Aspect ratio is not in the upstream catalog.',
+                    'Modules.Qameraai.Admin'
+                );
+            }
         }
         return $errors;
     }
