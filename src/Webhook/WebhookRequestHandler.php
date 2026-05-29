@@ -17,7 +17,7 @@ use Throwable;
  *   2. server-side secret is configured (non-empty)
  *   3. X-Qamera-Signature header present
  *   4. signature header parses
- *   5. X-Qamera-Delivery-Id header present
+ *   5. X-Qamera-Request-Id header present
  *   6. body non-empty + within size cap + decodes as a JSON object
  *   7. body's delivery_id matches the header
  *   8. body's event_type matches `^[a-z][a-z0-9_.-]{0,63}$`

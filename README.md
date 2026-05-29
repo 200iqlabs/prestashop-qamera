@@ -106,13 +106,15 @@ Accepted deliveries are persisted to `ps_qamera_webhook_delivery` (PK = `deliver
 **Troubleshooting** — if you see rejection spikes:
 
 - `replay_window` → server clock is drifting. Check NTP (`timedatectl status` on Linux hosts).
-- `missing_signature` / `malformed_signature` → some Apache + PHP-FPM stacks strip custom headers. Add the following to your vhost so the `X-Qamera-*` headers reach PHP:
+- `missing_signature` / `malformed_signature` / `missing_request_id` → some Apache + PHP-FPM stacks strip custom headers. Add the following to your vhost so the `X-Qamera-*` headers reach PHP:
 
   ```apache
   SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
   SetEnvIfNoCase ^X-Qamera-Signature$ "(.*)" HTTP_X_QAMERA_SIGNATURE=$1
-  SetEnvIfNoCase ^X-Qamera-Delivery-Id$ "(.*)" HTTP_X_QAMERA_DELIVERY_ID=$1
+  SetEnvIfNoCase ^X-Qamera-Request-Id$ "(.*)" HTTP_X_QAMERA_REQUEST_ID=$1
   ```
+
+  > **Changed in 1.6.0:** the delivery id now arrives in `X-Qamera-Request-Id` (previously `X-Qamera-Delivery-Id`). Stacks that forward custom headers explicitly MUST forward `X-Qamera-Request-Id`, or every delivery is rejected with `missing_request_id`.
 
 - `signature_mismatch` → the secret in BO Configuration no longer matches Qamera AI. During the upstream 48 h dual-sign rotation grace window the plugin accepts the delivery if **either** signed value verifies against your local secret; once the window closes you must paste the new secret into Configuration.
 

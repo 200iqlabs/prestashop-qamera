@@ -100,8 +100,9 @@ final class Installer
             ) ENGINE=InnoDB DEFAULT CHARSET={$charset};",
 
             // Phase 4.1 — inbound webhook delivery log. PK is the upstream
-            // `X-Qamera-Delivery-Id` so concurrent duplicate inserts serialise
-            // on the index instead of needing application-level locking.
+            // delivery id (the `X-Qamera-Request-Id` header) so concurrent
+            // duplicate inserts serialise on the index instead of needing
+            // application-level locking.
             "CREATE TABLE IF NOT EXISTS `{$prefix}qamera_webhook_delivery` (
                 `delivery_id` VARCHAR(64) NOT NULL,
                 `received_at` DATETIME NOT NULL,
