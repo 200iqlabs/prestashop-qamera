@@ -700,6 +700,69 @@ final class QameraApiClientTest extends TestCase
         self::assertSame(10, $dispatched['priority']);
     }
 
+    public function testSubmitJobEmitsJobTypeWhenSet(): void
+    {
+        $body = (string) json_encode(['order_id' => '99999999-9999-9999-9999-999999999999', 'status' => 'queued', 'subjects' => [['product_ref' => 'ps:1:42', 'job_ids' => ['j1']]]]);
+        $client = $this->clientWith([new Response(200, [], $body)]);
+
+        $req = new SubmitJobRequest(
+            new SessionConfig('4:5'),
+            [new Subject('asset-1', 'Widget', 'ps:1:42', 1, 'openai/gpt-image-1', autoRegisterPackshot: true)],
+            jobType: 'packshot',
+        );
+        $client->submitJob($req);
+
+        $dispatched = $this->lastRequestBody();
+        self::assertSame('packshot', $dispatched['job_type']);
+        self::assertSame('asset-1', $dispatched['subjects'][0]['packshot_asset_id']);
+    }
+
+    public function testSubmitJobOmitsJobTypeAndNullPackshotAssetId(): void
+    {
+        $body = (string) json_encode(['order_id' => '99999999-9999-9999-9999-999999999999', 'status' => 'queued', 'subjects' => [['product_ref' => 'ps:1:42', 'job_ids' => ['j1']]]]);
+        $client = $this->clientWith([new Response(200, [], $body)]);
+
+        // photo_shoot shape: no job_type override here, packshot_asset_id omitted.
+        $req = new SubmitJobRequest(
+            new SessionConfig('4:5'),
+            [new Subject(null, 'Widget', 'ps:1:42', 1, 'openai/gpt-image-1')],
+        );
+        $client->submitJob($req);
+
+        $dispatched = $this->lastRequestBody();
+        self::assertArrayNotHasKey('job_type', $dispatched);
+        self::assertArrayNotHasKey('packshot_asset_id', $dispatched['subjects'][0]);
+    }
+
+    public function testAcceptJobPostsToAcceptEndpointOn204(): void
+    {
+        $client = $this->clientWith([new Response(204)]);
+        $client->acceptJob('j1');
+
+        $req = $this->recorder->records[0]['request'];
+        self::assertSame('POST', $req->getMethod());
+        self::assertStringEndsWith('/jobs/j1/accept', $req->getUri()->getPath());
+    }
+
+    public function testRejectJobPostsToRejectEndpointOn204(): void
+    {
+        $client = $this->clientWith([new Response(204)]);
+        $client->rejectJob('j1');
+
+        $req = $this->recorder->records[0]['request'];
+        self::assertSame('POST', $req->getMethod());
+        self::assertStringEndsWith('/jobs/j1/reject', $req->getUri()->getPath());
+    }
+
+    public function testAcceptJobOnNonCompletedJobRaisesTypedException(): void
+    {
+        $client = $this->clientWith([
+            new Response(409, [], (string) json_encode(['error' => ['code' => 'job_not_completed']])),
+        ]);
+        $this->expectException(ValidationException::class);
+        $client->acceptJob('j1');
+    }
+
     public function testSubjectRejectsBadAiModelShape(): void
     {
         $this->expectException(\InvalidArgumentException::class);

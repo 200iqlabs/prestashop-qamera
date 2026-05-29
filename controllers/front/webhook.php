@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use QameraAi\Module\Packshot\Acceptance\PackshotReviewRepository;
+use QameraAi\Module\Packshot\Acceptance\PackshotReviewWriter;
 use QameraAi\Module\Packshot\PackshotJobRepository;
 use QameraAi\Module\Packshot\PackshotJobUpdater;
 use QameraAi\Module\Packshot\SyncedProductLinkLookup;
@@ -120,9 +122,16 @@ class QameraaiWebhookModuleFrontController extends ModuleFrontController
             $logger
         );
 
+        // Phase 4.4 — pending review queue writer. Only job.completed with
+        // job.job_type='packshot' enters here; other handlers don't need it.
+        $packshotReview = new PackshotReviewWriter(
+            new PackshotReviewRepository($db, _DB_PREFIX_),
+            $logger
+        );
+
         return new EventDispatcher(
             [
-                'job.completed' => new JobCompletedHandler($heartbeat, $logger, $packshotJob),
+                'job.completed' => new JobCompletedHandler($heartbeat, $logger, $packshotJob, $packshotReview),
                 'job.failed' => new JobFailedHandler($heartbeat, $logger, $packshotJob),
                 'job.cancelled' => new JobCancelledHandler($heartbeat, $logger, $packshotJob),
                 'job.retried' => new JobRetriedHandler($heartbeat, $logger, $packshotJob),

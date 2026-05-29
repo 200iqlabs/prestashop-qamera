@@ -6,18 +6,22 @@ namespace QameraAi\Module\Controller\Admin;
 
 use Context;
 use PrestaShopBundle\Controller\Admin\FrameworkBundleAdminController;
+use PrestaShopLogger;
 use QameraAi\Module\Api\Cache\CachedReferenceClient;
 use QameraAi\Module\Api\Cache\CachedReferenceClientFactory;
 use QameraAi\Module\Api\Dto\AspectRatio;
 use QameraAi\Module\Api\Exception\ApiException;
-use QameraAi\Module\Api\Exception\ValidationException;
 use QameraAi\Module\Api\Factory\MissingConfigurationException;
+use QameraAi\Module\Packshot\Acceptance\PackshotReviewRepository;
+use QameraAi\Module\Packshot\Acceptance\PhotoShootSubmitError;
+use QameraAi\Module\Packshot\Acceptance\PhotoShootSubmitErrorClassifier;
 use QameraAi\Module\Packshot\CalculatorBridge;
 use QameraAi\Module\Packshot\PackshotJobSubmitter;
 use QameraAi\Module\Packshot\SubmitFormInput;
 use QameraAi\Module\Packshot\SubmitResult;
 use QameraAi\Module\Packshot\SyncedProductLink;
 use QameraAi\Module\Packshot\SyncedProductLinkLookup;
+use QameraAi\Module\Webhook\Event\QameraDbException;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -41,14 +45,18 @@ final class GenerateFormController extends FrameworkBundleAdminController
     public function showAction(
         Request $request,
         CachedReferenceClientFactory $referenceFactory,
-        SyncedProductLinkLookup $linkLookup
+        SyncedProductLinkLookup $linkLookup,
+        PackshotReviewRepository $reviewRepository
     ): Response {
+        $jobType = $this->normalizeJobType($request->query->get('job_type'));
         $rawProductIds = $this->parseProductIds($request->query->get('products', ''));
-        $productIds = $this->filterGeneratableAndFlash($rawProductIds, $linkLookup);
+        $productIds = $jobType === SubmitFormInput::JOB_TYPE_PHOTO_SHOOT
+            ? $this->filterPhotoShootEligibleAndFlash($rawProductIds, $linkLookup, $reviewRepository)
+            : $this->filterGeneratableAndFlash($rawProductIds, $linkLookup);
 
         try {
             $reference = $referenceFactory->create();
-            $context = $this->loadReferenceContext($reference);
+            $context = $this->loadReferenceContextFor($jobType, $reference);
         } catch (MissingConfigurationException) {
             $this->addFlash('error', $this->trans(
                 'Qamera AI API key is not configured. Save your credentials first.',
@@ -64,11 +72,18 @@ final class GenerateFormController extends FrameworkBundleAdminController
             return $this->redirectToRoute('_qameraai_admin_products_grid');
         }
 
+        // Packshot frame is fixed 1:1 (aspect-ratios list not fetched);
+        // photo-shoot resolves the catalog default.
+        $defaultAspectRatio = $jobType === SubmitFormInput::JOB_TYPE_PHOTO_SHOOT
+            ? $this->resolveDefaultAspectRatio($context['aspect_ratios'])
+            : '1:1';
+
         return $this->render(
             '@Modules/qameraai/views/templates/admin/generate_form.html.twig',
             $context + [
                 'product_ids' => $productIds,
-                'default_aspect_ratio' => $this->resolveDefaultAspectRatio($context['aspect_ratios']),
+                'job_type' => $jobType,
+                'default_aspect_ratio' => $defaultAspectRatio,
                 'default_images_count' => 4,
                 'errors' => [],
                 'submit_url' => $this->generateUrl('_qameraai_admin_generate_submit'),
@@ -169,19 +184,26 @@ final class GenerateFormController extends FrameworkBundleAdminController
         }
 
         $aiModel = trim((string) $request->request->get('ai_model'));
-        $aspectRatio = trim((string) $request->request->get('aspect_ratio', '1:1'));
         $imagesCount = (int) $request->request->get('images_count', 4);
+        $jobTypeEarly = $this->normalizeJobType($request->request->get('job_type'));
+        // Packshot (stage 1) is a clean 1:1 cutout — aspect ratio is not
+        // operator-selectable on that form, so force it server-side rather
+        // than trust/require the (hidden) field.
+        $aspectRatio = $jobTypeEarly === SubmitFormInput::JOB_TYPE_PACKSHOT
+            ? '1:1'
+            : trim((string) $request->request->get('aspect_ratio', '1:1'));
         $sceneryId = $this->emptyToNull($request->request->get('scenery_id'));
         $mannequinModelId = $this->emptyToNull($request->request->get('mannequin_model_id'));
         $presetId = $this->emptyToNull($request->request->get('preset_id'));
         $suggestions = $this->emptyToNull($request->request->get('suggestions'));
         $productIds = $this->parseProductIds($request->request->get('product_ids', ''));
+        $jobType = $jobTypeEarly;
 
-        // Reference data is needed for both aspect-ratio validation (we
-        // only accept values that came from /aspect-ratios) and the
-        // re-render path on validation failure. Load once.
+        // Reference data is needed for aspect-ratio validation (photo-shoot
+        // only) and the re-render path on validation failure. Scoped by job
+        // type: packshot fetches only /ai-models (1 upstream call, not 5).
         try {
-            $referenceContext = $this->loadReferenceContext($referenceFactory->create());
+            $referenceContext = $this->loadReferenceContextFor($jobType, $referenceFactory->create());
         } catch (MissingConfigurationException | ApiException $e) {
             $this->addFlash('error', $this->trans(
                 'Could not load Qamera AI reference data: %message%',
@@ -196,7 +218,10 @@ final class GenerateFormController extends FrameworkBundleAdminController
             $aspectRatio,
             $imagesCount,
             $productIds,
-            $referenceContext['aspect_ratios']
+            $referenceContext['aspect_ratios'],
+            // Packshot forces 1:1 server-side (field hidden) — don't validate
+            // it against the catalog; only the photo-shoot form exposes it.
+            $jobType === SubmitFormInput::JOB_TYPE_PHOTO_SHOOT
         );
         if ($errors !== []) {
             return $this->renderWithErrors($referenceFactory, $request, $errors);
@@ -214,17 +239,26 @@ final class GenerateFormController extends FrameworkBundleAdminController
                 mannequinModelId: $mannequinModelId,
                 presetId: $presetId,
                 suggestions: $suggestions,
+                jobType: $jobType,
             );
         } catch (\InvalidArgumentException $e) {
             $errors['general'] = $e->getMessage();
             return $this->renderWithErrors($referenceFactory, $request, $errors);
         }
 
-        try {
-            $result = $submitter->submit($input);
-        } catch (ValidationException $e) {
-            $errors['ai_model'] = $e->getMessage();
-            return $this->renderWithErrors($referenceFactory, $request, $errors);
+        $result = $submitter->submit($input);
+
+        // The submitter swallows upstream failures into the result (it never
+        // re-throws), so a photo-shoot 422 surfaces via $result->firstApiError.
+        // Classify it (packshot_not_approved / gate-disabled) into a friendly,
+        // actionable flash instead of the raw "All sessions failed: …" string.
+        if (
+            $jobType === SubmitFormInput::JOB_TYPE_PHOTO_SHOOT
+            && !$result->isFullSuccess()
+            && $result->firstApiError !== null
+        ) {
+            $this->flashPhotoShootError($result->firstApiError);
+            return $this->redirectToRoute('_qameraai_admin_products_grid');
         }
 
         $this->flashResult($result);
@@ -251,6 +285,31 @@ final class GenerateFormController extends FrameworkBundleAdminController
         }
 
         return $this->json(['cost' => $cost, 'currency' => 'credits']);
+    }
+
+    /**
+     * Job-type-scoped reference load. A packshot form renders only the
+     * AI-model dropdown (model + count), so it fetches ONLY `/ai-models` —
+     * NOT sceneries/mannequins/presets/aspect-ratios. Beyond matching the
+     * simplified form, this cuts the upstream round-trips from 5 to 1, so an
+     * intermittent SSL-handshake timeout on a photo-shoot-only list can no
+     * longer block the packshot form from opening.
+     *
+     * @return array<string, mixed>
+     */
+    private function loadReferenceContextFor(string $jobType, CachedReferenceClient $reference): array
+    {
+        if ($jobType !== SubmitFormInput::JOB_TYPE_PHOTO_SHOOT) {
+            return [
+                'ai_models' => $reference->listAiModels(),
+                'sceneries' => [],
+                'mannequins' => [],
+                'presets' => [],
+                'aspect_ratios' => [],
+            ];
+        }
+
+        return $this->loadReferenceContext($reference);
     }
 
     /**
@@ -294,7 +353,8 @@ final class GenerateFormController extends FrameworkBundleAdminController
         string $aspectRatio,
         int $imagesCount,
         array $productIds,
-        array $aspectRatios
+        array $aspectRatios,
+        bool $validateAspectRatio = true
     ): array {
         $errors = [];
         if ($aiModel === '') {
@@ -314,12 +374,14 @@ final class GenerateFormController extends FrameworkBundleAdminController
         // crafted POST with an arbitrary string slipping through to the
         // upstream submitter, and gives the operator a clear field-level
         // error instead of an opaque API failure.
-        $allowed = array_map(static fn (AspectRatio $ar): string => $ar->value, $aspectRatios);
-        if ($aspectRatio === '' || !in_array($aspectRatio, $allowed, true)) {
-            $errors['aspect_ratio'] = $this->trans(
-                'Aspect ratio is not in the upstream catalog.',
-                'Modules.Qameraai.Admin'
-            );
+        if ($validateAspectRatio) {
+            $allowed = array_map(static fn (AspectRatio $ar): string => $ar->value, $aspectRatios);
+            if ($aspectRatio === '' || !in_array($aspectRatio, $allowed, true)) {
+                $errors['aspect_ratio'] = $this->trans(
+                    'Aspect ratio is not in the upstream catalog.',
+                    'Modules.Qameraai.Admin'
+                );
+            }
         }
         return $errors;
     }
@@ -332,8 +394,9 @@ final class GenerateFormController extends FrameworkBundleAdminController
         Request $request,
         array $errors
     ): Response {
+        $jobType = $this->normalizeJobType($request->request->get('job_type'));
         try {
-            $context = $this->loadReferenceContext($referenceFactory->create());
+            $context = $this->loadReferenceContextFor($jobType, $referenceFactory->create());
         } catch (MissingConfigurationException | ApiException) {
             // Already failed once — degrade to a flash + redirect rather
             // than render an empty form.
@@ -345,6 +408,7 @@ final class GenerateFormController extends FrameworkBundleAdminController
             '@Modules/qameraai/views/templates/admin/generate_form.html.twig',
             $context + [
                 'product_ids' => $this->parseProductIds($request->request->get('product_ids', '')),
+                'job_type' => $jobType,
                 'default_aspect_ratio' => trim((string) $request->request->get('aspect_ratio', '1:1')),
                 'default_images_count' => (int) $request->request->get('images_count', 4),
                 'errors' => $errors,
@@ -354,6 +418,118 @@ final class GenerateFormController extends FrameworkBundleAdminController
                 'js_asset_url' => rtrim(__PS_BASE_URI__, '/') . '/modules/qameraai/views/js/generate_form.js',
             ]
         );
+    }
+
+    /**
+     * Photo-shoot eligibility (D3): only products whose `product_ref` has a
+     * locally-accepted packshot review row may be photo-shot. Excluded rows
+     * are reported in a single flash. Mirrors {@see filterGeneratableAndFlash}.
+     *
+     * @param int[] $rawProductIds
+     * @return int[] eligible subset, in original order
+     */
+    private function filterPhotoShootEligibleAndFlash(
+        array $rawProductIds,
+        SyncedProductLinkLookup $lookup,
+        PackshotReviewRepository $reviewRepository
+    ): array {
+        if ($rawProductIds === []) {
+            return [];
+        }
+
+        $links = $lookup->loadByProductIds($this->resolveShopId(), $rawProductIds);
+        $refs = [];
+        foreach ($links as $link) {
+            $refs[] = $link->qameraProductRef;
+        }
+        // A DB failure on the eligibility lookup must degrade (treat nothing
+        // as eligible → all rows excluded with the existing flash) rather
+        // than 500 the form.
+        try {
+            $acceptedRefs = $reviewRepository->acceptedRefsIn($refs);
+        } catch (QameraDbException $e) {
+            PrestaShopLogger::addLog(
+                '[QameraAi][packshot-review] photo-shoot eligibility lookup failed: ' . $e->getMessage(),
+                3,
+                null,
+                'QameraAiModule',
+                null,
+                true
+            );
+            $acceptedRefs = [];
+        }
+
+        $eligible = [];
+        $excluded = 0;
+        foreach ($rawProductIds as $idProduct) {
+            $link = $links[$idProduct] ?? null;
+            if ($link !== null && isset($acceptedRefs[$link->qameraProductRef])) {
+                $eligible[] = $idProduct;
+            } else {
+                $excluded++;
+            }
+        }
+
+        if ($excluded > 0) {
+            $this->addFlash('info', $this->trans(
+                '%count% product(s) excluded — generate and approve a packshot first.',
+                'Modules.Qameraai.Admin',
+                ['%count%' => $excluded]
+            ));
+        }
+
+        return $eligible;
+    }
+
+    /**
+     * Translate a photo-shoot submit 422 into a friendly, actionable flash
+     * (add-packshot-acceptance-flow, "Photo-shoot is gated" requirement).
+     */
+    private function flashPhotoShootError(ApiException $e): void
+    {
+        $locale = $this->resolveLocale();
+        $classified = (new PhotoShootSubmitErrorClassifier())->classify($e, $locale);
+
+        switch ($classified->kind) {
+            case PhotoShootSubmitError::KIND_NOT_APPROVED:
+                $this->addFlash('error', $this->trans(
+                    'No approved packshot for this product yet. Approve a packshot in “Packshots review” first.',
+                    'Modules.Qameraai.Admin'
+                ));
+                return;
+            case PhotoShootSubmitError::KIND_GATE_DISABLED:
+                $this->addFlash('error', $this->trans(
+                    'The photo-shoot gate is not yet enabled upstream. Please retry after the cutover or contact support.',
+                    'Modules.Qameraai.Admin'
+                ));
+                return;
+            default:
+                $this->addFlash('error', $this->trans(
+                    'Photo-shoot submission failed: %message%',
+                    'Modules.Qameraai.Admin',
+                    ['%message%' => $classified->serverMessage ?? $e->getMessage()]
+                ));
+        }
+    }
+
+    /**
+     * @param mixed $raw
+     */
+    private function normalizeJobType($raw): string
+    {
+        return ((string) $raw) === SubmitFormInput::JOB_TYPE_PHOTO_SHOOT
+            ? SubmitFormInput::JOB_TYPE_PHOTO_SHOOT
+            : SubmitFormInput::JOB_TYPE_PACKSHOT;
+    }
+
+    private function resolveLocale(): string
+    {
+        $context = Context::getContext();
+        $language = $context->language ?? null;
+        if (is_object($language) && isset($language->iso_code) && is_string($language->iso_code)) {
+            return $language->iso_code;
+        }
+        return 'en';
     }
 
     private function flashResult(SubmitResult $result): void

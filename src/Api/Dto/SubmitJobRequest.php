@@ -23,6 +23,7 @@ final class SubmitJobRequest
         public readonly ?string $callbackUrl = null,
         public readonly ?array $externalMetadata = null,
         public readonly ?int $priority = null,
+        public readonly ?string $jobType = null,
     ) {
         $count = count($subjects);
         if ($count < 1 || $count > 100) {
@@ -47,6 +48,9 @@ final class SubmitJobRequest
             'session_config' => $this->sessionConfig->toPayload(),
             'subjects' => array_map(static fn (Subject $s): array => $s->toPayload(), $this->subjects),
         ];
+        if ($this->jobType !== null) {
+            $payload['job_type'] = $this->jobType;
+        }
         if ($this->callbackUrl !== null) {
             $payload['callback_url'] = $this->callbackUrl;
         }

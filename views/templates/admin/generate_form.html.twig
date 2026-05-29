@@ -4,13 +4,15 @@
    is the operator's raw POST. On the GET path it is absent — `default()`
    keeps the empty-state behaviour intact. #}
 {% set prev = previous_input|default({}) %}
+{% set job_type = job_type|default('packshot') %}
+{% set is_photo_shoot = job_type == 'photo_shoot' %}
 
 {% block content %}
   <div class="card">
     <div class="card-header">
       <h3 class="card-header-title">
-        <i class="material-icons">auto_fix_high</i>
-        {{ 'Generate packshots'|trans({}, 'Modules.Qameraai.Admin') }}
+        <i class="material-icons">{{ is_photo_shoot ? 'camera' : 'auto_fix_high' }}</i>
+        {{ (is_photo_shoot ? 'Generate photo-shoot' : 'Generate packshots')|trans({}, 'Modules.Qameraai.Admin') }}
       </h3>
       <div class="card-header-actions">
         <a href="{{ products_url }}" class="btn btn-outline-secondary">
@@ -31,6 +33,14 @@
       <form method="post" action="{{ submit_url }}" id="qameraai-generate-form">
         <input type="hidden" name="_token" value="{{ csrf_token('qamera_generate_submit') }}">
         <input type="hidden" name="product_ids" value="{{ product_ids|join(',') }}">
+        <input type="hidden" name="job_type" value="{{ job_type }}">
+        {# Packshot (stage 1) is a clean cutout — no scene/style and a fixed
+           1:1 frame (matches the canonical web UI packshot step, which only
+           picks image + count). The styling fields + aspect ratio below are
+           photo-shoot-only; for a packshot we send 1:1 via this hidden field. #}
+        {% if not is_photo_shoot %}
+          <input type="hidden" name="aspect_ratio" value="1:1">
+        {% endif %}
 
         <div class="form-group row">
           <label class="form-control-label col-sm-3">
@@ -67,6 +77,7 @@
           </div>
         </div>
 
+        {% if is_photo_shoot %}
         <div class="form-group row">
           <label class="form-control-label col-sm-3" for="qameraai-aspect-ratio">
             {{ 'Aspect ratio'|trans({}, 'Modules.Qameraai.Admin') }} *
@@ -88,6 +99,7 @@
             {% endif %}
           </div>
         </div>
+        {% endif %}
 
         <div class="form-group row">
           <label class="form-control-label col-sm-3" for="qameraai-images-count">
@@ -103,6 +115,7 @@
           </div>
         </div>
 
+        {% if is_photo_shoot %}
         <div class="form-group row">
           <label class="form-control-label col-sm-3" for="qameraai-scenery">
             {{ 'Scenery'|trans({}, 'Modules.Qameraai.Admin') }}
@@ -164,6 +177,7 @@
                       placeholder="{{ 'Free-form notes for the AI (optional)'|trans({}, 'Modules.Qameraai.Admin') }}">{{ prev.suggestions|default('') }}</textarea>
           </div>
         </div>
+        {% endif %}
 
         <div class="form-group row">
           <div class="col-sm-9 offset-sm-3">

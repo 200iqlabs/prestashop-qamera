@@ -19,6 +19,7 @@ use QameraAi\Module\Packshot\SubmitFormInput;
 use QameraAi\Module\Packshot\SyncedProductLink;
 use QameraAi\Module\Sync\PrestaShopLoggerWrapper;
 use QameraAi\Module\Tests\Support\FakePackshotJobRepository;
+use QameraAi\Module\Tests\Support\FakePackshotReviewRepository;
 use QameraAi\Module\Tests\Support\FakeSyncedProductLinkLookup;
 
 final class PackshotJobSubmitterTest extends TestCase
@@ -102,6 +103,9 @@ final class PackshotJobSubmitterTest extends TestCase
         self::assertSame([], $repo->insertedRows);
         self::assertArrayHasKey(1, $result->chunkFailures);
         self::assertStringContainsString('images_count', $result->chunkFailures[1]);
+        // The swallowed upstream exception is preserved on the result so the
+        // controller can classify a photo-shoot gate 422 into a friendly flash.
+        self::assertInstanceOf(ValidationException::class, $result->firstApiError);
     }
 
     public function testServerErrorLeavesDbUntouched(): void
@@ -281,12 +285,83 @@ final class PackshotJobSubmitterTest extends TestCase
         $submitter->submit($this->input([42], imagesCount: 1));
 
         self::assertNotNull($captured);
+        self::assertSame(SubmitFormInput::JOB_TYPE_PACKSHOT, $captured->jobType);
         $subject = $captured->subjects[0];
         self::assertSame(true, $subject->autoRegisterPackshot);
         self::assertMatchesRegularExpression(
             '/^ps:1:42:packshot:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/',
             (string) $subject->packshotExternalRef,
         );
+    }
+
+    public function testPhotoShootSubmitOmitsAssetIdAutoRegisterAndInputPackshot(): void
+    {
+        $lookup = new FakeSyncedProductLinkLookup();
+        // A photo_shoot-eligible product: synced link exists, but note the
+        // analysis gate is irrelevant here — eligibility is the accepted
+        // review row, not canGenerate().
+        $lookup->byIdProduct[42] = $this->link(42);
+
+        $reviewRepo = new FakePackshotReviewRepository();
+        $reviewRepo->acceptedRefs['ps:1:42'] = true;
+
+        $captured = null;
+        $registerCalls = 0;
+        $client = $this->stubClient(
+            function (SubmitJobRequest $req) use (&$captured): SubmitJobResponse {
+                $captured = $req;
+                return new SubmitJobResponse('ord-ps', 'queued', [
+                    new SubmitJobResponseSubject('ps:1:42', ['j-ps']),
+                ]);
+            },
+            function (RegisterPackshotRequest $req) use (&$registerCalls): PackshotResponse {
+                $registerCalls++;
+                return new PackshotResponse($req->externalRef, 'prod-1', 'pack-1', 'created');
+            },
+        );
+        $repo = new FakePackshotJobRepository();
+        $submitter = $this->submitter($client, $repo, $lookup, $reviewRepo);
+
+        $result = $submitter->submit(
+            $this->input([42], imagesCount: 1, jobType: SubmitFormInput::JOB_TYPE_PHOTO_SHOOT)
+        );
+
+        self::assertSame(1, $result->jobsPersisted);
+        self::assertSame(0, $registerCalls, 'photo_shoot must NOT register an input packshot');
+        self::assertNotNull($captured);
+        self::assertSame(SubmitFormInput::JOB_TYPE_PHOTO_SHOOT, $captured->jobType);
+        $subject = $captured->subjects[0];
+        self::assertNull($subject->packshotAssetId, 'photo_shoot omits packshot_asset_id');
+        self::assertNull($subject->autoRegisterPackshot, 'photo_shoot omits auto_register_packshot');
+        self::assertNull($subject->packshotExternalRef, 'photo_shoot does not register an output packshot');
+        // The local mirror row still carries a stage-tagged external ref.
+        self::assertStringContainsString(':photoshoot:', $repo->insertedRows[0]->packshotExternalRef);
+    }
+
+    public function testPhotoShootSkipsProductsWithoutAcceptedPackshot(): void
+    {
+        $lookup = new FakeSyncedProductLinkLookup();
+        $lookup->byIdProduct[42] = $this->link(42); // accepted
+        $lookup->byIdProduct[43] = $this->link(43); // pending/none → skipped
+
+        $reviewRepo = new FakePackshotReviewRepository();
+        $reviewRepo->acceptedRefs['ps:1:42'] = true;
+
+        $client = $this->stubClient(function (SubmitJobRequest $req): SubmitJobResponse {
+            self::assertCount(1, $req->subjects, 'only the accepted product is eligible');
+            self::assertSame('ps:1:42', $req->subjects[0]->productRef);
+            return new SubmitJobResponse('ord-ps', 'queued', [
+                new SubmitJobResponseSubject('ps:1:42', ['j-ps']),
+            ]);
+        });
+        $repo = new FakePackshotJobRepository();
+        $submitter = $this->submitter($client, $repo, $lookup, $reviewRepo);
+
+        $result = $submitter->submit(
+            $this->input([42, 43], imagesCount: 1, jobType: SubmitFormInput::JOB_TYPE_PHOTO_SHOOT)
+        );
+
+        self::assertSame(1, $result->jobsPersisted);
     }
 
     public function testRegistersInputPackshotBeforeSubmittingJob(): void
@@ -348,14 +423,18 @@ final class PackshotJobSubmitterTest extends TestCase
     /**
      * @param int[] $productIds
      */
-    private function input(array $productIds, int $imagesCount): SubmitFormInput
-    {
+    private function input(
+        array $productIds,
+        int $imagesCount,
+        string $jobType = SubmitFormInput::JOB_TYPE_PACKSHOT,
+    ): SubmitFormInput {
         return new SubmitFormInput(
             idShop: 1,
             productIds: $productIds,
             aiModel: 'openai/gpt-image-1',
             aspectRatio: '1:1',
             imagesCount: $imagesCount,
+            jobType: $jobType,
         );
     }
 
@@ -418,6 +497,7 @@ final class PackshotJobSubmitterTest extends TestCase
         QameraApiClient $client,
         FakePackshotJobRepository $repo,
         FakeSyncedProductLinkLookup $lookup,
+        ?FakePackshotReviewRepository $reviewRepo = null,
     ): PackshotJobSubmitter {
         $logger = new class extends PrestaShopLoggerWrapper {
             public function addLog(
@@ -431,6 +511,12 @@ final class PackshotJobSubmitterTest extends TestCase
                 // Drop logs in tests; assert directly on SubmitResult.
             }
         };
-        return new PackshotJobSubmitter($client, $repo, $lookup, $logger);
+        return new PackshotJobSubmitter(
+            $client,
+            $repo,
+            $lookup,
+            $reviewRepo ?? new FakePackshotReviewRepository(),
+            $logger,
+        );
     }
 }

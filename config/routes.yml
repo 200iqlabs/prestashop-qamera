@@ -56,6 +56,24 @@ _qameraai_admin_jobs_history:
     _legacy_controller: AdminQameraAiJobs
     _legacy_link: AdminQameraAiJobs
 
+# --- Phase 4.4: packshot acceptance flow ---
+
+_qameraai_admin_packshot_review:
+  path: /qameraai/packshots
+  methods: [GET]
+  defaults:
+    _controller: 'QameraAi\Module\Controller\Admin\PackshotReviewController::indexAction'
+    _legacy_controller: AdminQameraAiPackshotReview
+    _legacy_link: AdminQameraAiPackshotReview
+
+_qameraai_admin_packshot_vote:
+  path: /qameraai/packshots/vote
+  methods: [POST]
+  defaults:
+    _controller: 'QameraAi\Module\Controller\Admin\PackshotReviewController::voteAction'
+    _legacy_controller: AdminQameraAiPackshotReview
+    _legacy_link: AdminQameraAiPackshotReview
+
 # --- Phase 4.4: analysis-status surfacing ---
 
 _qameraai_admin_product_status:
