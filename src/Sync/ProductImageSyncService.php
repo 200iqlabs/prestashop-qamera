@@ -82,6 +82,29 @@ class ProductImageSyncService
             && $row['qamera_product_id'] !== null
             && (string) $row['qamera_product_id'] !== '');
 
+        // D2: a re-sync of an already-registered product with a stored asset
+        // is a no-op. `registerImage` is idempotent on the deterministic
+        // external_ref, so re-uploading only mints a fresh asset that upstream
+        // ignores, drifting `qamera_asset_id` away from the catalog (the
+        // divergence proved in the 2026-05-29 smoke). Skip entirely; the
+        // AnalysisStatusRefresher keeps `qamera_asset_id` reconciled. A
+        // registered row WITHOUT an asset falls through to re-register (recovery).
+        if ($isRegistered && (string) ($row['qamera_asset_id'] ?? '') !== '') {
+            $this->logger->addLog(
+                sprintf(
+                    '[QameraAi] id_product=%d already registered with a stored asset; '
+                    . 'skipping re-sync upload to avoid orphaning the catalog asset.',
+                    $idProduct
+                ),
+                1,
+                null,
+                'QameraAiModule',
+                $idProduct,
+                true
+            );
+            return;
+        }
+
         $imageToUpload = $isRegistered
             ? $idImage
             : $this->resolver->resolve(
@@ -160,7 +183,7 @@ class ProductImageSyncService
     private function loadBookkeepingRow(int $idProduct, int $idShop): ?array
     {
         $sql = sprintf(
-            'SELECT `status`, `qamera_product_id`, `display_name_snapshot`, '
+            'SELECT `status`, `qamera_product_id`, `qamera_asset_id`, `display_name_snapshot`, '
             . '`sku_snapshot`, `description_snapshot` '
             . 'FROM `%sqamera_product_link` '
             . 'WHERE `id_product` = %d AND `id_shop` = %d',

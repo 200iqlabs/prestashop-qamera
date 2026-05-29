@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace QameraAi\Module\Tests\Unit\Packshot;
 
 use PHPUnit\Framework\TestCase;
+use QameraAi\Module\Api\Dto\PackshotResponse;
+use QameraAi\Module\Api\Dto\RegisterPackshotRequest;
 use QameraAi\Module\Api\Dto\SubmitJobRequest;
 use QameraAi\Module\Api\Dto\SubmitJobResponse;
 use QameraAi\Module\Api\Dto\SubmitJobResponseSubject;
@@ -287,6 +289,62 @@ final class PackshotJobSubmitterTest extends TestCase
         );
     }
 
+    public function testRegistersInputPackshotBeforeSubmittingJob(): void
+    {
+        $lookup = new FakeSyncedProductLinkLookup();
+        $lookup->byIdProduct[42] = $this->link(42);
+
+        $order = [];
+        $registered = [];
+        $client = $this->stubClient(
+            function (SubmitJobRequest $req) use (&$order): SubmitJobResponse {
+                $order[] = 'submit';
+                return new SubmitJobResponse('ord-1', 'queued', [
+                    new SubmitJobResponseSubject('ps:1:42', ['j1']),
+                ]);
+            },
+            function (RegisterPackshotRequest $req) use (&$order, &$registered): PackshotResponse {
+                $order[] = 'register';
+                $registered[] = $req;
+                return new PackshotResponse($req->externalRef, 'prod-1', 'pack-1', 'created');
+            },
+        );
+        $submitter = $this->submitter($client, new FakePackshotJobRepository(), $lookup);
+        $submitter->submit($this->input([42], imagesCount: 1));
+
+        // registration happens, and strictly before the job submit
+        self::assertSame(['register', 'submit'], $order);
+        self::assertCount(1, $registered);
+        $req = $registered[0];
+        self::assertSame('ps:1:42:packshot:src', $req->externalRef);
+        self::assertSame('ps:1:42', $req->productRef);
+        self::assertSame('asset-42', $req->assetId);
+        self::assertNull($req->sourceImageRef);
+    }
+
+    public function testRegisterPackshotFailureAbortsSubmitWithNoJobAndNoRows(): void
+    {
+        $lookup = new FakeSyncedProductLinkLookup();
+        $lookup->byIdProduct[42] = $this->link(42);
+
+        $repo = new FakePackshotJobRepository();
+        $client = $this->stubClient(
+            function (SubmitJobRequest $req): SubmitJobResponse {
+                self::fail('submitJob must not be called when registerPackshot failed');
+            },
+            function (RegisterPackshotRequest $req): PackshotResponse {
+                throw new ServerException('packshot registration 503');
+            },
+        );
+        $submitter = $this->submitter($client, $repo, $lookup);
+
+        $result = $submitter->submit($this->input([42], imagesCount: 1));
+
+        self::assertSame(0, $result->sessionsSubmitted);
+        self::assertSame(1, $result->sessionsFailed);
+        self::assertSame([], $repo->insertedRows);
+    }
+
     /**
      * @param int[] $productIds
      */
@@ -321,17 +379,32 @@ final class PackshotJobSubmitterTest extends TestCase
 
     /**
      * @param callable(SubmitJobRequest): SubmitJobResponse $handler
+     * @param callable(RegisterPackshotRequest): PackshotResponse|null $onRegisterPackshot
+     *        Optional hook invoked on each registerPackshot() call (record / throw).
+     *        When null, returns a default `created` PackshotResponse without HTTP.
      */
-    private function stubClient(callable $handler): QameraApiClient
+    private function stubClient(callable $handler, ?callable $onRegisterPackshot = null): QameraApiClient
     {
-        return new class ($handler) extends QameraApiClient {
+        return new class ($handler, $onRegisterPackshot) extends QameraApiClient {
             /** @var callable(SubmitJobRequest): SubmitJobResponse */
             private $handler;
+            /** @var callable(RegisterPackshotRequest): PackshotResponse|null */
+            private $onRegisterPackshot;
 
-            public function __construct(callable $handler)
+            public function __construct(callable $handler, ?callable $onRegisterPackshot)
             {
                 $this->handler = $handler;
+                $this->onRegisterPackshot = $onRegisterPackshot;
                 // Bypass parent ctor — never opens an HTTP socket.
+            }
+
+            public function registerPackshot(RegisterPackshotRequest $request): PackshotResponse
+            {
+                if ($this->onRegisterPackshot !== null) {
+                    return ($this->onRegisterPackshot)($request);
+                }
+
+                return new PackshotResponse($request->externalRef, 'prod-stub', 'pack-stub', 'created');
             }
 
             public function submitJob(SubmitJobRequest $request): SubmitJobResponse

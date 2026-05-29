@@ -8,6 +8,8 @@ use PHPUnit\Framework\TestCase;
 use QameraAi\Module\Api\Dto\SubmitJobRequest;
 use QameraAi\Module\Api\Dto\SubmitJobResponse;
 use QameraAi\Module\Api\Dto\SubmitJobResponseSubject;
+use QameraAi\Module\Api\Dto\PackshotResponse;
+use QameraAi\Module\Api\Dto\RegisterPackshotRequest;
 use QameraAi\Module\Api\QameraApiClient;
 use QameraAi\Module\Packshot\PackshotJobRow;
 use QameraAi\Module\Packshot\PackshotJobSubmitter;
@@ -206,6 +208,12 @@ final class SubmitWebhookEndToEndTest extends TestCase
             public function __construct(callable $handler)
             {
                 $this->handler = $handler;
+            }
+
+            public function registerPackshot(RegisterPackshotRequest $request): PackshotResponse
+            {
+                // Input-packshot pre-flight (D1). Stubbed: never opens a socket.
+                return new PackshotResponse($request->externalRef, 'prod-stub', 'pack-stub', 'created');
             }
 
             public function submitJob(SubmitJobRequest $request): SubmitJobResponse
