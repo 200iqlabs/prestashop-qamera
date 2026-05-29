@@ -1,9 +1,15 @@
 # Tasks — add-packshot-acceptance-flow
 
 > **IMPLEMENTED** (2026-05-29). Tasks 1–8 complete on branch `add-packshot-acceptance-flow`
-> (commits 4e7b125 · 8271ac0 · 8920835 · 724b72b · 9b6a2c9 · 58084ea). Full unit suite
-> 398/398 green on PHP 8.1/8.2/8.3; PHPCS clean. Only §9 (operator smoke) remains, which
-> also needs the upstream `PLUGIN_PHOTO_SHOOT_GATE_ENABLED` flag flipped ON.
+> (commits 4e7b125 · 8271ac0 · 8920835 · 724b72b · 9b6a2c9 · 58084ea · a7ab469). Full unit
+> suite 400/400 green on PHP 8.1/8.2/8.3; PHPCS clean. Code-review pass (PR #26) applied:
+> review-table DB errors now degrade instead of 500ing the grid/form, and the vote-drift
+> case is logged (commit a7ab469).
+>
+> **§9 (operator-driven smoke) is the only remaining work and is NOW THE NEXT STEP.** It is
+> blocked on the upstream `PLUGIN_PHOTO_SHOOT_GATE_ENABLED` flag being flipped ON (tasks 9.2–9.3
+> exercise the gated photo-shoot path). Run against the live container on the main checkout
+> (not a worktree — the bind-mount only resolves `QameraAi\Module\…` there per CLAUDE.md).
 
 ## 0. Prerequisites confirmed (gate) — ✅ DONE
 
@@ -51,7 +57,7 @@
 
 - [x] 8.1 PHPCS clean (src/ tests/) + PHPUnit **398/398** green on **8.1, 8.2, 8.3** (verified in-container). PHPStan-L5 runs in CI only — it requires the PrestaShop core (`_PS_ROOT_DIR_` / `ps-module-extension.neon`), unavailable in the standalone docker runner per CLAUDE.md; the new `src/Packshot/Acceptance/*` follows the same `Db`-repository shape already passing CI.
 
-## 9. Smoke (operator-driven)
+## 9. Smoke (operator-driven) — ⏭️ NEXT (blocked on `PLUGIN_PHOTO_SHOOT_GATE_ENABLED` ON for 9.2–9.3)
 
 - [ ] 9.1 Generate packshot → webhook → row appears in "Packshots — review" (pending) with preview.
 - [ ] 9.2 Accept → `/jobs/{id}/accept` 2xx → local voting='accepted' → "Generate photo-shoot" enables on the grid.
