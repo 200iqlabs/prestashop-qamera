@@ -1,4 +1,7 @@
-<!-- DRAFT — finalize against the live API once the prerequisite fixes deploy. -->
+<!-- Finalized 2026-05-29: prerequisites fix-webhook-payload-contract (#22),
+     fix-packshot-asset-id-mismatch (#21), fix-packshot-catalog-registration (#25),
+     fix-webhook-job-error-string (#24) all merged; contract runtime-confirmed
+     (accept/reject = 204; outputs[0].url = signed preview, smoke product 31). -->
 
 ## ADDED Requirements
 
@@ -18,12 +21,16 @@ The submitter SHALL enforce the upstream constraints: when `jobType='packshot'`,
 
 ### Requirement: Client exposes job accept and reject
 
-`QameraApiClient` SHALL expose `acceptJob(string $id): JobDto` and `rejectJob(string $id): JobDto`, issuing `POST /jobs/{id}/accept` and `POST /jobs/{id}/reject` respectively, decoding the returned `JobDto` (which carries `voting`/`votingAt`). Failures SHALL raise the existing typed `ApiException` hierarchy; a `422` whose `ErrorEnvelope.code` is `packshot_not_approved` SHALL remain inspectable by the caller.
+`QameraApiClient` SHALL expose `acceptJob(string $id): void` and `rejectJob(string $id): void`, issuing `POST /jobs/{id}/accept` and `POST /jobs/{id}/reject` respectively. The endpoints return **`204 No Content`** (verified against `plugin-v1.yaml` — pure metadata, no body), so the methods decode nothing and simply return on a 2xx; the caller updates the local `ps_qamera_packshot_review.voting` itself. Failures SHALL raise the existing typed `ApiException` hierarchy. In particular a **`409 job_not_completed`** (voting is only allowed on a `completed` job) SHALL surface as the typed exception — naturally avoided since review rows are born from a `job.completed` delivery, but handled defensively. A `422` whose `ErrorEnvelope.code` is `packshot_not_approved` SHALL remain inspectable by the caller.
 
-#### Scenario: accept posts to the accept endpoint
-- **WHEN** `acceptJob('j1')` is called
-- **THEN** the client issues `POST /jobs/j1/accept` and returns the decoded `JobDto`
+#### Scenario: accept posts to the accept endpoint and returns on 204
+- **WHEN** `acceptJob('j1')` is called and the API returns `204`
+- **THEN** the client issues `POST /jobs/j1/accept` and returns without error (no body decoded)
 
-#### Scenario: reject posts to the reject endpoint
-- **WHEN** `rejectJob('j1')` is called
-- **THEN** the client issues `POST /jobs/j1/reject` and returns the decoded `JobDto`
+#### Scenario: reject posts to the reject endpoint and returns on 204
+- **WHEN** `rejectJob('j1')` is called and the API returns `204`
+- **THEN** the client issues `POST /jobs/j1/reject` and returns without error
+
+#### Scenario: voting a non-completed job raises the typed 409
+- **WHEN** `acceptJob('j1')` is called and the API returns `409` `job_not_completed`
+- **THEN** the client raises the typed `ApiException` (no local voting change)

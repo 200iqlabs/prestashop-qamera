@@ -1,19 +1,18 @@
 # Tasks — add-packshot-acceptance-flow
 
-> **OUTLINE — not ready for `/opsx:apply`.** Two prerequisites must merge + deploy first
-> (`fix-packshot-asset-id-mismatch`, `fix-webhook-payload-contract`), then this is finalized
-> against the runtime-confirmed contract (see design.md "Open items"). Section 0 gates the rest.
+> **READY for `/opsx:apply`** (finalized 2026-05-29). All prerequisites merged and the
+> runtime contract confirmed (see design.md "Resolved…"). Section 0 is satisfied.
 
-## 0. Prerequisites confirmed (gate)
+## 0. Prerequisites confirmed (gate) — ✅ DONE
 
-- [ ] 0.1 `fix-packshot-asset-id-mismatch` merged + deployed; a stage-1 `job_type='packshot'` submit reaches the backend with a correct source `asset_id` (no `generation_failed`).
-- [ ] 0.2 `fix-webhook-payload-contract` merged + deployed; a real `job.completed` with `job.job_type='packshot'` is accepted (200) and observed (capture the payload to confirm `outputs[0].url` is the packshot preview).
+- [x] 0.1 `fix-packshot-asset-id-mismatch` (#21) merged; **`fix-packshot-catalog-registration` (#25)** merged + smoked — a stage-1 `job_type='packshot'` submit now completes (the plugin registers the input packshot first; no `generation_failed` / `MISSING_CATALOG_ENTRY`). Proven on product 31.
+- [x] 0.2 `fix-webhook-payload-contract` (#22) + `fix-webhook-job-error-string` (#24) merged; a real `job.completed(job_type='packshot')` was accepted (200) and `outputs[0].url` confirmed = signed Supabase preview (`type='image/jpeg'`), persisted into `output_url`.
 
 ## 1. API client (qamera-api-client)
 
 - [ ] 1.1 `SubmitJobRequest` + optional `?string $jobType`; `toPayload()` emits `job_type` when set.
 - [ ] 1.2 `Subject.packshotAssetId` nullable; `toPayload()` omits `packshot_asset_id` when null.
-- [ ] 1.3 `QameraApiClient::acceptJob(string $id): JobDto` / `rejectJob(string $id): JobDto` → `POST /jobs/{id}/accept|reject`.
+- [ ] 1.3 `QameraApiClient::acceptJob(string $id): void` / `rejectJob(string $id): void` → `POST /jobs/{id}/accept|reject` (endpoints return **204 No Content**; no body to decode — return on 2xx). Map `409` to the typed `ApiException` (`job_not_completed`).
 
 ## 2. Schema (packshot-acceptance)
 
@@ -22,7 +21,7 @@
 
 ## 3. Submitter branch (packshot-jobs)
 
-- [ ] 3.1 Branch the submit path: packshot (job_type='packshot', auto_register=true, source asset_id) vs photo_shoot (job_type='photo_shoot', omit asset_id + auto_register).
+- [ ] 3.1 Branch the submit path: packshot (job_type='packshot', auto_register=true, source asset_id) vs photo_shoot (job_type='photo_shoot', omit asset_id + auto_register). **Scope the `registerPackshot('…:packshot:src')` pre-flight added by #25 to the packshot branch ONLY** — photo_shoot must NOT register an input packshot (it relies on the upstream accepted-packshot resolution). Update `PackshotJobSubmitterTest` accordingly.
 - [ ] 3.2 Photo-shoot eligibility = has a local `voting='accepted'` review row for the product_ref.
 
 ## 4. Webhook branch (webhook-event-dispatch / packshot-acceptance)

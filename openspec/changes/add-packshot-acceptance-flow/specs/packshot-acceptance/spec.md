@@ -1,5 +1,6 @@
-<!-- DRAFT — scenario sets to be finalized after fix-packshot-asset-id-mismatch and
-     fix-webhook-payload-contract merge and the runtime contract is confirmed. -->
+<!-- Finalized 2026-05-29: prerequisites #21/#22/#24/#25 merged; runtime contract
+     confirmed by smoke (outputs[0].url = signed Supabase preview, product 31;
+     job_type='packshot' completion path proven; accept/reject = 204). -->
 
 ## ADDED Requirements
 
@@ -49,7 +50,11 @@ Accepting or rejecting a pending packshot SHALL call `QameraApiClient::acceptJob
 
 ### Requirement: Photo-shoot is gated on a locally-accepted packshot
 
-A product SHALL be eligible for a `job_type='photo_shoot'` submission iff it has at least one `ps_qamera_packshot_review` row for its `product_ref` with `voting='accepted'`. The gate is enforced client-side regardless of the server `PLUGIN_PHOTO_SHOOT_GATE_ENABLED` flag (which the plugin cannot read). A `422 packshot_not_approved` from the API (detected via `ErrorEnvelope.code`) SHALL be surfaced as a localized, actionable flash rather than a raw error.
+A product SHALL be eligible for a `job_type='photo_shoot'` submission iff it has at least one `ps_qamera_packshot_review` row for its `product_ref` with `voting='accepted'`. The gate is enforced client-side regardless of the server `PLUGIN_PHOTO_SHOOT_GATE_ENABLED` flag (which the plugin cannot read). The photo_shoot submission **omits** `packshot_asset_id` (decision: "omit + flip flag with deploy" — when the flag is ON the backend resolves the latest accepted packshot per `product_ref`).
+
+Two upstream error codes SHALL be detected via `ErrorEnvelope.code` and surfaced as localized, actionable flashes (never a raw error):
+- `packshot_not_approved` (422) — drift safety-net: upstream has no accepted packshot (e.g. rejected upstream after a local accept). Flash + "accept a packshot first".
+- `invalid_input` (422) — appears when the flag is still **OFF** and `packshot_asset_id` was omitted (the backend requires it OFF). This is a deploy/flag mis-config signal, not operator error; flash a distinct "photo-shoot gate not yet enabled upstream — contact support / retry after cutover" message rather than the raw validation error. (Both the plugin gate and prod require the flag ON; smoke task 9.3 requires it too.)
 
 #### Scenario: Accepted packshot unlocks photo-shoot
 - **GIVEN** a product `ps:1:42` with a `ps_qamera_packshot_review` row `voting='accepted'`
@@ -62,3 +67,8 @@ A product SHALL be eligible for a `job_type='photo_shoot'` submission iff it has
 #### Scenario: 422 packshot_not_approved is surfaced as a friendly flash
 - **WHEN** a photo_shoot submit returns 422 with `ErrorEnvelope.code='packshot_not_approved'`
 - **THEN** the BO flashes `ErrorEnvelope::messageFor(locale)` plus an "accept a packshot first" hint, not a raw 422
+
+#### Scenario: 422 invalid_input (flag OFF) is surfaced as a gate-not-enabled flash
+- **GIVEN** the server `PLUGIN_PHOTO_SHOOT_GATE_ENABLED` flag is still OFF
+- **WHEN** a photo_shoot submit omits `packshot_asset_id` and returns 422 with `ErrorEnvelope.code='invalid_input'`
+- **THEN** the BO flashes a distinct "photo-shoot gate not yet enabled upstream" message (not a raw validation error), signalling a deploy/flag cutover issue rather than operator error

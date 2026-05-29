@@ -64,13 +64,18 @@ The gate keys on local `ps_qamera_packshot_review.voting='accepted'`. `ProductPa
 - `SubmitJobRequest` gains `?string $jobType` → `toPayload()` emits `job_type` when set.
 - `Subject.packshotAssetId` becomes nullable; `toPayload()` omits it when null. Packshot subjects send it (the source `qamera_asset_id`); photo_shoot subjects omit it.
 - Packshot submissions set `autoRegisterPackshot=true` on every subject (D5 upstream — else 422 `invalid_input`); photo_shoot submissions omit it.
-- `QameraApiClient::acceptJob(string $id): JobDto` / `rejectJob(string $id): JobDto` → `POST /jobs/{id}/accept|reject`. `JobDto` already carries `voting`/`votingAt`/`jobType`.
+- **Input-packshot registration is scoped to stage-1 only (interaction with `fix-packshot-catalog-registration`, #25).** That fix made `PackshotJobSubmitter` call `registerPackshot('ps:s:p:packshot:src', asset=qamera_asset_id)` before *every* submit (single-path submitter). When this change adds the `job_type` branch, the `registerPackshot` pre-flight MUST run **only for `job_type='packshot'`** (the input source the upstream catalog needs). A `job_type='photo_shoot'` submission omits BOTH the input-packshot registration AND `packshot_asset_id` — the backend resolves the accepted packshot per `product_ref` (flag ON). Failing to scope it would register a spurious `:src` packshot on the photo_shoot path.
+- `QameraApiClient::acceptJob(string $id): void` / `rejectJob(string $id): void` → `POST /jobs/{id}/accept|reject`, which return **`204 No Content`** (verified — pure metadata). The methods return on 2xx; the caller flips the local `ps_qamera_packshot_review.voting`. A `409 job_not_completed` surfaces as the typed `ApiException`.
 
-## Open items to finalize AFTER prerequisites merge
+## Resolved after prerequisites merged + runtime confirmation (2026-05-29)
 
-- Confirm the exact `job_type` placement in `SubmitJobRequestSchema` (request top-level — verified) and the accept/reject response shape against the live API once `fix-webhook-payload-contract` lands and a real `job.completed(job_type=packshot)` is observed.
-- Confirm `outputs[0].url` is the right preview for a packshot job (vs a dedicated field) from a real delivery.
-- Finalize spec scenario sets + tasks.md once the two fixes are deployed and the runtime contract is confirmed.
+All prerequisites are merged (`#21` asset-id, `#22` webhook-contract, `#24` job.error-string, `#25` catalog-registration) and the contract is runtime-confirmed:
+
+- `job_type` placement = request top-level — verified against `SubmitJobRequestSchema`.
+- accept/reject = **`204 No Content`** (not a `JobDto`) — verified against `plugin-v1.yaml`; methods are `: void`. `409 job_not_completed` for non-completed jobs.
+- **`outputs[0].url` IS the packshot preview** — PROVEN by the #25 smoke (product 31): a real `job.completed(job_type=packshot)` carried `outputs[0].url` = a signed Supabase preview (`outputs[0].type='image/jpeg'`), persisted verbatim into `ps_qamera_packshot_job.output_url`. The webhook `outputs[]` is the same shape as `GET /jobs` outputs, so the `asset_url = outputs[0].url` mapping is sound.
+- `job.product_ref` shape = clean `ps:<shop>:<product>` — confirmed; the strict `ProductRefParser` (#22) accepts it.
+- Spec scenarios + tasks.md finalized in this pass.
 
 ## Out of scope
 
