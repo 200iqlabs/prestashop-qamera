@@ -92,7 +92,7 @@ final class PackshotJobSubmitter
         if ($generable === []) {
             // Caller has already surfaced the disabled state via the
             // grid; this defensive path catches a stale form post (the
-            // operator started the form before a row's qamera_image_id
+            // operator started the form before a row's qamera_asset_id
             // was nulled out, then submitted). Return a zero-result so
             // the controller can flash "no eligible products".
             $this->logEvent(
@@ -185,7 +185,7 @@ final class PackshotJobSubmitter
             ];
 
             $subjects[] = new Subject(
-                packshotAssetId: (string) $link->qameraImageId,
+                packshotAssetId: (string) $link->qameraAssetId,
                 productLabel: $this->truncateLabel($link->displayNameSnapshot),
                 productRef: $link->qameraProductRef,
                 imagesCount: $input->imagesCount,

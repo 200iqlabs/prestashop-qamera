@@ -114,7 +114,7 @@ final class GenerateFormController extends FrameworkBundleAdminController
                 $unsynced++;
                 continue;
             }
-            if ($link->qameraImageId === null || $link->qameraImageId === '') {
+            if ($link->qameraAssetId === null || $link->qameraAssetId === '') {
                 $unsynced++;
                 continue;
             }

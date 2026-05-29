@@ -181,13 +181,13 @@ final class PackshotJobSubmitterTest extends TestCase
     public function testUnsyncedProductsAreSkippedWithoutSubmitting(): void
     {
         $lookup = new FakeSyncedProductLinkLookup();
-        // Both products lookup-able but only one has qamera_image_id.
+        // Both products lookup-able but only one has qamera_asset_id.
         $lookup->byIdProduct[42] = $this->link(42);
         $lookup->byIdProduct[43] = new SyncedProductLink(
             idLink: 200,
             idShop: 1,
             idProduct: 43,
-            qameraImageId: null,
+            qameraAssetId: null,
             qameraProductRef: 'ps:1:43',
             displayNameSnapshot: 'Unsynced',
         );
@@ -204,6 +204,63 @@ final class PackshotJobSubmitterTest extends TestCase
         $result = $submitter->submit($this->input([42, 43], imagesCount: 1));
 
         self::assertSame(1, $result->jobsPersisted);
+    }
+
+    public function testSubjectPackshotAssetIdEqualsLinkAssetId(): void
+    {
+        $lookup = new FakeSyncedProductLinkLookup();
+        // A link whose storage asset id is deliberately distinct from any
+        // 'img-*' shape — the outbound Subject MUST carry this exact value.
+        $lookup->byIdProduct[42] = new SyncedProductLink(
+            idLink: 142,
+            idShop: 1,
+            idProduct: 42,
+            qameraAssetId: 'asset-uuid-xyz',
+            qameraProductRef: 'ps:1:42',
+            displayNameSnapshot: 'Widget',
+            analysisStatus: SyncedProductLink::ANALYSIS_STATUS_DESCRIBED,
+        );
+
+        $captured = null;
+        $client = $this->stubClient(function (SubmitJobRequest $req) use (&$captured): SubmitJobResponse {
+            $captured = $req;
+            return new SubmitJobResponse('ord-1', 'queued', [
+                new SubmitJobResponseSubject('ps:1:42', ['j1']),
+            ]);
+        });
+        $submitter = $this->submitter($client, new FakePackshotJobRepository(), $lookup);
+        $submitter->submit($this->input([42], imagesCount: 1));
+
+        self::assertNotNull($captured);
+        self::assertSame('asset-uuid-xyz', $captured->subjects[0]->packshotAssetId);
+    }
+
+    public function testEmptyAssetIdLinkIsSkippedByCanGenerate(): void
+    {
+        $lookup = new FakeSyncedProductLinkLookup();
+        // Empty-string asset id (e.g. a malformed/nulled row): canGenerate()
+        // must reject it so no empty packshot_asset_id is ever sent upstream.
+        $lookup->byIdProduct[42] = new SyncedProductLink(
+            idLink: 142,
+            idShop: 1,
+            idProduct: 42,
+            qameraAssetId: '',
+            qameraProductRef: 'ps:1:42',
+            displayNameSnapshot: 'Widget',
+            analysisStatus: SyncedProductLink::ANALYSIS_STATUS_DESCRIBED,
+        );
+
+        $client = $this->stubClient(static function (): SubmitJobResponse {
+            self::fail('submitJob must not be called when no link can generate');
+        });
+        $repo = new FakePackshotJobRepository();
+        $submitter = $this->submitter($client, $repo, $lookup);
+
+        $result = $submitter->submit($this->input([42], imagesCount: 1));
+
+        self::assertSame(0, $result->sessionsSubmitted);
+        self::assertSame(0, $result->jobsPersisted);
+        self::assertSame([], $repo->insertedRows);
     }
 
     public function testPackshotExternalRefMatchesSpecRegex(): void
@@ -250,11 +307,11 @@ final class PackshotJobSubmitterTest extends TestCase
             idLink: 100 + $idProduct,
             idShop: 1,
             idProduct: $idProduct,
-            qameraImageId: 'img-' . $idProduct,
+            qameraAssetId: 'asset-' . $idProduct,
             qameraProductRef: 'ps:1:' . $idProduct,
             displayNameSnapshot: 'Product ' . $idProduct,
             // Phase 4.4 — submitter still gates on canGenerate(), which
-            // now requires `described` in addition to a non-null image
+            // now requires `described` in addition to a non-null asset
             // id. Test fixtures default to `described` so existing
             // submitter scenarios stay green; tests that need to verify
             // the new gate pass an explicit override.

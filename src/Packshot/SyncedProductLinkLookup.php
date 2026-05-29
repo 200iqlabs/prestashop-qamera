@@ -13,7 +13,7 @@ use QameraAi\Module\Webhook\Event\QameraDbException;
  * class stays focused on the new `ps_qamera_packshot_job` table.
  *
  * SELECTs are intentionally narrow — only the columns the consumers
- * actually need (id_link, qamera_image_id, qamera_product_ref,
+ * actually need (id_link, qamera_asset_id, qamera_product_ref,
  * display_name_snapshot). PHPCS sniff at PR review time: no `SELECT *`.
  */
 /**
@@ -47,7 +47,7 @@ class SyncedProductLinkLookup
         $idsCsv = implode(',', array_map(static fn (int $i): int => $i, $idProducts));
 
         $sql = sprintf(
-            'SELECT `id_link`, `id_shop`, `id_product`, `qamera_image_id`, '
+            'SELECT `id_link`, `id_shop`, `id_product`, `qamera_asset_id`, '
             . '`qamera_product_ref`, `display_name_snapshot`, '
             . '`analysis_status`, `analysis_described_count`, '
             . '`analysis_total_count`, `analysis_refreshed_at` '
@@ -79,7 +79,7 @@ class SyncedProductLinkLookup
      * Paginated grid feed for the BO products page. Includes every
      * registered product link (synced OR pending) so the grid can
      * surface both states with one query. Unsynced rows
-     * (qamera_image_id IS NULL) render with a disabled Generate
+     * (qamera_asset_id IS NULL) render with a disabled Generate
      * action — the filter happens client-side via
      * {@see SyncedProductLink::canGenerate()}.
      *
@@ -93,7 +93,7 @@ class SyncedProductLinkLookup
         $offset = max(0, $offset);
 
         $sql = sprintf(
-            'SELECT `id_link`, `id_shop`, `id_product`, `qamera_image_id`, '
+            'SELECT `id_link`, `id_shop`, `id_product`, `qamera_asset_id`, '
             . '`qamera_product_ref`, `display_name_snapshot`, `status`, `last_synced_at`, '
             . '`analysis_status`, `analysis_described_count`, '
             . '`analysis_total_count`, `analysis_refreshed_at` '
@@ -133,7 +133,7 @@ class SyncedProductLinkLookup
     public function findByIdLink(int $idShop, int $idLink): ?SyncedProductLink
     {
         $sql = sprintf(
-            'SELECT `id_link`, `id_shop`, `id_product`, `qamera_image_id`, '
+            'SELECT `id_link`, `id_shop`, `id_product`, `qamera_asset_id`, '
             . '`qamera_product_ref`, `display_name_snapshot`, `status`, `last_synced_at`, '
             . '`analysis_status`, `analysis_described_count`, '
             . '`analysis_total_count`, `analysis_refreshed_at` '
@@ -167,8 +167,8 @@ class SyncedProductLinkLookup
             (int) $row['id_link'],
             (int) $row['id_shop'],
             (int) $row['id_product'],
-            isset($row['qamera_image_id']) && $row['qamera_image_id'] !== ''
-                ? (string) $row['qamera_image_id']
+            isset($row['qamera_asset_id']) && $row['qamera_asset_id'] !== ''
+                ? (string) $row['qamera_asset_id']
                 : null,
             (string) $row['qamera_product_ref'],
             (string) ($row['display_name_snapshot'] ?? ''),

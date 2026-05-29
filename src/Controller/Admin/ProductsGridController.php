@@ -13,7 +13,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Lists synced products with single + bulk "Generate" actions. Rows
- * whose `qamera_image_id IS NULL` render with the action disabled and
+ * whose `qamera_asset_id IS NULL` render with the action disabled and
  * a hover hint per the `qamera-bo-ui` spec.
  *
  * Phase 4.4 (add-analysis-status-surfacing) added an Analysis column
@@ -47,7 +47,7 @@ final class ProductsGridController extends FrameworkBundleAdminController
                     'id_product' => $r->idProduct,
                     'name' => $r->displayNameSnapshot,
                     'product_ref' => $r->qameraProductRef,
-                    'qamera_image_id' => $r->qameraImageId,
+                    'qamera_asset_id' => $r->qameraAssetId,
                     'status' => $r->status,
                     'last_synced_at' => $r->lastSyncedAt,
                     'can_generate' => $r->canGenerate(),

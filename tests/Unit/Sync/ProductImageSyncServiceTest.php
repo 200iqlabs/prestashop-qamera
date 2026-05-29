@@ -155,6 +155,12 @@ final class ProductImageSyncServiceTest extends TestCase
         self::assertStringContainsString("'registered'", $capturedSql);
         self::assertStringContainsString("'abc-uuid'", $capturedSql);
         self::assertStringContainsString('`last_error_message` = NULL', $capturedSql);
+        // The persisted value MUST be the storage asset_id (the value PUT
+        // upstream), NOT the logical ImageResponse.imageId ('img-uuid').
+        // The two are distinct UUIDs; persisting the wrong one is the
+        // root cause this change fixes.
+        self::assertStringContainsString("`qamera_asset_id` = 'asset-uuid'", $capturedSql);
+        self::assertStringNotContainsString('img-uuid', $capturedSql);
     }
 
     public function testRegisteredRowSkipsProductMetadataInRequest(): void
@@ -193,6 +199,10 @@ final class ProductImageSyncServiceTest extends TestCase
         self::assertStringContainsString('`last_synced_at` = NOW()', $capturedSql);
         self::assertStringNotContainsString("'registered'", $capturedSql);
         self::assertStringNotContainsString('`qamera_product_id`', $capturedSql);
+        // Re-sync path refreshes qamera_asset_id with the NEW presigned
+        // asset id, never the logical imageId.
+        self::assertStringContainsString("`qamera_asset_id` = 'asset-uuid-2'", $capturedSql);
+        self::assertStringNotContainsString('img-uuid', $capturedSql);
     }
 
     public function testValidationExceptionMapsToError(): void

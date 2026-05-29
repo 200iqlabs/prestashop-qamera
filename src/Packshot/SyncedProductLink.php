@@ -6,10 +6,11 @@ namespace QameraAi\Module\Packshot;
 
 /**
  * Read-side projection of `ps_qamera_product_link` for the submitter and
- * the BO products grid. `qameraImageId` is `null` for rows that have been
- * registered upstream but have not yet had `POST /images` succeed —
- * those rows are NOT generable and the BO renders them with the action
- * disabled.
+ * the BO products grid. `qameraAssetId` is `null` for rows that have been
+ * registered upstream but have not yet had `POST /images` succeed (or were
+ * migrated and await re-sync) — those rows are NOT generable and the BO
+ * renders them with the action disabled. It holds the storage `asset_id`
+ * minted by `requestUpload()` — the value sent as `Subject.packshot_asset_id`.
  *
  * Phase 4.4 (add-analysis-status-surfacing) added the analysis-status
  * aggregate cache: `analysisStatus` mirrors the upstream Gemini
@@ -32,7 +33,7 @@ final class SyncedProductLink
         public readonly int $idLink,
         public readonly int $idShop,
         public readonly int $idProduct,
-        public readonly ?string $qameraImageId,
+        public readonly ?string $qameraAssetId,
         public readonly string $qameraProductRef,
         public readonly string $displayNameSnapshot,
         public readonly ?string $status = null,
@@ -46,8 +47,8 @@ final class SyncedProductLink
 
     public function canGenerate(): bool
     {
-        return $this->qameraImageId !== null
-            && $this->qameraImageId !== ''
+        return $this->qameraAssetId !== null
+            && $this->qameraAssetId !== ''
             && $this->analysisStatus === self::ANALYSIS_STATUS_DESCRIBED;
     }
 
@@ -58,8 +59,9 @@ final class SyncedProductLink
      * the key returned here through the translator.
      *
      * The "sync first" reason takes precedence over "analysis pending":
-     * without an image_id there's literally nothing to analyse, so showing
-     * the analysis hint would be misleading.
+     * without a storage asset_id there's literally nothing to analyse (and
+     * a job would fail at generation), so showing the analysis hint would
+     * be misleading.
      *
      * Note on `partial`: the spec gates Generate strictly on `described`
      * — the multi-image future will revisit this when the operator
@@ -68,7 +70,7 @@ final class SyncedProductLink
      */
     public function getDisabledHint(): ?string
     {
-        if ($this->qameraImageId === null || $this->qameraImageId === '') {
+        if ($this->qameraAssetId === null || $this->qameraAssetId === '') {
             return 'Sync this product first';
         }
 

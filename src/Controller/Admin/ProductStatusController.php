@@ -61,7 +61,7 @@ final class ProductStatusController extends FrameworkBundleAdminController
             idLink: $link->idLink,
             idShop: $link->idShop,
             idProduct: $link->idProduct,
-            qameraImageId: $link->qameraImageId,
+            qameraAssetId: $link->qameraAssetId,
             qameraProductRef: $link->qameraProductRef,
             displayNameSnapshot: $link->displayNameSnapshot,
             status: $link->status,
