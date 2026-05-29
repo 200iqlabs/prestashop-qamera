@@ -20,7 +20,11 @@ PrestaShop module that talks to the Qamera AI Plugin API (`https://qamera.ai/api
 
 ## Git worktrees
 
-Composer and PHP are NOT on the Windows host PATH — the dev container is the only PHP runtime. The parent `docker-compose.yml` bind-mounts the main checkout (`./modules/qameraai`) into `/var/www/html/modules/qameraai`; worktrees under `.claude/worktrees/<branch>` are NOT bind-mounted and are therefore invisible to `make up` / `make shell` / `make install`. Use worktrees for **isolated editing + unit tests + static analysis only**, not for PrestaShop integration smoke (which has to happen in the main checkout).
+Composer and PHP are NOT on the Windows host PATH — the dev container is the only PHP runtime. The parent `docker-compose.yml` bind-mounts the main checkout (`./modules/qameraai`) into `/var/www/html/modules/qameraai`. **`.claude/worktrees/<branch>` lives INSIDE that bind-mount, so the container DOES see it** at `/var/www/html/modules/qameraai/.claude/worktrees/<branch>` — it is NOT isolated from the PS runtime. The `make` targets still can't *resolve* `QameraAi\Module\…` from a worktree (wrong autoload root — the worktree is a nested dir, not a top-level `modules/<name>/`), so use worktrees for **isolated editing + unit tests + static analysis only**, not for PrestaShop integration smoke (which has to happen in the main checkout).
+
+<important if="worktree carries a vendor/ install">
+A worktree containing a copy of `qameraai.php` + `vendor/` is a second module copy the PS runtime can stumble into (`qameraai.php` loads `__DIR__/vendor/autoload.php` at runtime). A broken/partial `composer install` in the worktree then surfaces as runtime warnings like `file_get_contents(.../.claude/worktrees/<branch>/vendor/friendsofphp/php-cs-fixer/.../InvalidConfigurationException.php): Failed to open stream` (php-cs-fixer is a TRANSITIVE dep of `prestashop/php-dev-tools`, not in `composer.json`). The fix is to delete the worktree, not to touch the live module. **Always tear down a worktree when done** — `git worktree remove .claude/worktrees/<branch>` (or `rm -rf` if it was never git-registered), then `cache:clear` as `www-data`.
+</important>
 
 Setup procedure (one-time per worktree):
 
