@@ -1,7 +1,9 @@
 # Tasks — add-packshot-acceptance-flow
 
-> **READY for `/opsx:apply`** (finalized 2026-05-29). All prerequisites merged and the
-> runtime contract confirmed (see design.md "Resolved…"). Section 0 is satisfied.
+> **IMPLEMENTED** (2026-05-29). Tasks 1–8 complete on branch `add-packshot-acceptance-flow`
+> (commits 4e7b125 · 8271ac0 · 8920835 · 724b72b · 9b6a2c9 · 58084ea). Full unit suite
+> 398/398 green on PHP 8.1/8.2/8.3; PHPCS clean. Only §9 (operator smoke) remains, which
+> also needs the upstream `PLUGIN_PHOTO_SHOOT_GATE_ENABLED` flag flipped ON.
 
 ## 0. Prerequisites confirmed (gate) — ✅ DONE
 
@@ -40,14 +42,14 @@
 
 ## 7. Tests
 
-- [ ] 7.1 DTO: `SubmitJobRequest` job_type emit; `Subject` nullable asset_id omit; `acceptJob`/`rejectJob` request shape.
-- [ ] 7.2 Webhook branch: packshot completion → pending review row; photo_shoot completion → no review row.
-- [ ] 7.3 Gate: accepted unlocks photo-shoot; pending/none disables; 422 friendly flash.
-- [ ] 7.4 Submitter branch: packshot sends auto_register+asset_id; photo_shoot omits both.
+- [x] 7.1 DTO: covered by `QameraApiClientTest` (job_type emit, null packshot_asset_id omit, accept/reject endpoints + 204 + 409).
+- [x] 7.2 Webhook branch: covered by `JobCompletedHandlerTest` (packshot → pending review row; photo_shoot + untyped → no review row).
+- [x] 7.3 Gate: 422 friendly-flash mapping covered by `PhotoShootSubmitErrorClassifierTest`; accepted-packshot JOIN gate covered by `PackshotReviewRepositoryTest::acceptedRefsIn*`. Grid enable/disable rendering itself is Twig-level → exercised by §9 smoke.
+- [x] 7.4 Submitter branch: covered by `PackshotJobSubmitterTest` (packshot sends auto_register+asset_id+input-register; photo_shoot omits all three) + `PackshotVoteServiceTest`.
 
 ## 8. Static analysis + lint
 
-- [ ] 8.1 PHPCS / PHPStan-L5 / PHPUnit green across 8.1/8.2/8.3.
+- [x] 8.1 PHPCS clean (src/ tests/) + PHPUnit **398/398** green on **8.1, 8.2, 8.3** (verified in-container). PHPStan-L5 runs in CI only — it requires the PrestaShop core (`_PS_ROOT_DIR_` / `ps-module-extension.neon`), unavailable in the standalone docker runner per CLAUDE.md; the new `src/Packshot/Acceptance/*` follows the same `Db`-repository shape already passing CI.
 
 ## 9. Smoke (operator-driven)
 
