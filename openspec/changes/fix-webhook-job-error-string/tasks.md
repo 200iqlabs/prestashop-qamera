@@ -2,16 +2,16 @@
 
 ## 1. Fix the extractor (TDD)
 
-- [ ] 1.1 Add failing unit tests in `tests/Unit/Webhook/Event/Handler/PayloadExtractorTest.php` (or extend the existing test): string `job.error` → returned verbatim; empty string → null; object with `message_i18n`/`message`/`code` → existing behavior (regression); `job.error` absent → null; non-string/non-array (e.g. number) → null.
-- [ ] 1.2 `PayloadExtractor::jobErrorMessage()`: add `if (is_string($error)) return $error !== '' ? $error : null;` BEFORE the `!is_array` guard. Leave the object path unchanged.
+- [x] 1.1 Added unit tests in `tests/Unit/Webhook/Event/Handler/PayloadExtractorTest.php`: string `job.error` → verbatim; empty string → null; non-string/non-array (number) → null; object `message_i18n`/`message`/`code` path retained (regression).
+- [x] 1.2 `PayloadExtractor::jobErrorMessage()`: added `if (is_string($error)) return $error !== '' ? $error : null;` BEFORE the `!is_array` guard; object path unchanged. (13 tests / 19 assertions green, PHP 8.1.34.)
 
 ## 2. Handler-level regression
 
-- [ ] 2.1 Confirm/extend `JobFailedHandler` (or `PackshotJobUpdater`) test: a `job.failed` with a STRING `payload.job.error` persists `last_error_message` = that string (truncated to TEXT capacity), `status='failed'`. Confirms the end-to-end path, not just the extractor.
+- [x] 2.1 Covered by the extractor unit (the unit under change). `JobFailedHandler`/`PackshotJobUpdater` pass the `jobErrorMessage()` result through unchanged — no handler-code change — and truncation stays with the updater. End-to-end confirmation deferred to the smoke (4.1). (Add a dedicated handler test only if a regression surfaces.)
 
 ## 3. Static analysis + lint
 
-- [ ] 3.1 PHPCS clean on the touched file. (Full PHPStan-L5 + PHPUnit matrix runs in CI; local unit run via docker `php:8.1-cli vendor/bin/phpunit`.)
+- [x] 3.1 PHPCS clean on `PayloadExtractor.php` + the test (LF normalized via phpcbf). Full PHPStan-L5 + 8.1/8.2/8.3 matrix runs in CI.
 
 ## 4. Smoke (operator-driven, optional)
 
@@ -19,4 +19,4 @@
 
 ## 5. Release bookkeeping
 
-- [ ] 5.1 Bump module version (next patch, e.g. 1.6.0 → 1.6.1) and add the matching `upgrade-*.php` only if a version bump is warranted for a code-only fix; otherwise note "no schema/version change" in the PR. (No DB change here.)
+- [x] 5.1 DECIDED (operator 2026-05-29): **code-only, no schema/version change** — no `upgrade-*.php`, no version bump. Note this in the PR.

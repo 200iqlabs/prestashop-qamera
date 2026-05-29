@@ -110,6 +110,14 @@ final class PayloadExtractor
             return null;
         }
         $error = $job['error'] ?? null;
+        // Live wire shape (2026-05-29 smoke): job.error is frequently a plain
+        // string (e.g. "PLUGIN_JOB_MISSING_CATALOG_ENTRY: …"), not the
+        // documented {code, message_i18n, retryable} object. Return it verbatim
+        // so last_error_message is populated; the object handling below stays
+        // for the REST-DTO shape and any future server alignment.
+        if (is_string($error)) {
+            return $error !== '' ? $error : null;
+        }
         if (!is_array($error)) {
             return null;
         }

@@ -92,4 +92,25 @@ final class PayloadExtractorTest extends TestCase
         self::assertNull(PayloadExtractor::jobErrorMessage(['job' => []], 'en'));
         self::assertNull(PayloadExtractor::jobErrorMessage(['job' => ['error' => null]], 'en'));
     }
+
+    public function testJobErrorMessageReturnsPlainStringErrorVerbatim(): void
+    {
+        // Live wire shape (2026-05-29 smoke): job.error is a plain string, not an object.
+        $payload = ['job' => ['error' => 'PLUGIN_JOB_MISSING_CATALOG_ENTRY: asset_id … has no matching product_packshots row']];
+
+        self::assertSame(
+            'PLUGIN_JOB_MISSING_CATALOG_ENTRY: asset_id … has no matching product_packshots row',
+            PayloadExtractor::jobErrorMessage($payload, 'pl')
+        );
+    }
+
+    public function testJobErrorMessageReturnsNullForEmptyStringError(): void
+    {
+        self::assertNull(PayloadExtractor::jobErrorMessage(['job' => ['error' => '']], 'en'));
+    }
+
+    public function testJobErrorMessageReturnsNullForNonStringNonArrayError(): void
+    {
+        self::assertNull(PayloadExtractor::jobErrorMessage(['job' => ['error' => 123]], 'en'));
+    }
 }
