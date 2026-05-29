@@ -152,12 +152,19 @@
     }
   }
 
+  // Only http(s) URLs are allowed for the thumbnail link/src — blocks a
+  // javascript:/data: scheme from executing on click (building DOM nodes
+  // already prevents attribute breakout; this closes the scheme hole too).
+  function isSafeHttpUrl(value) {
+    return /^https?:\/\//i.test(String(value));
+  }
+
   // Build the thumbnail via DOM nodes (NOT innerHTML string concat) so a
   // hostile/odd output URL cannot break out of an attribute (XSS-safe).
   function renderOutput(cell, outputUrl) {
     while (cell.firstChild) { cell.removeChild(cell.firstChild); }
 
-    if (!outputUrl) {
+    if (!outputUrl || !isSafeHttpUrl(outputUrl)) {
       var dash = document.createElement('span');
       dash.className = 'text-muted';
       dash.textContent = '—';

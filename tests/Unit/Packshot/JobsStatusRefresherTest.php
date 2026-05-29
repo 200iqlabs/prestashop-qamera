@@ -15,6 +15,7 @@ use QameraAi\Module\Packshot\PackshotJobRow;
 use QameraAi\Module\Packshot\PackshotJobWebhookUpdate;
 use QameraAi\Module\Sync\PrestaShopLoggerWrapper;
 use QameraAi\Module\Tests\Support\TestableJobsStatusRefresher;
+use QameraAi\Module\Webhook\Event\QameraDbException;
 
 final class JobsStatusRefresherTest extends TestCase
 {
@@ -140,8 +141,88 @@ final class JobsStatusRefresherTest extends TestCase
         self::assertStringContainsString('5xx', $result->refreshError);
     }
 
-    private function row(string $status, ?int $syncedOffsetSeconds): PackshotJobRow
+    public function testExistingExpiryPreservedWhenOutputUrlUnchanged(): void
     {
+        // GET /jobs/{id} carries no expiry; a pull that returns the same
+        // output URL must NOT wipe the webhook-set output_url_expires_at.
+        $row = $this->row(
+            PackshotJobRow::STATUS_COMPLETED,
+            -10,
+            'https://cdn/out.jpg',
+            '2026-06-01 00:00:00',
+        );
+        $this->client->method('getJob')->willReturn(
+            $this->job('completed', [new JobOutput('https://cdn/out.jpg', 'image/jpeg')], null)
+        );
+        $captured = null;
+        $this->repo->method('upsertFromWebhook')->willReturnCallback(
+            function (PackshotJobWebhookUpdate $u) use (&$captured): void {
+                $captured = $u;
+            }
+        );
+
+        $result = $this->refresher->refresh($row, true); // force past settled TTL
+
+        self::assertNotNull($captured);
+        self::assertSame('2026-06-01 00:00:00', $captured->outputUrlExpiresAt);
+        self::assertSame('2026-06-01 00:00:00', $result->outputUrlExpiresAt);
+    }
+
+    public function testExpiryClearedWhenOutputUrlChanges(): void
+    {
+        // A genuinely new output URL has an unknown expiry → reset to NULL
+        // (the webhook will repopulate it).
+        $row = $this->row(
+            PackshotJobRow::STATUS_COMPLETED,
+            -10,
+            'https://cdn/old.jpg',
+            '2026-06-01 00:00:00',
+        );
+        $this->client->method('getJob')->willReturn(
+            $this->job('completed', [new JobOutput('https://cdn/new.jpg', 'image/jpeg')], null)
+        );
+        $captured = null;
+        $this->repo->method('upsertFromWebhook')->willReturnCallback(
+            function (PackshotJobWebhookUpdate $u) use (&$captured): void {
+                $captured = $u;
+            }
+        );
+
+        $result = $this->refresher->refresh($row, true);
+
+        self::assertNotNull($captured);
+        self::assertSame('https://cdn/new.jpg', $captured->outputUrl);
+        self::assertNull($captured->outputUrlExpiresAt);
+        self::assertNull($result->outputUrlExpiresAt);
+    }
+
+    public function testPersistFailureReturnsFreshValuesWithRefreshErrorAndKeepsStaleSync(): void
+    {
+        $row = $this->row(PackshotJobRow::STATUS_IN_PROGRESS, -120);
+        $priorSync = $row->lastSyncedAt;
+        $this->client->method('getJob')->willReturn(
+            $this->job('completed', [new JobOutput('https://cdn/out.jpg', 'image/jpeg')], null)
+        );
+        $this->repo->method('upsertFromWebhook')
+            ->willThrowException(new QameraDbException('write failed'));
+
+        $result = $this->refresher->refresh($row);
+
+        // Fresh upstream values are surfaced even though the cache write failed,
+        self::assertSame(PackshotJobRow::STATUS_COMPLETED, $result->status);
+        self::assertSame('https://cdn/out.jpg', $result->outputUrl);
+        self::assertNotNull($result->refreshError);
+        // ...but last_synced_at stays at the prior (stale) value so the TTL gate
+        // re-pulls on the next tick instead of trusting an unpersisted refresh.
+        self::assertSame($priorSync, $result->lastSyncedAt);
+    }
+
+    private function row(
+        string $status,
+        ?int $syncedOffsetSeconds,
+        ?string $outputUrl = null,
+        ?string $outputUrlExpiresAt = null
+    ): PackshotJobRow {
         $lastSynced = $syncedOffsetSeconds === null
             ? null
             : date('Y-m-d H:i:s', self::FROZEN + $syncedOffsetSeconds);
@@ -155,8 +236,8 @@ final class JobsStatusRefresherTest extends TestCase
             idProduct: 42,
             packshotExternalRef: 'ps:1:42:packshot:abc',
             status: $status,
-            outputUrl: null,
-            outputUrlExpiresAt: null,
+            outputUrl: $outputUrl,
+            outputUrlExpiresAt: $outputUrlExpiresAt,
             lastErrorMessage: null,
             aiModel: 'openai/gpt-image-1',
             aspectRatio: '1:1',

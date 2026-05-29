@@ -95,12 +95,22 @@ class JobsStatusRefresher
         $lastError = $this->errorMessage($job->error);
         $now = $this->now();
 
+        // `GET /jobs/{id}` (JobOutput) carries no expiry, but the repo UPDATE
+        // overwrites `output_url_expires_at` unconditionally — so naively
+        // passing null here would wipe a webhook-set expiry. Preserve the
+        // row's existing expiry when the output URL is unchanged; only an
+        // actually-new output (URL differs) resets it to NULL (unknown, the
+        // webhook will repopulate it).
+        $outputExpiresAt = ($outputUrl !== null && $outputUrl === $row->outputUrl)
+            ? $row->outputUrlExpiresAt
+            : null;
+
         try {
             $this->repository->upsertFromWebhook(new PackshotJobWebhookUpdate(
                 qameraJobId: $row->qameraJobId,
                 status: $status,
                 outputUrl: $outputUrl,
-                outputUrlExpiresAt: null,
+                outputUrlExpiresAt: $outputExpiresAt,
                 lastErrorMessage: $lastError,
                 now: $now,
             ));
@@ -112,14 +122,14 @@ class JobsStatusRefresher
             return new JobRefreshResult(
                 $status,
                 $outputUrl,
-                null,
+                $outputExpiresAt,
                 $lastError,
                 $row->lastSyncedAt,
                 'Failed to persist job-status cache — refresh again shortly.',
             );
         }
 
-        return new JobRefreshResult($status, $outputUrl, null, $lastError, $now);
+        return new JobRefreshResult($status, $outputUrl, $outputExpiresAt, $lastError, $now);
     }
 
     /**
