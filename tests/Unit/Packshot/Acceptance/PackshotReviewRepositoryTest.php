@@ -125,7 +125,7 @@ final class PackshotReviewRepositoryTest extends TestCase
 
     public function testHasAcceptedForProductRefTrueWhenRowExists(): void
     {
-        $this->db->getRowScript = [['1' => '1']];
+        $this->db->getRowScript = [['n' => '1']];
 
         $result = $this->repo->hasAcceptedForProductRef('ps:1:42');
 
@@ -133,7 +133,9 @@ final class PackshotReviewRepositoryTest extends TestCase
         $sql = $this->db->executed[0];
         self::assertStringContainsString("`product_ref` = 'ps:1:42'", $sql);
         self::assertStringContainsString("`voting` = 'accepted'", $sql);
-        self::assertStringContainsString('LIMIT 1', $sql);
+        // Must NOT carry an explicit LIMIT — Db::getRow() appends its own,
+        // and `LIMIT 1 LIMIT 1` is a MySQL syntax error (caught in live smoke).
+        self::assertStringNotContainsString('LIMIT', $sql);
     }
 
     public function testHasAcceptedForProductRefFalseWhenAbsent(): void

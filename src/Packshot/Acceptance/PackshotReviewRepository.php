@@ -159,9 +159,12 @@ class PackshotReviewRepository
      */
     public function hasAcceptedForProductRef(string $productRef): bool
     {
+        // NOTE: Db::getRow() auto-appends `LIMIT 1`; we MUST NOT include it
+        // here or the resulting `LIMIT 1 LIMIT 1` is a MySQL syntax error
+        // (same pitfall guarded in SyncedProductLinkLookup::findByIdLink).
         $sql = sprintf(
-            'SELECT 1 FROM `%sqamera_packshot_review` '
-            . "WHERE `product_ref` = '%s' AND `voting` = '%s' LIMIT 1",
+            'SELECT 1 AS `n` FROM `%sqamera_packshot_review` '
+            . "WHERE `product_ref` = '%s' AND `voting` = '%s'",
             $this->tablePrefix,
             $this->escape($productRef),
             $this->escape(PackshotReviewRow::VOTING_ACCEPTED)
