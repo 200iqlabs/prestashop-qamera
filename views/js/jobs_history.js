@@ -286,7 +286,7 @@
     icon.style.fontSize = '14px';
     icon.style.verticalAlign = 'middle';
     badge.appendChild(icon);
-    badge.appendChild(document.createTextNode(' ' + (i18n.imported || 'Imported')));
+    badge.appendChild(document.createTextNode(' ' + i18n.imported));
     return badge;
   }
 
@@ -296,14 +296,14 @@
     if (disabled) {
       btn.className = 'btn btn-outline-secondary btn-sm';
       btn.setAttribute('disabled', 'disabled');
-      btn.setAttribute('title', i18n.acceptFirstTitle || '');
+      btn.setAttribute('title', i18n.acceptFirstTitle);
     } else {
       btn.className = 'btn btn-outline-primary btn-sm js-qameraai-job-import';
       btn.setAttribute('data-job-id', jobId || '');
-      btn.setAttribute('title', i18n.downloadTitle || '');
+      btn.setAttribute('title', i18n.downloadTitle);
     }
     btn.appendChild(buildMaterialIcon('cloud_download'));
-    btn.appendChild(document.createTextNode(' ' + (i18n.downloadToShop || 'Download to shop')));
+    btn.appendChild(document.createTextNode(' ' + i18n.downloadToShop));
     return btn;
   }
 
