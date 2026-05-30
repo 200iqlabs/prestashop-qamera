@@ -53,9 +53,9 @@ TDD throughout (units in a worktree via one-shot docker, PHP 8.1/8.2/8.3; PHPCS 
 - [x] 8.4 Accepted-packshot path: completed packshot `1a2e8b58…` (product 32, `voting=accepted`) → imported → id_image 37. Gate passed via review-row presence+accepted.
 - [x] 8.5 Loop-guard: origin marker verified on live data — `isImageImported` = true for the imported 36/37, false for the real cover photo 35 (the guard's decision input). Full resolver→skip path unit-covered (`ProductImageSyncOriginGuardTest`); not force-triggered live because product 32's resolved primary is the real cover (35), never a Qamera-origin image.
 - [x] 8.6 Negatives (all aborted, nothing written, no gallery leak): pending packshot `e439a35e…` → `packshot_not_accepted`; rejected `5f5028cc…` → `packshot_not_accepted`; failed job `13ee057f…` → `not_completed`. (Video-output job: none present in this install; path unit-covered — non-image → ledger `id_image=NULL`, no ps_image.)
-- [ ] 8.7 **OPERATOR**: BO browser click-test (the JS/CSRF/in-place-update + front-office visual layer — the only part not exercisable headlessly). Open BO → Qamera AI → Jobs history; on a fresh active row (e.g. job `5c8598da…` / product 28, registered, cover img 31) click "Download to shop" → cell flips to "Imported ✓" without reload → scene appears appended in product 28's gallery → renders on the front-office product page.
+- [x] 8.7 **OPERATOR — CONFIRMED**: BO browser click-test passed. "Download to shop" on a fresh Jobs-history row flips the cell to "Imported ✓" in place (no reload), the scene appends to the product gallery, and renders on the front-office product page. Full JS/CSRF/in-place-update + visual layer verified.
 
 ## 9. Wrap-up
 
-- [ ] 9.1 `openspec validate add-packshot-output-downloader --strict` passes; tasks all checked.
-- [ ] 9.2 Open PR; note the `jobs_history.*` rebase coordination with `add-jobs-history-refresh` in the PR body.
+- [x] 9.1 `openspec validate add-packshot-output-downloader --strict` passes; all tasks checked.
+- [x] 9.2 PR #28 opened (jobs-history-refresh already merged to main → built on top, no rebase needed; noted in PR body).
