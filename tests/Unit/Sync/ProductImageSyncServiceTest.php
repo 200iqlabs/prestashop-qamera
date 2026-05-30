@@ -43,6 +43,9 @@ final class ProductImageSyncServiceTest extends TestCase
     /** @var PrestaShopLoggerWrapper&\PHPUnit\Framework\MockObject\MockObject */
     private $logger;
 
+    /** @var \QameraAi\Module\Packshot\Output\ImportedOutputRepository&\PHPUnit\Framework\MockObject\MockObject */
+    private $importedOutputs;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -59,6 +62,12 @@ final class ProductImageSyncServiceTest extends TestCase
         $this->uploadStrategy = $this->createMock(ImageUploadStrategy::class);
         $this->resolver = $this->createMock(PrimaryImageResolver::class);
         $this->logger = $this->createMock(PrestaShopLoggerWrapper::class);
+        // Default: no resolved image is Qamera-origin, so the loop guard never
+        // short-circuits and the existing upload behaviour is unchanged.
+        $this->importedOutputs = $this->createMock(
+            \QameraAi\Module\Packshot\Output\ImportedOutputRepository::class
+        );
+        $this->importedOutputs->method('isImageImported')->willReturn(false);
     }
 
     private function service(): ProductImageSyncService
@@ -71,7 +80,8 @@ final class ProductImageSyncServiceTest extends TestCase
             $this->uploadStrategy,
             $this->resolver,
             $this->logger,
-            new InMemoryDedupCache()
+            new InMemoryDedupCache(),
+            $this->importedOutputs
         ) extends ProductImageSyncService {
             protected function resolveImagePath(int $idImage): string
             {

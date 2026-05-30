@@ -28,6 +28,9 @@ final class RecordingDb extends Db
     /** @var list<array<string, mixed>|false> Queue of getRow() return values. */
     public array $getRowScript = [];
 
+    /** @var list<array<int, array<string, mixed>>> Queue of executeS() result sets. */
+    public array $executeSScript = [];
+
     public bool $failNextExecute = false;
     public ?\Throwable $throwOnExecute = null;
 
@@ -55,7 +58,10 @@ final class RecordingDb extends Db
     public function executeS(string $sql, bool $array = true, bool $useCache = true)
     {
         $this->executed[] = $sql;
-        return [];
+        if ($this->executeSScript === []) {
+            return [];
+        }
+        return array_shift($this->executeSScript);
     }
 
     public function getRow(string $sql, bool $useCache = true)

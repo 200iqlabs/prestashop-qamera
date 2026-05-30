@@ -170,7 +170,8 @@ final class ProductImageSyncIntegrationTest extends IntegrationTestCase
             new PresignedImageUploadStrategy($apiClient, $this->buildUploadHttpClient($stack)),
             new PrimaryImageResolver(),
             new PrestaShopLoggerWrapper(),
-            new InMemoryDedupCache()
+            new InMemoryDedupCache(),
+            new \QameraAi\Module\Packshot\Output\ImportedOutputRepository(Db::getInstance(), _DB_PREFIX_)
         );
     }
 
