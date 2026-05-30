@@ -3,9 +3,7 @@
 ## Purpose
 
 Defines how completed Qamera AI job outputs (packshots accepted in review, and photo-shoot scenes) are imported back into the PrestaShop product gallery. This capability owns the `ps_qamera_imported_output` ledger, the per-job import eligibility gate (type + acceptance state + already-imported), the lazy fresh-fetch of job outputs at action time, the download-resize-append placement into `ps_image` (without disturbing existing images, cover, or applying the shop watermark), and the idempotent/partial-resume semantics. Non-image outputs (video/reels) are recorded in the ledger but not placed — a deliberate v1 scope boundary.
-
 ## Requirements
-
 ### Requirement: Imported-output ledger table records every imported output
 
 The module SHALL create a `ps_qamera_imported_output` table that records, for each output imported into the PrestaShop product gallery, the originating job and the resulting local image. The table SHALL key uniqueness on `(qamera_job_id, output_index)` so a given output of a given job can be imported at most once. Columns SHALL include at minimum: surrogate primary key; `qamera_job_id` (CHAR(36)); `output_index` (INT UNSIGNED — the position of the output within the job's `outputs[]`); `output_type` (the upstream `JobOutput.type`, e.g. `image/jpeg`); `id_shop` and `id_product` (resolved from the job `product_ref`); `id_image` (the created `ps_image` id, NULL for outputs recorded-but-not-placed such as video); `imported_at` (DATETIME). The table SHALL be created in the installer and via an upgrade script, and dropped on uninstall.
@@ -134,3 +132,32 @@ Because `GET /jobs/{id}` re-signs a 7-day URL on every call (verified upstream, 
 - **GIVEN** a completed job whose mirrored `output_url` token is several days old
 - **WHEN** the operator triggers the import
 - **THEN** the module imports using the URL returned by the click-time `getJob()` fetch (freshly signed), not the stale mirror value
+
+### Requirement: A single job output can be imported from the browse view
+
+The module SHALL expose a per-output "Add to product gallery" import keyed on `(qamera_job_id, output_index)`, triggered from the product-detail Qamera browse accordion, reusing the existing ledger, fresh-fetch, placement, and idempotency machinery. The single-output import SHALL apply the same eligibility rules as the per-job action — the output MUST be MIME type `image/*`, a `photo_shoot` job output is eligible unconditionally, and a `packshot` job output is eligible only when its review row is `voting='accepted'` — and SHALL place only the targeted output, leaving the job's other outputs untouched.
+
+#### Scenario: Importing one session image places only that output
+
+- **GIVEN** a completed `photo_shoot` job with three `image/*` outputs and no ledger rows
+- **WHEN** the operator triggers "Add to product gallery" on the second session image (output_index 1) in the browse view
+- **THEN** the module fetches the job fresh, downloads output_index 1, appends it as a new `ps_image` at end-of-gallery without setting cover or applying the watermark
+- **AND** inserts a ledger row for `(qamera_job_id, 1)` only, leaving outputs 0 and 2 unimported
+
+#### Scenario: Per-output import is idempotent
+
+- **GIVEN** output_index 1 of a job already has a `ps_qamera_imported_output` ledger row
+- **WHEN** the operator triggers the per-output import for that same output
+- **THEN** no new `ps_image` is created and the action reports already-imported
+
+#### Scenario: Gallery-origin asset is not importable
+
+- **WHEN** the browse view displays a product/main image or a packshot ingested from a gallery image (no backing job output)
+- **THEN** no per-output import action is offered, because the asset is not a job output and originates from the gallery
+
+#### Scenario: Pending generated packshot output is not importable
+
+- **GIVEN** a generated packshot whose review row is `voting='pending'`
+- **WHEN** a per-output import is requested for it
+- **THEN** the import is rejected with a "packshot not accepted" reason and no `ps_image` is written
+
