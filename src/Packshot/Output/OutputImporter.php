@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace QameraAi\Module\Packshot\Output;
 
+use QameraAi\Module\Api\Dto\JobDto;
 use QameraAi\Module\Api\Exception\ApiException;
 use QameraAi\Module\Api\QameraApiClient;
 use QameraAi\Module\Packshot\Acceptance\PackshotReviewRepository;
@@ -86,6 +87,87 @@ class OutputImporter
 
     public function import(string $jobId): ImportResult
     {
+        $job = $this->fetchGatedJob($jobId, $ref);
+        if ($job instanceof ImportResult) {
+            return $job;
+        }
+
+        $already = $this->ledger->importedIndexes($jobId);
+        $now = $this->now();
+
+        $imported = [];
+        $skipped = [];
+        $nonImage = [];
+        $failures = [];
+
+        foreach ($job->outputs as $i => $out) {
+            $this->placeOneOutput(
+                $jobId,
+                (int) $i,
+                $out,
+                $ref,
+                $already,
+                $now,
+                $imported,
+                $skipped,
+                $nonImage,
+                $failures
+            );
+        }
+
+        return new ImportResult($imported, $skipped, $nonImage, $failures, null);
+    }
+
+    /**
+     * Imports a single job output keyed `(qamera_job_id, output_index)` for
+     * the browse "Add to product gallery" action. Same fresh-fetch + gate +
+     * placement + ledger machinery as {@see import()}, but it touches only the
+     * one targeted output and leaves the job's other outputs untouched.
+     */
+    public function importOutput(string $jobId, int $outputIndex): ImportResult
+    {
+        $job = $this->fetchGatedJob($jobId, $ref);
+        if ($job instanceof ImportResult) {
+            return $job;
+        }
+
+        if (!array_key_exists($outputIndex, $job->outputs)) {
+            return ImportResult::aborted('output_not_found');
+        }
+
+        $already = $this->ledger->importedIndexes($jobId);
+        $now = $this->now();
+
+        $imported = [];
+        $skipped = [];
+        $nonImage = [];
+        $failures = [];
+
+        $this->placeOneOutput(
+            $jobId,
+            $outputIndex,
+            $job->outputs[$outputIndex],
+            $ref,
+            $already,
+            $now,
+            $imported,
+            $skipped,
+            $nonImage,
+            $failures
+        );
+
+        return new ImportResult($imported, $skipped, $nonImage, $failures, null);
+    }
+
+    /**
+     * Shared fresh-fetch + gate + product-ref resolution. Returns the job on
+     * success (binding $ref to the parsed product ref by reference), or an
+     * aborted {@see ImportResult} the caller must return verbatim.
+     *
+     * @param-out \QameraAi\Module\Webhook\Event\ProductRef $ref
+     */
+    private function fetchGatedJob(string $jobId, mixed &$ref): JobDto|ImportResult
+    {
         try {
             $job = $this->api->getJob($jobId);
         } catch (ApiException $e) {
@@ -108,62 +190,76 @@ class OutputImporter
             return ImportResult::aborted('product_not_registered');
         }
 
-        $already = $this->ledger->importedIndexes($jobId);
-        $now = $this->now();
+        return $job;
+    }
 
-        $imported = [];
-        $skipped = [];
-        $nonImage = [];
-        $failures = [];
-
-        foreach ($job->outputs as $i => $out) {
-            $index = (int) $i;
-            if (in_array($index, $already, true)) {
-                $skipped[] = $index;
-                continue;
-            }
-
-            if (!$this->isImageType($out->type)) {
-                // v1 scope boundary: record video/reel etc. but place nothing.
-                $this->ledger->record(new ImportedOutputRow(
-                    null,
-                    $jobId,
-                    $index,
-                    $out->type,
-                    $ref->shopId,
-                    $ref->productId,
-                    null,
-                    $now,
-                ));
-                $nonImage[] = $index;
-                continue;
-            }
-
-            try {
-                $idImage = $this->gallery->importImage($ref->productId, $ref->shopId, $out->url);
-                $this->ledger->record(new ImportedOutputRow(
-                    null,
-                    $jobId,
-                    $index,
-                    $out->type,
-                    $ref->shopId,
-                    $ref->productId,
-                    $idImage,
-                    $now,
-                ));
-                $imported[] = ['output_index' => $index, 'id_image' => $idImage];
-            } catch (Throwable $e) {
-                $failures[] = ['output_index' => $index, 'error' => $this->sanitize($e)];
-                $this->log(sprintf(
-                    'output import: output %d of job %s failed: %s',
-                    $index,
-                    $jobId,
-                    $e->getMessage()
-                ), $ref->productId);
-            }
+    /**
+     * Places one output, mutating the per-batch accumulators. Already-ledgered
+     * → skipped; non-image → recorded but not placed; image → downloaded,
+     * appended, and recorded.
+     *
+     * @param \QameraAi\Module\Webhook\Event\ProductRef $ref
+     * @param int[]                                     $already
+     * @param list<array{output_index:int, id_image:int}> $imported
+     * @param list<int>                                 $skipped
+     * @param list<int>                                 $nonImage
+     * @param list<array{output_index:int, error:string}> $failures
+     */
+    private function placeOneOutput(
+        string $jobId,
+        int $index,
+        \QameraAi\Module\Api\Dto\JobOutput $out,
+        $ref,
+        array $already,
+        string $now,
+        array &$imported,
+        array &$skipped,
+        array &$nonImage,
+        array &$failures
+    ): void {
+        if (in_array($index, $already, true)) {
+            $skipped[] = $index;
+            return;
         }
 
-        return new ImportResult($imported, $skipped, $nonImage, $failures, null);
+        if (!$this->isImageType($out->type)) {
+            // v1 scope boundary: record video/reel etc. but place nothing.
+            $this->ledger->record(new ImportedOutputRow(
+                null,
+                $jobId,
+                $index,
+                $out->type,
+                $ref->shopId,
+                $ref->productId,
+                null,
+                $now,
+            ));
+            $nonImage[] = $index;
+            return;
+        }
+
+        try {
+            $idImage = $this->gallery->importImage($ref->productId, $ref->shopId, $out->url);
+            $this->ledger->record(new ImportedOutputRow(
+                null,
+                $jobId,
+                $index,
+                $out->type,
+                $ref->shopId,
+                $ref->productId,
+                $idImage,
+                $now,
+            ));
+            $imported[] = ['output_index' => $index, 'id_image' => $idImage];
+        } catch (Throwable $e) {
+            $failures[] = ['output_index' => $index, 'error' => $this->sanitize($e)];
+            $this->log(sprintf(
+                'output import: output %d of job %s failed: %s',
+                $index,
+                $jobId,
+                $e->getMessage()
+            ), $ref->productId);
+        }
     }
 
     private function isImageType(string $type): bool

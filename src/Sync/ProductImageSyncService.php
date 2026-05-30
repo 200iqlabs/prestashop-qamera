@@ -46,6 +46,7 @@ class ProductImageSyncService
         private readonly PrestaShopLoggerWrapper $logger,
         private readonly InMemoryDedupCache $dedupCache,
         private readonly ImportedOutputRepository $importedOutputs,
+        private readonly ExternalRefBuilder $externalRefBuilder,
     ) {
     }
 
@@ -167,7 +168,7 @@ class ProductImageSyncService
             );
 
             $productRef = $this->refBuilder->build($idShop, $idProduct);
-            $externalRef = sprintf('%s:image:%d', $productRef, $imageToUpload);
+            $externalRef = $this->externalRefBuilder->imageRef($idShop, $idProduct, $imageToUpload);
             $metadata = $isRegistered ? null : $this->buildMetadataFromRow($row);
 
             $request = new RegisterImageRequest($externalRef, $productRef, $assetId, $metadata);

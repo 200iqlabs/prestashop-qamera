@@ -108,3 +108,56 @@ _qameraai_admin_product_status:
     _controller: 'QameraAi\Module\Controller\Admin\ProductStatusController::statusAction'
     _legacy_controller: AdminQameraAiProducts
     _legacy_link: AdminQameraAiProducts
+
+# --- add-gallery-image-ingest: product-detail Qamera tab ---
+
+_qameraai_admin_gallery_ingest:
+  path: /qameraai/gallery/{idProduct}/ingest
+  methods: [POST]
+  requirements:
+    idProduct: '\d+'
+  defaults:
+    _controller: 'QameraAi\Module\Controller\Admin\GalleryIngestController::ingestAction'
+    _legacy_controller: AdminQameraAiProducts
+    _legacy_link: AdminQameraAiProducts
+
+_qameraai_admin_gallery_status:
+  path: /qameraai/gallery/{idProduct}/status
+  methods: [GET]
+  requirements:
+    idProduct: '\d+'
+  defaults:
+    _controller: 'QameraAi\Module\Controller\Admin\GalleryIngestController::statusAction'
+    _legacy_controller: AdminQameraAiProducts
+    _legacy_link: AdminQameraAiProducts
+
+_qameraai_admin_gallery_browse:
+  path: /qameraai/gallery/{idProduct}/browse
+  methods: [GET]
+  requirements:
+    idProduct: '\d+'
+  defaults:
+    _controller: 'QameraAi\Module\Controller\Admin\GalleryBrowseController::browseAction'
+    _legacy_controller: AdminQameraAiProducts
+    _legacy_link: AdminQameraAiProducts
+
+_qameraai_admin_gallery_sessions:
+  path: /qameraai/gallery/{idProduct}/browse/{imageId}/sessions
+  methods: [GET]
+  requirements:
+    idProduct: '\d+'
+    imageId: '[A-Za-z0-9._-]+'
+  defaults:
+    _controller: 'QameraAi\Module\Controller\Admin\GalleryBrowseController::sessionsAction'
+    _legacy_controller: AdminQameraAiProducts
+    _legacy_link: AdminQameraAiProducts
+
+_qameraai_admin_gallery_import:
+  path: /qameraai/gallery/{idProduct}/import-output
+  methods: [POST]
+  requirements:
+    idProduct: '\d+'
+  defaults:
+    _controller: 'QameraAi\Module\Controller\Admin\GalleryBrowseController::importOutputAction'
+    _legacy_controller: AdminQameraAiProducts
+    _legacy_link: AdminQameraAiProducts

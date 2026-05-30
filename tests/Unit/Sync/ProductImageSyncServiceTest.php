@@ -16,6 +16,7 @@ use QameraAi\Module\Api\Exception\ServerException;
 use QameraAi\Module\Api\Exception\TransportException;
 use QameraAi\Module\Api\Exception\ValidationException;
 use QameraAi\Module\Api\QameraApiClient;
+use QameraAi\Module\Sync\ExternalRefBuilder;
 use QameraAi\Module\Sync\ImageUploadStrategy;
 use QameraAi\Module\Sync\InMemoryDedupCache;
 use QameraAi\Module\Sync\PrestaShopLoggerWrapper;
@@ -81,7 +82,8 @@ final class ProductImageSyncServiceTest extends TestCase
             $this->resolver,
             $this->logger,
             new InMemoryDedupCache(),
-            $this->importedOutputs
+            $this->importedOutputs,
+            new ExternalRefBuilder(new ProductRefBuilder())
         ) extends ProductImageSyncService {
             protected function resolveImagePath(int $idImage): string
             {
@@ -531,6 +533,38 @@ final class ProductImageSyncServiceTest extends TestCase
         );
         preg_match("/`last_error_message` = '([^']+)'/", $capturedSql, $m);
         self::assertSame(500, strlen($m[1]));
+    }
+
+    public function testHookSyncMintsImageRefViaSharedBuilder(): void
+    {
+        // 1.2: the hook-sync call site and the gallery picker MUST yield a
+        // byte-identical image external_ref for the same (shop, prod, image),
+        // or a packshot's source_image_ref will not resolve upstream. Assert
+        // the captured ref equals the shared ExternalRefBuilder's output.
+        $this->expectRowRead(42, [
+            'status' => 'pending',
+            'qamera_product_id' => null,
+            'display_name_snapshot' => 'Widget',
+            'sku_snapshot' => null,
+            'description_snapshot' => null,
+        ]);
+        $this->resolver->method('resolve')->willReturn(100);
+        $this->uploadStrategy->method('uploadImage')->willReturn('asset-uuid');
+
+        $captured = null;
+        $this->apiClient->method('registerImage')
+            ->willReturnCallback(function (RegisterImageRequest $r) use (&$captured): ImageResponse {
+                $captured = $r;
+                return $this->makeImageResponse($r->externalRef, 'abc-uuid');
+            });
+        $this->db->method('execute')->willReturn(true);
+
+        $this->service()->syncOnImageAdded(42, 99);
+
+        $shared = (new ExternalRefBuilder(new ProductRefBuilder()))->imageRef(1, 42, 100);
+        self::assertNotNull($captured);
+        self::assertSame($shared, $captured->externalRef);
+        self::assertSame('ps:1:42:image:100', $captured->externalRef);
     }
 
     private function seedPendingRow(): void

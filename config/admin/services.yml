@@ -7,3 +7,8 @@ services:
   QameraAi\Module\Controller\Admin\:
     resource: '../../src/Controller/Admin'
     tags: ['controller.service_arguments']
+
+  # Renders the product-detail Qamera tab. Needs twig/router/csrf which are
+  # PRIVATE in the compiled container, so it is wired by DI (autowire) and the
+  # module hook fetches THIS public service via $this->get().
+  QameraAi\Module\Gallery\Tab\GalleryTabRenderer: ~

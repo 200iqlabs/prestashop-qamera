@@ -9,6 +9,7 @@ use Image;
 use PHPUnit\Framework\TestCase;
 use QameraAi\Module\Api\QameraApiClient;
 use QameraAi\Module\Packshot\Output\ImportedOutputRepository;
+use QameraAi\Module\Sync\ExternalRefBuilder;
 use QameraAi\Module\Sync\ImageUploadStrategy;
 use QameraAi\Module\Sync\InMemoryDedupCache;
 use QameraAi\Module\Sync\PrestaShopLoggerWrapper;
@@ -104,6 +105,7 @@ final class ProductImageSyncOriginGuardTest extends TestCase
             $this->createMock(PrestaShopLoggerWrapper::class),
             new InMemoryDedupCache(),
             $ledger,
+            new ExternalRefBuilder(new ProductRefBuilder()),
         );
     }
 }
