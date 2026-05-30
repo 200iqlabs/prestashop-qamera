@@ -6,7 +6,10 @@ namespace QameraAi\Module\Controller\Admin;
 
 use Context;
 use PrestaShopBundle\Controller\Admin\FrameworkBundleAdminController;
+use QameraAi\Module\Packshot\Acceptance\PackshotReviewRepository;
 use QameraAi\Module\Packshot\JobsGridFilters;
+use QameraAi\Module\Packshot\Output\ImportedOutputRepository;
+use QameraAi\Module\Packshot\Output\OutputImporter;
 use QameraAi\Module\Packshot\PackshotJobRepository;
 use QameraAi\Module\Packshot\PackshotJobRow;
 use Symfony\Component\HttpFoundation\Request;
@@ -22,7 +25,10 @@ final class JobsHistoryController extends FrameworkBundleAdminController
 
     public function indexAction(
         Request $request,
-        PackshotJobRepository $repository
+        PackshotJobRepository $repository,
+        PackshotReviewRepository $reviews,
+        ImportedOutputRepository $importedOutputs,
+        OutputImporter $importer
     ): Response {
         $status = trim((string) $request->query->get('status', ''));
         $statusFilter = ($status === '' || $status === 'all') ? null : $status;
@@ -43,6 +49,22 @@ final class JobsHistoryController extends FrameworkBundleAdminController
         $rows = $repository->listForGrid($filters);
         $total = $repository->countForGrid($statusFilter);
         $totalPages = (int) ceil(max(1, $total) / self::PAGE_SIZE);
+
+        // Per-row "Download to shop" display state, keyed by qamera_job_id.
+        // The page is bounded (PAGE_SIZE), so the per-row review + ledger reads
+        // are acceptable for v1; a batched variant is a future optimisation.
+        $importState = [];
+        foreach ($rows as $row) {
+            $jobId = (string) ($row['qamera_job_id'] ?? '');
+            if ($jobId === '') {
+                continue;
+            }
+            $importState[$jobId] = $importer->gridState(
+                (string) ($row['status'] ?? ''),
+                $reviews->findByJobId($jobId),
+                $importedOutputs->importedIndexes($jobId)
+            );
+        }
 
         return $this->render(
             '@Modules/qameraai/views/templates/admin/jobs_history.html.twig',
@@ -69,6 +91,15 @@ final class JobsHistoryController extends FrameworkBundleAdminController
                 // JS — build the public path from __PS_BASE_URI__ (see commit
                 // d1c9c18 in products_grid).
                 'js_asset_url' => rtrim(__PS_BASE_URI__, '/') . '/modules/qameraai/views/js/jobs_history.js',
+                'import_state' => $importState,
+                // Per-row import endpoint; JS substitutes {jobId} (same pattern
+                // as status_url_template above).
+                'import_url_template' => preg_replace(
+                    '#/__JOBID__/import(?=\?|$)#',
+                    '/{jobId}/import',
+                    $this->generateUrl('_qameraai_admin_output_import', ['jobId' => '__JOBID__']),
+                    1
+                ),
             ]
         );
     }

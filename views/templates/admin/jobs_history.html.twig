@@ -44,6 +44,7 @@
               <th>{{ 'AI model'|trans({}, 'Modules.Qameraai.Admin') }}</th>
               <th>{{ 'Aspect'|trans({}, 'Modules.Qameraai.Admin') }}</th>
               <th>{{ 'Output'|trans({}, 'Modules.Qameraai.Admin') }}</th>
+              <th>{{ 'Shop import'|trans({}, 'Modules.Qameraai.Admin') }}</th>
               <th style="width:48px;"></th>
             </tr>
           </thead>
@@ -70,6 +71,31 @@
                     <a href="{{ row.output_url }}" target="_blank" rel="noopener">
                       <img src="{{ row.output_url }}" alt="" style="max-width:64px; max-height:64px;">
                     </a>
+                  {% else %}
+                    <span class="text-muted">—</span>
+                  {% endif %}
+                </td>
+                <td class="js-qameraai-import-cell">
+                  {% set istate = import_state[row.qamera_job_id]|default({'state': 'absent'}) %}
+                  {% if istate.state == 'imported' %}
+                    <span class="badge badge-success js-qameraai-import-done">
+                      <i class="material-icons" style="font-size:14px;vertical-align:middle;">check</i>
+                      {{ 'Imported'|trans({}, 'Modules.Qameraai.Admin') }}
+                    </span>
+                  {% elseif istate.state == 'active' %}
+                    <button type="button"
+                            class="btn btn-outline-primary btn-sm js-qameraai-job-import"
+                            data-job-id="{{ row.qamera_job_id }}"
+                            title="{{ 'Download this result into the product gallery'|trans({}, 'Modules.Qameraai.Admin') }}">
+                      <i class="material-icons">cloud_download</i>
+                      {{ 'Download to shop'|trans({}, 'Modules.Qameraai.Admin') }}
+                    </button>
+                  {% elseif istate.state == 'disabled' %}
+                    <button type="button" class="btn btn-outline-secondary btn-sm" disabled
+                            title="{{ 'Accept this packshot in the Packshots view first'|trans({}, 'Modules.Qameraai.Admin') }}">
+                      <i class="material-icons">cloud_download</i>
+                      {{ 'Download to shop'|trans({}, 'Modules.Qameraai.Admin') }}
+                    </button>
                   {% else %}
                     <span class="text-muted">—</span>
                   {% endif %}
@@ -107,7 +133,15 @@
 
   <script>
     window.QameraAiJobsHistory = {
-      statusUrlTemplate: {{ status_url_template|json_encode|raw }}
+      statusUrlTemplate: {{ status_url_template|json_encode|raw }},
+      importUrlTemplate: {{ import_url_template|json_encode|raw }},
+      importCsrfToken: {{ csrf_token('qamera_output_import')|json_encode|raw }},
+      i18n: {
+        importing: {{ 'Importing…'|trans({}, 'Modules.Qameraai.Admin')|json_encode|raw }},
+        imported: {{ 'Imported'|trans({}, 'Modules.Qameraai.Admin')|json_encode|raw }},
+        importFailed: {{ 'Import failed'|trans({}, 'Modules.Qameraai.Admin')|json_encode|raw }},
+        importPartial: {{ 'Some images failed to import'|trans({}, 'Modules.Qameraai.Admin')|json_encode|raw }}
+      }
     };
   </script>
   <script src="{{ js_asset_url }}"></script>

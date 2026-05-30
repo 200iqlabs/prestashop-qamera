@@ -88,6 +88,23 @@ services:
       $resolver: '@QameraAi\Module\Sync\PrimaryImageResolver'
       $logger: '@QameraAi\Module\Sync\PrestaShopLoggerWrapper'
       $dedupCache: '@QameraAi\Module\Sync\InMemoryDedupCache'
+      $importedOutputs: '@QameraAi\Module\Packshot\Output\ImportedOutputRepository'
+
+  # Phase 4.5 (add-packshot-output-downloader) — imported-output ledger.
+  # Same raw-SQL repository shape as PackshotReviewRepository; Db + prefix
+  # scalars wired explicitly (Symfony cannot autowire them).
+  QameraAi\Module\Packshot\Output\ImportedOutputRepository:
+    public: true
+    arguments:
+      $db: '@qameraai.db'
+      $tablePrefix: !php/const _DB_PREFIX_
+
+  # Phase 4.5 — output import service + presenter, public so the BO import
+  # controller can pull them as action arguments. All other deps autowire.
+  QameraAi\Module\Packshot\Output\OutputImporter:
+    public: true
+  QameraAi\Module\Packshot\Output\ImportResultPresenter:
+    public: true
 
   # ---- Phase 4.1: webhook handler ----
   # The front controller (`controllers/front/webhook.php`) instantiates

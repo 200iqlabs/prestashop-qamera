@@ -62,7 +62,13 @@ For each `image/*` output without a ledger row:
 6. Insert ledger row. On a per-output download/resize failure, record the successful ones, surface a partial-failure diagnostic, do not abort the set.
 
 ### Gating (single entry point, Jobs history)
-`OutputImporter`/controller evaluates per `qamera_job_id`: row `status='completed'` + has `image/*` output, AND (`job_type='photo_shoot'`) OR (`job_type='packshot'` AND `PackshotReviewRepository::findByJobId($jobId)?->voting === 'accepted'`). Already-imported (every image output has a ledger row) → terminal "imported ✓". The Packshots review view is untouched (it lists only `pending`; accepted rows have left it — which is exactly why the action cannot live there).
+`OutputImporter`/controller evaluates per `qamera_job_id`: row `status='completed'` + has `image/*` output, AND the job-level gate passes. Already-imported (image output has a ledger row) → terminal "imported ✓". The Packshots review view is untouched (it lists only `pending`; accepted rows have left it — which is exactly why the action cannot live there).
+
+**Mechanism — derive packshot-ness from review-row presence (discovered during apply: `ps_qamera_packshot_job` has NO `job_type` column).** Rather than add a `job_type` column to the mirror and thread it through the 4.4 webhook write path (`JobCompletedHandler` / `PackshotJobWebhookUpdate` / `upsertFromWebhook` — also a merge surface with `add-jobs-history-refresh`), the gate uses the fact that `JobCompletedHandler` creates a `ps_qamera_packshot_review` row **iff** `job_type='packshot'`. So `PackshotReviewRepository::findByJobId($jobId)`:
+- returns a row → the job is a packshot → gate requires `voting==='accepted'`;
+- returns null → not a gated packshot (photo_shoot, or a pre-4.4 legacy packshot with no review row) → gate passes.
+
+This keeps the grid and the import action using the *same* job-level gate (`jobGateReason(status, ?review)`), so they never disagree, and touches zero 4.4-owned code. Behavior is identical to the spec's `job_type`-phrased scenarios for every post-4.4 job (a packshot always has a review row); the only softening is that a legacy packshot with no review row is importable without an acceptance that never existed for it — acceptable and rare. The import path additionally has `getJob().jobType` available but deliberately does not re-gate on it, to stay consistent with the grid.
 
 ### Loop guard (two layers)
 - **Layer A (D6):** append/never-cover → an imported scene is not the resolver's primary in the common case.

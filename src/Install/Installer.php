@@ -188,6 +188,20 @@ final class Installer
                 KEY `qamera_packshot_review_shop_product` (`id_shop`, `id_product`),
                 KEY `qamera_packshot_review_voting` (`voting`, `generated_at`)
             ) ENGINE=InnoDB DEFAULT CHARSET={$charset};",
+            "CREATE TABLE IF NOT EXISTS `{$prefix}qamera_imported_output` (
+                `id_qamera_imported_output` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                `qamera_job_id` CHAR(36) NOT NULL,
+                `output_index` INT UNSIGNED NOT NULL,
+                `output_type` VARCHAR(64) NOT NULL,
+                `id_shop` INT UNSIGNED NOT NULL,
+                `id_product` INT UNSIGNED NOT NULL,
+                `id_image` INT UNSIGNED NULL,
+                `imported_at` DATETIME NOT NULL,
+                PRIMARY KEY (`id_qamera_imported_output`),
+                UNIQUE KEY `qamera_imported_output_job_index` (`qamera_job_id`, `output_index`),
+                KEY `qamera_imported_output_shop_product` (`id_product`, `id_shop`),
+                KEY `qamera_imported_output_id_image` (`id_image`)
+            ) ENGINE=InnoDB DEFAULT CHARSET={$charset};",
         ];
 
         foreach ($statements as $sql) {
@@ -298,6 +312,7 @@ final class Installer
         // strict-mode servers.
         return Db::getInstance()->execute(
             "DROP TABLE IF EXISTS "
+            . "`{$prefix}qamera_imported_output`, "
             . "`{$prefix}qamera_packshot_review`, "
             . "`{$prefix}qamera_packshot_job`, "
             . "`{$prefix}qamera_webhook_delivery`, "

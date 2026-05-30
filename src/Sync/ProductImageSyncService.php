@@ -17,6 +17,7 @@ use QameraAi\Module\Api\Exception\ServerException;
 use QameraAi\Module\Api\Exception\TransportException;
 use QameraAi\Module\Api\Exception\ValidationException;
 use QameraAi\Module\Api\QameraApiClient;
+use QameraAi\Module\Packshot\Output\ImportedOutputRepository;
 use Throwable;
 
 /**
@@ -44,6 +45,7 @@ class ProductImageSyncService
         private readonly PrimaryImageResolver $resolver,
         private readonly PrestaShopLoggerWrapper $logger,
         private readonly InMemoryDedupCache $dedupCache,
+        private readonly ImportedOutputRepository $importedOutputs,
     ) {
     }
 
@@ -118,6 +120,29 @@ class ProductImageSyncService
                 sprintf(
                     '[QameraAi] no resolvable primary image for id_product=%d; '
                     . 'skipping image sync (row status unchanged).',
+                    $idProduct
+                ),
+                1,
+                null,
+                'QameraAiModule',
+                $idProduct,
+                true
+            );
+            return;
+        }
+
+        // Loop guard (add-packshot-output-downloader, Layer B): if the
+        // resolved primary image was itself imported FROM Qamera (a generated
+        // scene/packshot written into the gallery by the output downloader),
+        // never re-upload it — that would feed a generated asset back as the
+        // source image for the next generation. Treat it as no eligible input
+        // (identical to the null-resolution early-return; row status untouched).
+        if ($this->importedOutputs->isImageImported($imageToUpload)) {
+            $this->logger->addLog(
+                sprintf(
+                    '[QameraAi] resolved primary image id_image=%d for id_product=%d is '
+                    . 'Qamera-imported; skipping re-upload (loop guard).',
+                    $imageToUpload,
                     $idProduct
                 ),
                 1,

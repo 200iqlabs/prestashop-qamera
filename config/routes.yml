@@ -85,6 +85,18 @@ _qameraai_admin_packshot_vote:
     _legacy_controller: AdminQameraAiPackshotReview
     _legacy_link: AdminQameraAiPackshotReview
 
+# --- Phase 4.5: output downloader ---
+
+_qameraai_admin_output_import:
+  path: /qameraai/jobs/{jobId}/import
+  methods: [POST]
+  requirements:
+    jobId: '[A-Za-z0-9._-]+'
+  defaults:
+    _controller: 'QameraAi\Module\Controller\Admin\OutputImportController::importAction'
+    _legacy_controller: AdminQameraAiJobs
+    _legacy_link: AdminQameraAiJobs
+
 # --- Phase 4.4: analysis-status surfacing ---
 
 _qameraai_admin_product_status:

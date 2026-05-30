@@ -28,6 +28,77 @@
 
     initRefreshButtons(statusUrlTemplate);
     initPoll(statusUrlTemplate);
+    initImportButtons(config);
+  }
+
+  // add-packshot-output-downloader — "Download to shop": POST the job to the
+  // import endpoint, then flip the cell to an "imported" badge in place.
+  function initImportButtons(config) {
+    var importUrlTemplate = config.importUrlTemplate || '';
+    var csrfToken = config.importCsrfToken || '';
+    var i18n = config.i18n || {};
+    if (!importUrlTemplate) { return; }
+
+    document.querySelectorAll('.js-qameraai-job-import').forEach(function (btn) {
+      btn.addEventListener('click', function (evt) {
+        evt.preventDefault();
+        var jobId = btn.getAttribute('data-job-id');
+        if (!jobId) { return; }
+        runImport(jobId, importUrlTemplate, csrfToken, i18n, btn);
+      });
+    });
+  }
+
+  function runImport(jobId, importUrlTemplate, csrfToken, i18n, button) {
+    var url = importUrlTemplate.replace('{jobId}', encodeURIComponent(jobId));
+    button.setAttribute('disabled', 'disabled');
+    button.classList.add('qameraai-spinner');
+
+    var body = new URLSearchParams();
+    body.set('_token', csrfToken);
+
+    return fetch(url, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    })
+      .then(function (res) {
+        return res.json().catch(function () { return null; });
+      })
+      .then(function (payload) {
+        if (payload && (payload.state === 'imported' || (payload.imported && payload.imported.length))) {
+          markImported(jobId, i18n);
+          if (payload.state === 'partial' && window.console) {
+            window.console.warn('[QameraAi] ' + (i18n.importPartial || 'Some images failed to import'));
+          }
+          return;
+        }
+        // Aborted / nothing imported — re-enable and surface the reason.
+        button.removeAttribute('disabled');
+        button.classList.remove('qameraai-spinner');
+        var reason = payload && payload.reason ? payload.reason : (i18n.importFailed || 'Import failed');
+        if (window.console) {
+          window.console.warn('[QameraAi] import for ' + jobId + ' did not complete: ' + reason);
+        }
+        button.setAttribute('title', String(reason));
+      })
+      .catch(function () {
+        button.removeAttribute('disabled');
+        button.classList.remove('qameraai-spinner');
+      });
+  }
+
+  function markImported(jobId, i18n) {
+    var row = document.querySelector('tr[data-job-id="' + cssEscape(jobId) + '"]');
+    if (!row) { return; }
+    var cell = row.querySelector('.js-qameraai-import-cell');
+    if (!cell) { return; }
+    while (cell.firstChild) { cell.removeChild(cell.firstChild); }
+    var badge = document.createElement('span');
+    badge.className = 'badge badge-success js-qameraai-import-done';
+    badge.textContent = i18n.imported || 'Imported';
+    cell.appendChild(badge);
   }
 
   function initRefreshButtons(statusUrlTemplate) {
