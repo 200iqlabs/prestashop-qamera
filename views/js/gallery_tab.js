@@ -160,6 +160,44 @@
     if ((data.orphan_packshots || []).length > 0) {
       container.appendChild(buildOrphans(ctx, data.orphan_packshots));
     }
+
+    maybePollStatus(ctx, data.images || []);
+  }
+
+  // D4: poll GET /products embedded analysis_status while any image is still
+  // pending/processing, flipping the badge to described without a manual
+  // Refresh. Bounded to ~1 min so a stuck analysis does not poll forever.
+  function maybePollStatus(ctx, images) {
+    var pending = images.filter(function (i) {
+      return i.analysis_status === 'pending' || i.analysis_status === 'processing';
+    });
+    if (pending.length === 0 || !ctx.config.urls.status) { return; }
+
+    var attempts = 0;
+    var timer = window.setInterval(function () {
+      attempts += 1;
+      fetch(ctx.config.urls.status, { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          var anyPending = false;
+          ((data && data.images) || []).forEach(function (img) {
+            updateBadge(img.image_id, img.analysis_status);
+            if (img.analysis_status === 'pending' || img.analysis_status === 'processing') {
+              anyPending = true;
+            }
+          });
+          if (!anyPending || attempts >= 12) { window.clearInterval(timer); }
+        })
+        .catch(function () { if (attempts >= 12) { window.clearInterval(timer); } });
+    }, 5000);
+  }
+
+  function updateBadge(imageId, status) {
+    if (!imageId) { return; }
+    var row = document.querySelector('.qameraai-browse-row[data-image-id="' + imageId + '"]');
+    if (!row) { return; }
+    var b = row.querySelector('.qameraai-badge');
+    if (b && status) { b.textContent = status; }
   }
 
   function buildRow(ctx, image) {
@@ -309,6 +347,7 @@
         if (imported || already) {
           btn.textContent = already ? t(ctx, 'already_imported', 'Already imported') : t(ctx, 'imported', 'Imported ✓');
           btn.classList.add('btn-success');
+          if (imported) { showImportedNotice(ctx); }
           return;
         }
         // Surface the server reason instead of a blank "Import failed".
@@ -319,6 +358,17 @@
         btn.disabled = false;
         btn.textContent = t(ctx, 'import_failed', 'Import failed');
       });
+  }
+
+  // The PS "Images" tab is a separate core component we cannot refresh from
+  // here, so the appended gallery image only shows after a page reload. Tell
+  // the operator once per page.
+  function showImportedNotice(ctx) {
+    var notices = document.getElementById('qameraai-browse-notices');
+    if (!notices || document.getElementById('qameraai-import-notice')) { return; }
+    var note = alertDiv('alert-success', t(ctx, 'imported_reload', 'Image added to the gallery — reload the page to see it in the Images tab.'));
+    note.id = 'qameraai-import-notice';
+    notices.appendChild(note);
   }
 
   function reasonMessage(ctx, reason) {

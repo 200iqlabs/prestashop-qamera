@@ -324,6 +324,11 @@ class QameraAi extends Module
             'importing' => $this->trans('Importing…', [], $d),
             'imported' => $this->trans('Imported ✓', [], $d),
             'already_imported' => $this->trans('Already imported', [], $d),
+            'imported_reload' => $this->trans(
+                'Image added to the gallery — reload the page to see it in the Images tab.',
+                [],
+                $d
+            ),
             'import_failed' => $this->trans('Import failed', [], $d),
             'reason_not_registered' => $this->trans('Product not synced to Qamera yet', [], $d),
             'reason_not_accepted' => $this->trans('Packshot not accepted yet', [], $d),
