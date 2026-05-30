@@ -67,14 +67,19 @@
         return res.json().catch(function () { return null; });
       })
       .then(function (payload) {
-        if (payload && (payload.state === 'imported' || (payload.imported && payload.imported.length))) {
+        // Terminal "imported" states: a fresh import, a partial set with at
+        // least one image written, or an already-imported row (e.g. a second
+        // tab/click after a prior import). All three mean the output is in the
+        // gallery, so the cell flips to the "imported" badge.
+        var didImport = payload && (payload.imported && payload.imported.length);
+        if (payload && (payload.state === 'imported' || payload.state === 'already_imported' || didImport)) {
           markImported(jobId, i18n);
           if (payload.state === 'partial' && window.console) {
             window.console.warn('[QameraAi] ' + (i18n.importPartial || 'Some images failed to import'));
           }
           return;
         }
-        // Aborted / nothing imported — re-enable and surface the reason.
+        // Nothing placed / aborted — re-enable and surface the reason.
         button.removeAttribute('disabled');
         button.classList.remove('qameraai-spinner');
         var reason = payload && payload.reason ? payload.reason : (i18n.importFailed || 'Import failed');
