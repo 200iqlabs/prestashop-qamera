@@ -11,8 +11,7 @@ if (file_exists($autoload)) {
     require_once $autoload;
 }
 
-use PrestaShop\PrestaShop\Adapter\SymfonyContainer;
-use QameraAi\Module\Gallery\WriteScopeChecker;
+use QameraAi\Module\Gallery\Tab\GalleryTabRenderer;
 use QameraAi\Module\Install\Installer;
 use QameraAi\Module\Sync\ProductImageSyncService;
 use QameraAi\Module\Sync\ProductSnapshotWriter;
@@ -226,46 +225,15 @@ class QameraAi extends Module
         }
 
         try {
-            $container = SymfonyContainer::getInstance();
-            if ($container === null) {
-                return '';
-            }
-            /** @var \Twig\Environment $twig */
-            $twig = $container->get('twig');
-            /** @var \Symfony\Component\Routing\RouterInterface $router */
-            $router = $container->get('router');
-            /** @var \Symfony\Component\Security\Csrf\CsrfTokenManagerInterface $csrf */
-            $csrf = $container->get('security.csrf.token_manager');
-
             $idLang = (int) ($this->context->language->id ?? 1);
-            $writeScope = $this->resolveWriteScope();
+            /** @var \QameraAi\Module\Gallery\Tab\GalleryTabRenderer $renderer */
+            $renderer = $this->get(GalleryTabRenderer::class);
 
-            $config = [
-                'idProduct' => $idProduct,
-                'writeScope' => $writeScope,
-                'urls' => [
-                    'ingest' => $router->generate('_qameraai_admin_gallery_ingest', ['idProduct' => $idProduct]),
-                    'status' => $router->generate('_qameraai_admin_gallery_status', ['idProduct' => $idProduct]),
-                    'browse' => $router->generate('_qameraai_admin_gallery_browse', ['idProduct' => $idProduct]),
-                    'sessionsTemplate' => $router->generate(
-                        '_qameraai_admin_gallery_sessions',
-                        ['idProduct' => $idProduct, 'imageId' => '__IMAGE__']
-                    ),
-                    'importOutput' => $router->generate('_qameraai_admin_gallery_import', ['idProduct' => $idProduct]),
-                ],
-                'token' => [
-                    'ingest' => $csrf->getToken('qamera_gallery_ingest')->getValue(),
-                    'import' => $csrf->getToken('qamera_gallery_import')->getValue(),
-                ],
-                'i18n' => $this->galleryTabI18n(),
-            ];
-
-            return $twig->render('@Modules/qameraai/views/templates/admin/product_tab.html.twig', [
-                'id_product' => $idProduct,
-                'write_scope' => $writeScope,
-                'gallery_images' => $this->collectGalleryImages($idProduct, $idLang),
-                'config_json' => json_encode($config) ?: '{}',
-            ]);
+            return $renderer->render(
+                $idProduct,
+                $this->collectGalleryImages($idProduct, $idLang),
+                $this->galleryTabI18n()
+            );
         } catch (\Throwable $e) {
             PrestaShopLogger::addLog(
                 sprintf('[QameraAi] gallery tab render failed for id_product=%d: %s', $idProduct, $e->getMessage()),
@@ -300,17 +268,6 @@ class QameraAi extends Module
         }
         if (method_exists($controller, 'addJS')) {
             $controller->addJS($this->getPathUri() . 'views/js/gallery_tab.js');
-        }
-    }
-
-    private function resolveWriteScope(): bool
-    {
-        try {
-            /** @var WriteScopeChecker $checker */
-            $checker = $this->get(WriteScopeChecker::class);
-            return $checker->hasWriteScope();
-        } catch (\Throwable $e) {
-            return false;
         }
     }
 
@@ -369,6 +326,11 @@ class QameraAi extends Module
             'import_failed' => $this->trans('Import failed', [], $d),
             'recent_only' => $this->trans('Showing recent sessions only.', [], $d),
             'sessions_failed' => $this->trans('Could not load sessions.', [], $d),
+            'sessions_unavailable' => $this->trans(
+                'Sessions unavailable — the API key is missing the jobs read scope.',
+                [],
+                $d
+            ),
             'synthesized' => $this->trans('Synthesized / unmatched packshots', [], $d),
             'no_preview' => $this->trans('no preview', [], $d),
         ];

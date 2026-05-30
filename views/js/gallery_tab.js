@@ -233,6 +233,10 @@
       .then(function (r) { return r.json(); })
       .then(function (data) {
         strip.innerHTML = '';
+        if (data && data.sessions_error) {
+          strip.appendChild(textDiv('text-muted', t(ctx, 'sessions_unavailable', 'Sessions unavailable — the API key is missing the jobs read scope.')));
+          return;
+        }
         var sessions = (data && data.sessions) || [];
         if (sessions.length === 0) {
           strip.appendChild(textDiv('text-muted', t(ctx, 'none', 'None')));

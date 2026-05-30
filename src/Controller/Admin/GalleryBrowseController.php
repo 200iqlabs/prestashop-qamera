@@ -66,13 +66,20 @@ final class GalleryBrowseController extends FrameworkBundleAdminController
 
         try {
             $product = $api->getProduct($productRef);
+            // The jobs walk needs plugin.jobs:read; a key without it (or any
+            // other upstream error) must degrade to "no sessions + notice",
+            // never an uncaught 500 that the UI shows as a hard failure.
+            $walk = $resolver->resolve($productRef, $product->packshots);
         } catch (NotFoundException $e) {
             return new JsonResponse(['ok' => true, 'sessions' => [], 'sessions_truncated' => false]);
         } catch (ApiException $e) {
-            return new JsonResponse(['ok' => false, 'error_code' => 'api_error'], Response::HTTP_BAD_GATEWAY);
+            return new JsonResponse([
+                'ok' => true,
+                'sessions' => [],
+                'sessions_truncated' => false,
+                'sessions_error' => true,
+            ]);
         }
-
-        $walk = $resolver->resolve($productRef, $product->packshots);
 
         $sessions = [];
         foreach ($walk->sessions as $session) {
