@@ -34,6 +34,11 @@ services:
   QameraAi\Module\Sync\ProductRefBuilder:
     public: true
 
+  QameraAi\Module\Sync\ExternalRefBuilder:
+    public: true
+    arguments:
+      $refBuilder: '@QameraAi\Module\Sync\ProductRefBuilder'
+
   QameraAi\Module\Sync\PrestaShopLoggerWrapper:
     public: true
 
@@ -53,6 +58,37 @@ services:
 
   QameraAi\Module\Sync\PrimaryImageResolver:
     public: true
+
+  QameraAi\Module\Gallery\ProductImageFileResolver:
+    public: true
+
+  QameraAi\Module\Gallery\WriteScopeChecker:
+    public: true
+    arguments:
+      $apiClient: '@QameraAi\Module\Api\QameraApiClient'
+
+  QameraAi\Module\Gallery\GalleryIngestOrchestrator:
+    public: true
+    arguments:
+      $fileResolver: '@QameraAi\Module\Gallery\ProductImageFileResolver'
+      $uploadStrategy: '@QameraAi\Module\Sync\PresignedImageUploadStrategy'
+      $apiClient: '@QameraAi\Module\Api\QameraApiClient'
+      $refBuilder: '@QameraAi\Module\Sync\ExternalRefBuilder'
+      $productRefBuilder: '@QameraAi\Module\Sync\ProductRefBuilder'
+      $scopeChecker: '@QameraAi\Module\Gallery\WriteScopeChecker'
+
+  QameraAi\Module\Gallery\Browse\ProductImageBrowseAssembler:
+    public: true
+
+  QameraAi\Module\Gallery\Browse\SessionImageResolver:
+    public: true
+    arguments:
+      $apiClient: '@QameraAi\Module\Api\QameraApiClient'
+
+  QameraAi\Module\Gallery\Browse\ThumbnailSourcer:
+    public: true
+    arguments:
+      $apiClient: '@QameraAi\Module\Api\QameraApiClient'
 
   QameraAi\Module\Sync\InMemoryDedupCache:
     public: true
@@ -89,6 +125,7 @@ services:
       $logger: '@QameraAi\Module\Sync\PrestaShopLoggerWrapper'
       $dedupCache: '@QameraAi\Module\Sync\InMemoryDedupCache'
       $importedOutputs: '@QameraAi\Module\Packshot\Output\ImportedOutputRepository'
+      $externalRefBuilder: '@QameraAi\Module\Sync\ExternalRefBuilder'
 
   # Phase 4.5 (add-packshot-output-downloader) — imported-output ledger.
   # Same raw-SQL repository shape as PackshotReviewRepository; Db + prefix

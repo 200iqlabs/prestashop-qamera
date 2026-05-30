@@ -1,27 +1,27 @@
 ## 1. Foundation — external_ref builder
 
-- [ ] 1.1 Add a shared image/packshot `external_ref` builder producing `ps:<shop>:<prod>:image:<psImageId>` and `ps:<shop>:<prod>:pack:<psImageId>`; write unit tests covering both forms.
-- [ ] 1.2 Refactor `ProductImageSyncService` (line ~170) to mint the image ref via the shared builder so hook-sync and the picker stay byte-identical; assert via test that both call sites yield the same ref for the same `(shop, prod, image)`.
-- [ ] 1.3 Add a PrestaShop image-file resolver: given a PS image id, return local file path + content type + size; unit test against fixture paths (mock the PS `Image` lookup).
+- [x] 1.1 Add a shared image/packshot `external_ref` builder producing `ps:<shop>:<prod>:image:<psImageId>` and `ps:<shop>:<prod>:pack:<psImageId>`; write unit tests covering both forms.
+- [x] 1.2 Refactor `ProductImageSyncService` (line ~170) to mint the image ref via the shared builder so hook-sync and the picker stay byte-identical; assert via test that both call sites yield the same ref for the same `(shop, prod, image)`.
+- [x] 1.3 Add a PrestaShop image-file resolver: given a PS image id, return local file path + content type + size; unit test against fixture paths (mock the PS `Image` lookup).
 
 ## 2. Ingest orchestrator (push)
 
-- [ ] 2.1 Write failing unit tests for `GalleryIngestOrchestrator`: Flow A (register image), "add as packshot" = image-then-packshot with `source_image_ref` set, idempotent re-ingest (`status:'existing'`), oversize rejection, image-then-packshot ordering guard.
-- [ ] 2.2 Implement `GalleryIngestOrchestrator` per selected image: resolve file → `PresignedImageUploadStrategy::uploadImage` → `registerImage` (always) → `registerPackshot` (when packshot action) using `RegisterImageRequest`/`RegisterPackshotRequest`; make 2.1 tests pass.
-- [ ] 2.3 Add error-taxonomy mapping (Guzzle `MockHandler` tests): `invalid_input` / `unauthorized` / `forbidden` / `not_found` / `source_asset_unavailable` → per-item non-retryable error; `rate_limit_exceeded` / `internal_error` → backoff retry reusing the same `external_ref`.
-- [ ] 2.4 Add the `plugin.catalog:write` scope precheck (from cached `/me` scopes) gating ingest; unit test the blocked path and the live-403 path.
+- [x] 2.1 Write failing unit tests for `GalleryIngestOrchestrator`: Flow A (register image), "add as packshot" = image-then-packshot with `source_image_ref` set, idempotent re-ingest (`status:'existing'`), oversize rejection, image-then-packshot ordering guard.
+- [x] 2.2 Implement `GalleryIngestOrchestrator` per selected image: resolve file → `PresignedImageUploadStrategy::uploadImage` → `registerImage` (always) → `registerPackshot` (when packshot action) using `RegisterImageRequest`/`RegisterPackshotRequest`; make 2.1 tests pass.
+- [x] 2.3 Add error-taxonomy mapping (Guzzle `MockHandler` tests): `invalid_input` / `unauthorized` / `forbidden` / `not_found` / `source_asset_unavailable` → per-item non-retryable error; `rate_limit_exceeded` / `internal_error` → backoff retry reusing the same `external_ref`.
+- [x] 2.4 Add the `plugin.catalog:write` scope precheck (from cached `/me` scopes) gating ingest; unit test the blocked path and the live-403 path.
 
 ## 3. Browse assembler (pull)
 
-- [ ] 3.1 Write failing unit tests for `ProductImageBrowseAssembler`: group packshots under images by `sourceImageId`; surface `imagesTruncated`/`packshotsTruncated` notice; counts per image.
-- [ ] 3.2 Implement the assembler building image → packshots tree from `ProductDetailResponse`; make 3.1 tests pass.
-- [ ] 3.3 Implement the lazy, capped jobs walk: page `listJobs` via cursor up to the cap, client-filter `jobType==photo_shoot` + product, map `job.packshotAssetId → packshot.assetId → packshot.sourceImageId` → image; emit "recent sessions" notice on cap-hit. Unit test mapping + cap behavior with `MockHandler`.
-- [ ] 3.4 Implement thumbnail sourcing per object kind (session → `JobOutput.url`; product image → local PS file; ingested packshot → source image local thumb; generated packshot → `getJob(generatedByJobId).outputs[].url`; synthesized image → related packshot thumb, else labelled placeholder); unit test each branch.
+- [x] 3.1 Write failing unit tests for `ProductImageBrowseAssembler`: group packshots under images by `sourceImageId`; surface `imagesTruncated`/`packshotsTruncated` notice; counts per image.
+- [x] 3.2 Implement the assembler building image → packshots tree from `ProductDetailResponse`; make 3.1 tests pass.
+- [x] 3.3 Implement the lazy, capped jobs walk: page `listJobs` via cursor up to the cap, client-filter `jobType==photo_shoot` + product, map `job.packshotAssetId → packshot.assetId → packshot.sourceImageId` → image; emit "recent sessions" notice on cap-hit. Unit test mapping + cap behavior with `MockHandler`.
+- [x] 3.4 Implement thumbnail sourcing per object kind (session → `JobOutput.url`; product image → local PS file; ingested packshot → source image local thumb; generated packshot → `getJob(generatedByJobId).outputs[].url`; synthesized image → related packshot thumb, else labelled placeholder); unit test each branch.
 
 ## 4. Add-to-gallery — per-output import (reuse qamera-output-import)
 
-- [ ] 4.1 Write failing tests for single-output import keyed `(qamera_job_id, output_index)`: places only the targeted output, idempotent on existing ledger row, honors photo_shoot-unconditional vs packshot-accepted gate, rejects pending packshot.
-- [ ] 4.2 Implement the per-output import entry point reusing the existing fresh-fetch + download-resize-append + ledger machinery (no cover steal, no watermark); make 4.1 tests pass.
+- [x] 4.1 Write failing tests for single-output import keyed `(qamera_job_id, output_index)`: places only the targeted output, idempotent on existing ledger row, honors photo_shoot-unconditional vs packshot-accepted gate, rejects pending packshot.
+- [x] 4.2 Implement the per-output import entry point reusing the existing fresh-fetch + download-resize-append + ledger machinery (no cover steal, no watermark); make 4.1 tests pass.
 
 ## 5. Back-office controllers (AJAX)
 
