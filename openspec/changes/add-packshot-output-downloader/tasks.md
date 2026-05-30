@@ -47,12 +47,13 @@ TDD throughout (units in a worktree via one-shot docker, PHP 8.1/8.2/8.3; PHPCS 
 
 ## 8. Operator smoke (main checkout, live container)
 
-- [ ] 8.1 Upgrade module to 1.8.0 on the live container (`prestashop:module upgrade qameraai` as appropriate); verify `ps_qamera_imported_output` created with the UNIQUE key; routes + DI resolvable (cache:clear as **www-data**).
-- [ ] 8.2 Live-MySQL repo smoke in a rolled-back txn: `record` + `importedIndexes` + `isImageImported` + duplicate-noop (mirrors the 4.4 getRow-LIMIT precaution).
-- [ ] 8.3 End-to-end on a real completed photo-shoot job (existing synced product, e.g. 31/28): click "Download to shop" → scene appears in the product gallery appended, cover unchanged, front-office thumbnails render (all ImageType sizes on disk); ledger row written; button flips to "imported ✓"; re-click is a no-op.
-- [ ] 8.4 Accepted-packshot path: a completed `job_type='packshot'` accepted in the Packshots view → its Jobs history row shows the active action → import lands the cutout in the gallery.
-- [ ] 8.5 Loop-guard check: after import, a product re-save / watermark does NOT re-upload the imported scene to Qamera (verify via logs / `GET /products/{ref}` images unchanged).
-- [ ] 8.6 Negative: pending/rejected packshot row shows no active action; video-output job (if available) records a ledger row with `id_image=NULL` and places nothing.
+- [x] 8.1 Upgraded module to **1.8.0** on the live container as www-data (+ `chown var/` + www-data cache:clear). `ps_qamera_imported_output` created with the exact schema (UNIQUE(qamera_job_id,output_index), id_image NULLable, both KEYs); `ps_module.version=1.8.0`; route `_qameraai_admin_output_import` registered (`debug:router`).
+- [x] 8.2 Live-MySQL repo smoke (`tests/Smoke/imported_output_repo_smoke.php`, rolled-back txn): **9/9 PASS** — record + INSERT IGNORE dedup, importedIndexes [0,1], isImageImported true/false/0-guard, findByJob hydration incl. NULL id_image, exactly-2-rows (duplicate ignored). No rows persisted.
+- [x] 8.3 End-to-end on real photo-shoot job `376dfa48…` (product 32) via the actual `OutputImporter::import` path (getJob live read → download → gallery write → resize → ledger): output 0 → **id_image 36 appended at position 2, cover unchanged on 35**; all 6 files on disk (`36.jpg` + cart/home/large/medium/small `_default`); ledger row exact; **re-run = no-op** (`imported:[]`, `skipped:[0]`). (BO button-click + front-office eyeball = operator step below.)
+- [x] 8.4 Accepted-packshot path: completed packshot `1a2e8b58…` (product 32, `voting=accepted`) → imported → id_image 37. Gate passed via review-row presence+accepted.
+- [x] 8.5 Loop-guard: origin marker verified on live data — `isImageImported` = true for the imported 36/37, false for the real cover photo 35 (the guard's decision input). Full resolver→skip path unit-covered (`ProductImageSyncOriginGuardTest`); not force-triggered live because product 32's resolved primary is the real cover (35), never a Qamera-origin image.
+- [x] 8.6 Negatives (all aborted, nothing written, no gallery leak): pending packshot `e439a35e…` → `packshot_not_accepted`; rejected `5f5028cc…` → `packshot_not_accepted`; failed job `13ee057f…` → `not_completed`. (Video-output job: none present in this install; path unit-covered — non-image → ledger `id_image=NULL`, no ps_image.)
+- [ ] 8.7 **OPERATOR**: BO browser click-test (the JS/CSRF/in-place-update + front-office visual layer — the only part not exercisable headlessly). Open BO → Qamera AI → Jobs history; on a fresh active row (e.g. job `5c8598da…` / product 28, registered, cover img 31) click "Download to shop" → cell flips to "Imported ✓" without reload → scene appears appended in product 28's gallery → renders on the front-office product page.
 
 ## 9. Wrap-up
 
