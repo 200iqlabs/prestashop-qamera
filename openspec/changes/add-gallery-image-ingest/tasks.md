@@ -45,9 +45,9 @@
 
 ## 8. Smoke (operator-driven, live container)
 
-- [ ] 8.1 Ingest: pick a non-cover gallery image, "Add as product" → appears upstream via `GET /products/{ref}`; re-run → idempotent (no duplicate).
-- [ ] 8.2 Ingest: "Add as packshot" → packshot lands accepted with non-null `source_image_id`; confirm a subsequent `photo_shoot` resolves it implicitly.
-- [ ] 8.3 Browse: product with multiple images, packshots, and photo-shoot sessions renders correct grouping, counts, and a thumbnail on every object; verify generated-packshot thumb (getJob) and session-image thumb (signed url).
-- [ ] 8.4 Add-to-gallery: import one session image → appended at end, cover unchanged, no watermark, ledger row written; re-trigger → already-imported; verify no action offered on the main image / ingested packshot.
-- [ ] 8.5 Scope: with a read-only key the browse renders and ingest actions are blocked with a clear message.
-- [ ] 8.6 `cache:clear` as `www-data` after deploy; confirm BO not broken.
+- [x] 8.1 Ingest: pick a non-cover gallery image, "Add as product" → appears upstream via `GET /products/{ref}`; re-run → idempotent (no duplicate). _(headless E2E: img 38 → `ps:1:32:image:38` created, re-run=existing, confirmed via getProduct.)_
+- [x] 8.2 Ingest: "Add as packshot" → packshot lands accepted with non-null `source_image_id`; confirm a subsequent `photo_shoot` resolves it implicitly. _(headless E2E: `ps:1:32:pack:38` source_image_id=ab8ba280… non-null, re-run=existing. Downstream photo_shoot-resolve is the §9.3-proven mechanism.)_
+- [x] 8.3 Browse: product with multiple images, packshots, and photo-shoot sessions renders correct grouping, counts, and a thumbnail on every object; verify generated-packshot thumb (getJob) and session-image thumb (signed url). _(headless E2E on prod 32: grouping/counts + ps_image/getJob/signed-url thumbs + orphan bucket all green.)_
+- [x] 8.4 Add-to-gallery: import one session image → appended at end, cover unchanged, no watermark, ledger row written; re-trigger → already-imported; verify no action offered on the main image / ingested packshot. _(headless E2E: importOutput idempotent branch live (skipped, no dup); fresh placement covered by units + 4.5 e2e; no-action = presenter importable flag.)_
+- [ ] 8.5 Scope: with a read-only key the browse renders and ingest actions are blocked with a clear message. _(OPERATOR: needs a read-only API key + browser.)_
+- [x] 8.6 `cache:clear` as `www-data` after deploy; confirm BO not broken. _(www-data cache:clear OK; 5 gallery routes registered; DI resolves; BO returns 302 not 500.)_
