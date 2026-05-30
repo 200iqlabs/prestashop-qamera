@@ -75,6 +75,7 @@
                     <span class="text-muted">—</span>
                   {% endif %}
                 </td>
+                {# Keep this cell's markup in sync with renderImportCell()/buildImport*() in views/js/jobs_history.js — the poll rebuilds it client-side to mirror these four states. #}
                 <td class="js-qameraai-import-cell">
                   {% set istate = import_state[row.qamera_job_id]|default({'state': 'absent'}) %}
                   {% if istate.state == 'imported' %}
@@ -140,7 +141,10 @@
         importing: {{ 'Importing…'|trans({}, 'Modules.Qameraai.Admin')|json_encode|raw }},
         imported: {{ 'Imported'|trans({}, 'Modules.Qameraai.Admin')|json_encode|raw }},
         importFailed: {{ 'Import failed'|trans({}, 'Modules.Qameraai.Admin')|json_encode|raw }},
-        importPartial: {{ 'Some images failed to import'|trans({}, 'Modules.Qameraai.Admin')|json_encode|raw }}
+        importPartial: {{ 'Some images failed to import'|trans({}, 'Modules.Qameraai.Admin')|json_encode|raw }},
+        downloadToShop: {{ 'Download to shop'|trans({}, 'Modules.Qameraai.Admin')|json_encode|raw }},
+        downloadTitle: {{ 'Download this result into the product gallery'|trans({}, 'Modules.Qameraai.Admin')|json_encode|raw }},
+        acceptFirstTitle: {{ 'Accept this packshot in the Packshots view first'|trans({}, 'Modules.Qameraai.Admin')|json_encode|raw }}
       }
     };
   </script>

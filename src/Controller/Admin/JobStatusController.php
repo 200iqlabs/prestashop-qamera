@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace QameraAi\Module\Controller\Admin;
 
 use PrestaShopBundle\Controller\Admin\FrameworkBundleAdminController;
+use QameraAi\Module\Packshot\Acceptance\PackshotReviewRepository;
 use QameraAi\Module\Packshot\JobsStatusRefresher;
+use QameraAi\Module\Packshot\Output\ImportedOutputRepository;
+use QameraAi\Module\Packshot\Output\OutputImporter;
 use QameraAi\Module\Packshot\PackshotJobRepository;
 use QameraAi\Module\Webhook\Event\QameraDbException;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -22,7 +25,10 @@ final class JobStatusController extends FrameworkBundleAdminController
         Request $request,
         string $jobId,
         PackshotJobRepository $repository,
-        JobsStatusRefresher $refresher
+        JobsStatusRefresher $refresher,
+        OutputImporter $importer,
+        ImportedOutputRepository $importedOutputs,
+        PackshotReviewRepository $reviews
     ): JsonResponse {
         try {
             $row = $repository->findByJobId($jobId);
@@ -45,6 +51,14 @@ final class JobStatusController extends FrameworkBundleAdminController
             'output_url' => $result->outputUrl,
             'last_error_message' => $result->lastErrorMessage,
             'in_flight' => $refresher->isInFlight($result->status),
+            // Per-row "Download to shop" display state, recomputed against the
+            // freshly-refreshed status so the poll can surface the affordance
+            // in place (no full page reload). Mirrors indexAction's gridState.
+            'import_state' => $importer->gridState(
+                $result->status,
+                $reviews->findByJobId($jobId),
+                $importedOutputs->importedIndexes($jobId)
+            ),
         ];
 
         if ($result->refreshError !== null) {
