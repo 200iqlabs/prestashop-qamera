@@ -124,7 +124,7 @@
     if (!container) { return; }
     container.innerHTML = '';
     container.appendChild(textDiv('text-muted', t(ctx, 'loading', 'Loading…')));
-    notices.innerHTML = '';
+    if (notices) { notices.innerHTML = ''; }
 
     fetch(ctx.config.urls.browse, { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
@@ -248,6 +248,10 @@
       strip.appendChild(textDiv('text-muted', t(ctx, 'none', 'None')));
     }
     packshots.forEach(function (p) {
+      // output_index 0: a packshot-generation job emits exactly one image
+      // output (the cutout), so the generated packshot is always its job's
+      // output 0. ThumbnailSourcer makes the same single-output assumption.
+      // If packshot jobs ever emit multiple outputs this must map asset→index.
       strip.appendChild(assetCell(ctx, p.thumbnail_url, p.importable ? { job_id: p.generated_by_job_id, output_index: 0 } : null));
     });
     wrap.appendChild(strip);
@@ -304,6 +308,7 @@
     var strip = document.createElement('div');
     strip.className = 'qameraai-thumbs';
     orphans.forEach(function (p) {
+      // output_index 0: see renderPackshotStrip — single-output packshot job.
       strip.appendChild(assetCell(ctx, p.thumbnail_url, p.importable ? { job_id: p.generated_by_job_id, output_index: 0 } : null));
     });
     body.appendChild(strip);
