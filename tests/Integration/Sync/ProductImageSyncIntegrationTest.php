@@ -21,6 +21,7 @@ use QameraAi\Module\Sync\PresignedImageUploadStrategy;
 use QameraAi\Module\Sync\PrestaShopLoggerWrapper;
 use QameraAi\Module\Sync\PrimaryImageResolver;
 use QameraAi\Module\Sync\ProductImageSyncService;
+use QameraAi\Module\Sync\ExternalRefBuilder;
 use QameraAi\Module\Sync\ProductRefBuilder;
 use QameraAi\Module\Tests\Integration\Fixtures\BookkeepingFactory;
 use QameraAi\Module\Tests\Integration\Fixtures\ImageFactory;
@@ -171,7 +172,8 @@ final class ProductImageSyncIntegrationTest extends IntegrationTestCase
             new PrimaryImageResolver(),
             new PrestaShopLoggerWrapper(),
             new InMemoryDedupCache(),
-            new \QameraAi\Module\Packshot\Output\ImportedOutputRepository(Db::getInstance(), _DB_PREFIX_)
+            new \QameraAi\Module\Packshot\Output\ImportedOutputRepository(Db::getInstance(), _DB_PREFIX_),
+            new ExternalRefBuilder(new ProductRefBuilder())
         );
     }
 
