@@ -76,9 +76,9 @@ class ProductImageFileResolver
     protected function imageFormat(int $psImageId): string
     {
         $image = new Image($psImageId);
-        $format = $image->image_format ?? null;
+        $format = (string) $image->image_format;
 
-        return is_string($format) && $format !== '' ? $format : 'jpg';
+        return $format !== '' ? $format : 'jpg';
     }
 
     private function locateFile(string $folder, int $psImageId): ?string

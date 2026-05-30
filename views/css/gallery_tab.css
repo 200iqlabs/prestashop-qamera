@@ -1,0 +1,113 @@
+/* add-gallery-image-ingest — product-detail Qamera tab styles.
+   Bootstrap 4 (PS BO) carries the layout; this only covers the picker grid,
+   the browse accordion, and thumbnail strips. */
+
+.qameraai-gallery-tab .qameraai-picker-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.qameraai-picker-cell {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  width: 110px;
+  margin: 0;
+  padding: 6px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.qameraai-picker-cell img {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 3px;
+}
+
+.qameraai-picker-check {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+}
+
+.qameraai-cover-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 10px;
+  background: #2d8a34;
+  color: #fff;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.qameraai-picker-status {
+  font-size: 11px;
+  margin-top: 4px;
+  min-height: 14px;
+  text-align: center;
+}
+
+.qameraai-status-working { color: #5b6770; }
+.qameraai-status-ok { color: #2d8a34; }
+.qameraai-status-error { color: #c0392b; }
+
+.qameraai-browse-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.qameraai-browse-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.qameraai-count { font-size: 13px; }
+
+.qameraai-browse-body { padding: 12px 16px; }
+
+.qameraai-strip { margin-bottom: 12px; }
+.qameraai-strip h4 { font-size: 13px; text-transform: uppercase; color: #6c757d; }
+
+.qameraai-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.qameraai-thumb-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.qameraai-thumb {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 3px;
+  border: 1px solid #e0e0e0;
+}
+
+.qameraai-thumb-placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  font-size: 11px;
+  color: #adb5bd;
+  background: #f5f5f5;
+  border: 1px dashed #ced4da;
+  border-radius: 3px;
+}
+
+.qameraai-import-btn { font-size: 11px; }

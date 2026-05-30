@@ -25,23 +25,23 @@
 
 ## 5. Back-office controllers (AJAX)
 
-- [ ] 5.1 Add ingest controller endpoint(s) under `src/Controller/Admin/` driving `GalleryIngestOrchestrator` one item at a time, returning per-item status JSON (uploading → registering → analyzing → ready / error).
-- [ ] 5.2 Add browse controller endpoint(s): initial product-detail assembly, lazy row-expand (jobs walk + session images + thumbnails), and the per-output add-to-gallery trigger.
-- [ ] 5.3 Add a status-poll endpoint backed by `getProduct` embedded `analysis_status` for in-flight ingested items.
+- [x] 5.1 Add ingest controller endpoint(s) under `src/Controller/Admin/` driving `GalleryIngestOrchestrator` one item at a time, returning per-item status JSON (uploading → registering → analyzing → ready / error).
+- [x] 5.2 Add browse controller endpoint(s): initial product-detail assembly, lazy row-expand (jobs walk + session images + thumbnails), and the per-output add-to-gallery trigger.
+- [x] 5.3 Add a status-poll endpoint backed by `getProduct` embedded `analysis_status` for in-flight ingested items.
 
 ## 6. Tab mount + front-end
 
-- [ ] 6.1 Fill `hookDisplayAdminProductsExtra` to render the "Qamera" tab (Twig) hosting picker + browse accordion; fill `hookDisplayBackOfficeHeader` to inject the tab CSS/JS bundle only on the product-edit screen.
-- [ ] 6.2 Build the ingest picker UI: source toggle (store gallery / upload new), multi-select gallery grid, per-selection "Add as product" / "Add as packshot", live per-item status; block actions when write scope absent.
-- [ ] 6.3 Build the browse accordion: collapsed row (thumbnail + analysis badge + 📦/🎬 counts), expand → two thumbnail strips + lightbox (reuse PS fancybox), lazy jobs fetch on expand, truncation notice.
-- [ ] 6.4 Add the origin-guarded "Add to product gallery" action on session images + generated packshots (hidden for product/main image and ingested packshots); reflect already-imported state.
-- [ ] 6.5 Keep JS to vanilla + jQuery + Bootstrap 4 and Twig translation domain `Modules.Qameraai.Admin` per `qamera-bo-ui` constraints.
+- [x] 6.1 Fill `hookDisplayAdminProductsExtra` to render the "Qamera" tab (Twig) hosting picker + browse accordion; fill `hookDisplayBackOfficeHeader` to inject the tab CSS/JS bundle only on the product-edit screen.
+- [x] 6.2 Build the ingest picker UI: source toggle (store gallery / upload new), multi-select gallery grid, per-selection "Add as product" / "Add as packshot", live per-item status; block actions when write scope absent.
+- [x] 6.3 Build the browse accordion: collapsed row (thumbnail + analysis badge + 📦/🎬 counts), expand → two thumbnail strips + lightbox (reuse PS fancybox), lazy jobs fetch on expand, truncation notice.
+- [x] 6.4 Add the origin-guarded "Add to product gallery" action on session images + generated packshots (hidden for product/main image and ingested packshots); reflect already-imported state.
+- [x] 6.5 Keep JS to vanilla + jQuery + Bootstrap 4 and Twig translation domain `Modules.Qameraai.Admin` per `qamera-bo-ui` constraints.
 
 ## 7. Quality gates
 
-- [ ] 7.1 PHPCS (PSR-12) clean on all new/changed files.
-- [ ] 7.2 PHPStan level 5 clean (new `src/Gallery/*` and touched files).
-- [ ] 7.3 Full PHPUnit suite green on PHP 8.1 / 8.2 / 8.3 (CI matrix).
+- [x] 7.1 PHPCS (PSR-12) clean on all new/changed files.
+- [x] 7.2 PHPStan level 5 clean (new `src/Gallery/*` and touched files).
+- [x] 7.3 Full PHPUnit suite green on PHP 8.1 / 8.2 / 8.3 (CI matrix).
 
 ## 8. Smoke (operator-driven, live container)
 

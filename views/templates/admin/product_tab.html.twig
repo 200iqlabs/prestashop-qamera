@@ -1,0 +1,87 @@
+{# add-gallery-image-ingest — product-detail "Qamera" tab fragment.
+   Rendered as a standalone string from hookDisplayAdminProductsExtra (no
+   layout extends). Hosts the ingest picker and the browse accordion; the
+   JS bundle (gallery_tab.js) is injected via displayBackOfficeHeader. #}
+<div id="qameraai-gallery-tab" class="qameraai-gallery-tab"
+     data-id-product="{{ id_product }}">
+
+  {% if not write_scope %}
+    <div class="alert alert-warning" role="alert">
+      {{ 'This installation lacks the catalog write scope, so pushing images to Qamera is disabled. Browsing what already exists still works.'|trans({}, 'Modules.Qameraai.Admin') }}
+    </div>
+  {% endif %}
+
+  {# ---- Ingest picker (push) ---- #}
+  <div class="card mb-3">
+    <div class="card-header">
+      <h3 class="card-header-title">
+        {{ 'Push gallery images to Qamera'|trans({}, 'Modules.Qameraai.Admin') }}
+      </h3>
+    </div>
+    <div class="card-body">
+      <div class="btn-group mb-3" role="group" aria-label="source toggle">
+        <button type="button" class="btn btn-outline-primary active" data-source="gallery">
+          {{ 'Select from store gallery'|trans({}, 'Modules.Qameraai.Admin') }}
+        </button>
+        <button type="button" class="btn btn-outline-primary" data-source="upload" disabled
+                title="{{ 'Upload-new is coming soon; pick from the store gallery for now.'|trans({}, 'Modules.Qameraai.Admin') }}">
+          {{ 'Upload new'|trans({}, 'Modules.Qameraai.Admin') }}
+        </button>
+      </div>
+
+      {% if gallery_images is empty %}
+        <div class="alert alert-info" role="alert">
+          {{ 'This product has no gallery images yet. Add images in the Images tab first.'|trans({}, 'Modules.Qameraai.Admin') }}
+        </div>
+      {% else %}
+        <div class="qameraai-picker-grid">
+          {% for img in gallery_images %}
+            <label class="qameraai-picker-cell" data-id-image="{{ img.id_image }}">
+              <input type="checkbox" class="qameraai-picker-check" value="{{ img.id_image }}"
+                     {{ write_scope ? '' : 'disabled' }}>
+              <img src="{{ img.thumb_url }}" alt="image {{ img.id_image }}" loading="lazy">
+              {% if img.is_cover %}<span class="qameraai-cover-badge">{{ 'cover'|trans({}, 'Modules.Qameraai.Admin') }}</span>{% endif %}
+              <span class="qameraai-picker-status" data-role="status"></span>
+            </label>
+          {% endfor %}
+        </div>
+
+        <div class="qameraai-picker-actions mt-3">
+          <button type="button" class="btn btn-primary" data-action="ingest" data-mode="product"
+                  {{ write_scope ? '' : 'disabled' }}>
+            {{ 'Add selected as product images'|trans({}, 'Modules.Qameraai.Admin') }}
+          </button>
+          <button type="button" class="btn btn-secondary" data-action="ingest" data-mode="packshot"
+                  {{ write_scope ? '' : 'disabled' }}>
+            {{ 'Add selected as packshots'|trans({}, 'Modules.Qameraai.Admin') }}
+          </button>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ---- Browse accordion (pull) ---- #}
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-header-title">
+        {{ 'What lives in Qamera for this product'|trans({}, 'Modules.Qameraai.Admin') }}
+      </h3>
+      <div class="card-header-actions">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-action="refresh-browse">
+          {{ 'Refresh'|trans({}, 'Modules.Qameraai.Admin') }}
+        </button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div id="qameraai-browse-notices"></div>
+      <div id="qameraai-browse" class="qameraai-browse" aria-live="polite">
+        <div class="text-muted">{{ 'Loading…'|trans({}, 'Modules.Qameraai.Admin') }}</div>
+      </div>
+    </div>
+  </div>
+
+  {# i18n strings + endpoints handed to the vanilla JS bundle. #}
+  <script type="application/json" id="qameraai-gallery-config">
+    {{ config_json|raw }}
+  </script>
+</div>

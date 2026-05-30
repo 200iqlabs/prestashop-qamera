@@ -11,6 +11,8 @@ if (file_exists($autoload)) {
     require_once $autoload;
 }
 
+use PrestaShop\PrestaShop\Adapter\SymfonyContainer;
+use QameraAi\Module\Gallery\WriteScopeChecker;
 use QameraAi\Module\Install\Installer;
 use QameraAi\Module\Sync\ProductImageSyncService;
 use QameraAi\Module\Sync\ProductSnapshotWriter;
@@ -21,7 +23,7 @@ class QameraAi extends Module
     {
         $this->name = 'qameraai';
         $this->author = '200iq Labs';
-        $this->version = '1.8.0';
+        $this->version = '1.9.0';
         $this->ps_versions_compliancy = ['min' => '8.0.0', 'max' => '9.99.99'];
         $this->need_instance = 0;
         $this->bootstrap = true;
@@ -204,25 +206,171 @@ class QameraAi extends Module
     }
 
     /**
-     * Stub for the `displayAdminProductsExtra` hook registered by the
-     * installer. The real implementation lands in Phase 4 (back-office
-     * product page "Qamera AI" tab with packshot generation controls).
+     * Renders the "Qamera" tab on the BO product-detail page
+     * (add-gallery-image-ingest): the gallery ingest picker plus the
+     * per-image browse accordion. Rendered as a standalone Twig fragment;
+     * all AJAX wiring (endpoints, CSRF tokens, write-scope flag, gallery
+     * thumbnails) is handed to the JS bundle via a JSON config blob. Any
+     * failure degrades to an empty tab so the product page never breaks.
      *
      * @param array<string, mixed> $params
      */
     public function hookDisplayAdminProductsExtra(array $params): string
     {
-        return '';
+        $idProduct = isset($params['id_product']) ? (int) $params['id_product'] : 0;
+        if ($idProduct <= 0 && isset($params['object']) && is_object($params['object'])) {
+            $idProduct = (int) ($params['object']->id ?? 0);
+        }
+        if ($idProduct <= 0) {
+            return '';
+        }
+
+        try {
+            $container = SymfonyContainer::getInstance();
+            if ($container === null) {
+                return '';
+            }
+            /** @var \Twig\Environment $twig */
+            $twig = $container->get('twig');
+            /** @var \Symfony\Component\Routing\RouterInterface $router */
+            $router = $container->get('router');
+            /** @var \Symfony\Component\Security\Csrf\CsrfTokenManagerInterface $csrf */
+            $csrf = $container->get('security.csrf.token_manager');
+
+            $idLang = (int) ($this->context->language->id ?? 1);
+            $writeScope = $this->resolveWriteScope();
+
+            $config = [
+                'idProduct' => $idProduct,
+                'writeScope' => $writeScope,
+                'urls' => [
+                    'ingest' => $router->generate('_qameraai_admin_gallery_ingest', ['idProduct' => $idProduct]),
+                    'status' => $router->generate('_qameraai_admin_gallery_status', ['idProduct' => $idProduct]),
+                    'browse' => $router->generate('_qameraai_admin_gallery_browse', ['idProduct' => $idProduct]),
+                    'sessionsTemplate' => $router->generate(
+                        '_qameraai_admin_gallery_sessions',
+                        ['idProduct' => $idProduct, 'imageId' => '__IMAGE__']
+                    ),
+                    'importOutput' => $router->generate('_qameraai_admin_gallery_import', ['idProduct' => $idProduct]),
+                ],
+                'token' => [
+                    'ingest' => $csrf->getToken('qamera_gallery_ingest')->getValue(),
+                    'import' => $csrf->getToken('qamera_gallery_import')->getValue(),
+                ],
+                'i18n' => $this->galleryTabI18n(),
+            ];
+
+            return $twig->render('@Modules/qameraai/views/templates/admin/product_tab.html.twig', [
+                'id_product' => $idProduct,
+                'write_scope' => $writeScope,
+                'gallery_images' => $this->collectGalleryImages($idProduct, $idLang),
+                'config_json' => json_encode($config) ?: '{}',
+            ]);
+        } catch (\Throwable $e) {
+            PrestaShopLogger::addLog(
+                sprintf('[QameraAi] gallery tab render failed for id_product=%d: %s', $idProduct, $e->getMessage()),
+                2,
+                null,
+                'QameraAiModule',
+                $idProduct,
+                true
+            );
+            return '';
+        }
     }
 
     /**
-     * Stub for the `displayBackOfficeHeader` hook registered by the
-     * installer. The real implementation lands in Phase 4 (injects the
-     * back-office CSS/JS bundle on Qamera-related admin screens).
+     * Injects the gallery-tab CSS/JS bundle, only on the product-edit screen.
      *
      * @param array<string, mixed> $params
      */
     public function hookDisplayBackOfficeHeader(array $params): void
     {
+        $controller = $this->context->controller ?? null;
+        if ($controller === null) {
+            return;
+        }
+        $name = isset($controller->controller_name) ? (string) $controller->controller_name : '';
+        if ($name !== 'AdminProducts' && Tools::getValue('controller') !== 'AdminProducts') {
+            return;
+        }
+
+        if (method_exists($controller, 'addCSS')) {
+            $controller->addCSS($this->getPathUri() . 'views/css/gallery_tab.css');
+        }
+        if (method_exists($controller, 'addJS')) {
+            $controller->addJS($this->getPathUri() . 'views/js/gallery_tab.js');
+        }
+    }
+
+    private function resolveWriteScope(): bool
+    {
+        try {
+            /** @var WriteScopeChecker $checker */
+            $checker = $this->get(WriteScopeChecker::class);
+            return $checker->hasWriteScope();
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Builds the product's PS gallery thumbnails for the ingest picker.
+     *
+     * @return array<int, array{id_image:int, thumb_url:string, is_cover:bool}>
+     */
+    private function collectGalleryImages(int $idProduct, int $idLang): array
+    {
+        $out = [];
+        $cover = Image::getCover($idProduct);
+        $coverId = is_array($cover) && isset($cover['id_image']) ? (int) $cover['id_image'] : 0;
+
+        foreach (Image::getImages($idLang, $idProduct) as $img) {
+            $idImage = (int) ($img['id_image'] ?? 0);
+            if ($idImage <= 0) {
+                continue;
+            }
+            $out[] = [
+                'id_image' => $idImage,
+                'thumb_url' => (string) $this->context->link->getImageLink('qamera', $idImage, 'home_default'),
+                'is_cover' => $idImage === $coverId,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Translated strings handed to the vanilla JS bundle (which cannot call
+     * the PHP translator). Domain: `Modules.Qameraai.Admin`.
+     *
+     * @return array<string, string>
+     */
+    private function galleryTabI18n(): array
+    {
+        $d = 'Modules.Qameraai.Admin';
+
+        return [
+            'uploading' => $this->trans('Uploading…', [], $d),
+            'ready' => $this->trans('Ready', [], $d),
+            'already' => $this->trans('Already in Qamera', [], $d),
+            'failed' => $this->trans('Failed', [], $d),
+            'select_one' => $this->trans('Select at least one image.', [], $d),
+            'loading' => $this->trans('Loading…', [], $d),
+            'browse_failed' => $this->trans('Could not load Qamera data.', [], $d),
+            'empty' => $this->trans('This product is not in Qamera yet. Push a gallery image above to get started.', [], $d),
+            'truncated' => $this->trans('Some images or packshots are not shown (truncated by the server).', [], $d),
+            'packshots' => $this->trans('Packshots', [], $d),
+            'sessions' => $this->trans('Photo-shoot sessions', [], $d),
+            'none' => $this->trans('None', [], $d),
+            'add_to_gallery' => $this->trans('Add to product gallery', [], $d),
+            'importing' => $this->trans('Importing…', [], $d),
+            'imported' => $this->trans('Imported ✓', [], $d),
+            'import_failed' => $this->trans('Import failed', [], $d),
+            'recent_only' => $this->trans('Showing recent sessions only.', [], $d),
+            'sessions_failed' => $this->trans('Could not load sessions.', [], $d),
+            'synthesized' => $this->trans('Synthesized / unmatched packshots', [], $d),
+            'no_preview' => $this->trans('no preview', [], $d),
+        ];
     }
 }

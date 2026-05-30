@@ -78,9 +78,9 @@ final class ThumbnailSourcer
         // Synthesized image (no PS origin): borrow a related packshot's
         // already-resolved thumbnail, else placeholder.
         foreach ($image->packshots as $packshot) {
-            if ($packshot->thumbnail !== null
-                && $packshot->thumbnail->kind !== Thumbnail::KIND_PLACEHOLDER) {
-                return $packshot->thumbnail;
+            $thumb = $packshot->thumbnail;
+            if ($thumb !== null && $thumb->kind !== Thumbnail::KIND_PLACEHOLDER) {
+                return $thumb;
             }
         }
 
