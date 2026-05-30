@@ -75,6 +75,7 @@
                     <span class="text-muted">—</span>
                   {% endif %}
                 </td>
+                {# Keep this cell's markup in sync with renderImportCell()/buildImport*() in views/js/jobs_history.js — the poll rebuilds it client-side to mirror these four states. #}
                 <td class="js-qameraai-import-cell">
                   {% set istate = import_state[row.qamera_job_id]|default({'state': 'absent'}) %}
                   {% if istate.state == 'imported' %}

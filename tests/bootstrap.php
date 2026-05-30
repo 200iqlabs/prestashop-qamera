@@ -4,3 +4,4 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 require __DIR__ . '/Stubs/PrestaShopStubs.php';
+require __DIR__ . '/Stubs/SymfonyControllerStubs.php';
