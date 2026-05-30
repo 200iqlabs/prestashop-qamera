@@ -108,6 +108,11 @@ final class ThumbnailSourcer
         $url = null;
         try {
             $job = $this->apiClient->getJob($jobId);
+            // First image output: a packshot-generation job emits exactly one
+            // image (the cutout), so the generated packshot's thumbnail is that
+            // single output. The browse "Add to gallery" action imports the
+            // same output (output_index 0); if packshot jobs ever emit multiple
+            // outputs both must map the packshot asset to its real index.
             foreach ($job->outputs as $output) {
                 if (str_starts_with(strtolower($output->type), 'image/')) {
                     $url = $output->url;

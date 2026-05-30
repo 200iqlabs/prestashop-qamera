@@ -63,7 +63,9 @@ final class GalleryTabRenderer
             'id_product' => $idProduct,
             'write_scope' => $writeScope,
             'gallery_images' => $galleryImages,
-            'config_json' => json_encode($config) ?: '{}',
+            // JSON_HEX_TAG escapes `<`/`>` so no value (i18n, URL) can emit a
+            // literal `</script>` and break out of the inline JSON island.
+            'config_json' => json_encode($config, JSON_HEX_TAG | JSON_UNESCAPED_UNICODE) ?: '{}',
         ]);
     }
 
