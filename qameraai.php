@@ -323,7 +323,12 @@ class QameraAi extends Module
             'add_to_gallery' => $this->trans('Add to product gallery', [], $d),
             'importing' => $this->trans('Importing…', [], $d),
             'imported' => $this->trans('Imported ✓', [], $d),
+            'already_imported' => $this->trans('Already imported', [], $d),
             'import_failed' => $this->trans('Import failed', [], $d),
+            'reason_not_registered' => $this->trans('Product not synced to Qamera yet', [], $d),
+            'reason_not_accepted' => $this->trans('Packshot not accepted yet', [], $d),
+            'reason_not_completed' => $this->trans('Job not completed', [], $d),
+            'reason_api_error' => $this->trans('Qamera API error', [], $d),
             'recent_only' => $this->trans('Showing recent sessions only.', [], $d),
             'sessions_failed' => $this->trans('Could not load sessions.', [], $d),
             'sessions_unavailable' => $this->trans(

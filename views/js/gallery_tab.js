@@ -303,17 +303,36 @@
     fetch(ctx.config.urls.importOutput, { method: 'POST', body: body, credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
-        var ok = data && (data.ok === true || data.state === 'imported' || (data.imported && data.imported.length));
-        var already = data && data.state === 'imported' && data.skipped && data.skipped.length;
-        btn.textContent = (ok || already)
-          ? t(ctx, 'imported', 'Imported ✓')
-          : t(ctx, 'import_failed', 'Import failed');
-        btn.classList.toggle('btn-success', !!ok);
+        var imported = data && data.ok === true
+          && (data.state === 'imported' || (data.imported && data.imported.length));
+        var already = data && data.state === 'already_imported';
+        if (imported || already) {
+          btn.textContent = already ? t(ctx, 'already_imported', 'Already imported') : t(ctx, 'imported', 'Imported ✓');
+          btn.classList.add('btn-success');
+          return;
+        }
+        // Surface the server reason instead of a blank "Import failed".
+        btn.textContent = reasonMessage(ctx, data && data.reason);
+        btn.disabled = false;
       })
       .catch(function () {
         btn.disabled = false;
-        btn.textContent = t(ctx, 'add_to_gallery', 'Add to product gallery');
+        btn.textContent = t(ctx, 'import_failed', 'Import failed');
       });
+  }
+
+  function reasonMessage(ctx, reason) {
+    var map = {
+      product_not_registered: t(ctx, 'reason_not_registered', 'Product not synced to Qamera yet'),
+      packshot_not_accepted: t(ctx, 'reason_not_accepted', 'Packshot not accepted yet'),
+      not_completed: t(ctx, 'reason_not_completed', 'Job not completed'),
+      invalid_product_ref: t(ctx, 'import_failed', 'Import failed'),
+      output_not_found: t(ctx, 'import_failed', 'Import failed'),
+      api_error: t(ctx, 'reason_api_error', 'Qamera API error'),
+      invalid_csrf: t(ctx, 'import_failed', 'Import failed'),
+      bad_request: t(ctx, 'import_failed', 'Import failed')
+    };
+    return (reason && map[reason]) || t(ctx, 'import_failed', 'Import failed');
   }
 
   /* ---------------- DOM helpers ---------------- */
